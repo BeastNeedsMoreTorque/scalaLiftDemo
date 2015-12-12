@@ -11,12 +11,14 @@ import scala.util.{Try, Failure}
   * A sister of class Product.
   * Limitations: there is no effort at transaction management.
   */
-class DBProduct extends LongKeyedMapper[DBProduct] with Loggable {
+class DBProduct extends LongKeyedMapper[DBProduct] with CreatedUpdated  {
+
   def getSingleton = DBProduct
 
   def primaryKeyField = id
 
   object id extends MappedLongIndex(this)
+
 
   // our own auto-generated id
 
@@ -52,9 +54,8 @@ class DBProduct extends LongKeyedMapper[DBProduct] with Loggable {
   *       The framework traits enable creating the table or altering it based on definitions of the class automatically (at least in dev).
   */
 object DBProduct extends DBProduct
-with LongKeyedMetaMapper[DBProduct] with CreatedUpdated with Loggable {
+with LongKeyedMetaMapper[DBProduct] with Loggable {
   override def dbTableName = "product"
-
   /**
     * persist a product to database handling insert or update depending on whether the entry exists already or not.
     * Efficiency consideration: when doing two writes, use DB.use to avoid round-trips.
@@ -91,12 +92,13 @@ with LongKeyedMetaMapper[DBProduct] with CreatedUpdated with Loggable {
       // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
       // Use openOr on Box prod so that if non-empty, we update it, otherwise we create and save the product.
       DB.use(DefaultConnectionIdentifier) {
-        // avoids two round-trips to store to DB.
+        // avoids two round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct
+        // and it got stored at same time as UserProduct (monitoring Postgres).
         connection =>
           val newProd = prod.map(_.price_in_cents(p.price_in_cents).
             image_thumb_url(p.image_thumb_url).
             saveMe()) openOr createProduct
-          UserProducts.consume(user, newProd) // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
+          UserProduct.consume(user, newProd) // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
       }
     }
   }

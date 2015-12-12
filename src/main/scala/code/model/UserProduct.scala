@@ -6,7 +6,7 @@ import net.liftweb.mapper._
 import scala.util.Try
 
 // this code makes a case for value of unit testing since it took me a while to get it right... Let's set it up!
-object UserProducts extends UserProducts with LongKeyedMetaMapper[UserProducts] with Loggable {
+object UserProduct extends UserProduct with LongKeyedMetaMapper[UserProduct] with Loggable {
   /**
     * The join table UserProducts is increasing by one the row matching user in Users and prod in DBProduct or initialized to 1 on creation of relationship.
     * @param user the database user row consuming the product
@@ -16,8 +16,8 @@ object UserProducts extends UserProducts with LongKeyedMetaMapper[UserProducts] 
   def consume(user: User, prod: DBProduct): Try[(String, Long)] = {
     // get a UserProducts list matching by user then by product id, that is meant to be of size 0-1 but theoretically more if buggy.
     Try {
-      val userProdsList = UserProducts.
-        findAll(By(UserProducts.user, user.id.get)).
+      val userProdsList = UserProduct.
+        findAll(By(UserProduct.user, user.id.get)).
         filter(_.product.get == prod.id.get)
 
       // when list is non-empty update entry by incrementing by one else create/insert a new entry to DB
@@ -28,7 +28,7 @@ object UserProducts extends UserProducts with LongKeyedMetaMapper[UserProducts] 
       }
       elem.getOrElse {
         // create/insert new entry
-        UserProducts.create.
+        UserProduct.create.
           user(user.id.get).
           product(prod.id.get).
           saveMe() // persist on insert specifying minimal info with defaults specified by case class, so here only two columns are explicit to satisfy FK.
@@ -38,8 +38,8 @@ object UserProducts extends UserProducts with LongKeyedMetaMapper[UserProducts] 
   }
 }
 
-class UserProducts extends LongKeyedMapper[UserProducts] with CreatedUpdated {
-  def getSingleton = UserProducts
+class UserProduct extends LongKeyedMapper[UserProduct] with CreatedUpdated {
+  def getSingleton = UserProduct
 
   def primaryKeyField = id
 
