@@ -19,7 +19,7 @@ class ProductConsume extends CometActor with CometListener with CSSUtils with Lo
 
   override def lowPriority = {
     // use partial function for the callback to our publisher ProductExchange, we filter one type of data, cache it so that upon rendering we capture it and act accordingly
-    case p: Either[ClearInstruction, Product] =>
+    case p: Either[ClearInstruction @unchecked, Product @unchecked] =>
       displayInstructions = p
       reRender()
   }
