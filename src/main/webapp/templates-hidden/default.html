@@ -1,0 +1,136 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:lift="http://liftweb.net/">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8"/>
+    <meta name="description" content=""/>
+    <meta name="keywords" content=""/>
+    <title class="lift:Menu.title">App: </title>
+    <style class="lift:CSS.blueprint"></style>
+    <style class="lift:CSS.fancyType"></style>
+    <script id="jquery" src="/classpath/jquery.js" type="text/javascript"></script>
+    <script id="json" src="/classpath/json.js" type="text/javascript"></script>
+    <style type="text/css">
+
+        /* <![CDATA[ */
+        .edit_error_class {
+        display: block;
+        color: red;
+        }
+
+        .sidebar ul {
+        margin:0;
+        padding:0;
+        border-bottom:1px solid #ccc;
+        }
+
+
+        .sidebar ul li {
+        margin:0;
+        padding:0;
+        list-style:none;
+        border:1px solid #ccc;
+        border-bottom:none;
+        }
+
+        .sidebar ul li a {
+        display:block;
+        padding:3px;
+        text-indent:30px;
+        text-decoration:none;
+        }
+
+        .sidebar ul li span {
+        display:block;
+        padding:3px;
+        text-indent:30px;
+        text-decoration:none;
+        }
+
+        .sidebar ul li a:hover {
+        background-color: #eee;
+        }
+
+        /* Credit: http://www.particletree.com/features/rediscovering-the-button-element/
+        Took out font-weight as I found it too striking and color to show disable. Also took out font-family to make
+        whole page consistent. */
+        /* BUTTONS */.buttons a, .buttons button{
+        display:block;
+        float:left;
+        margin:0 7px 0 0;
+        background-color:#f5f5f5;
+        border:1px solid #dedede;
+        border-top:1px solid #eee;
+        border-left:1px solid #eee;
+        /* font-family:"Lucida Grande", Tahoma, Arial, Verdana, sans-serif; */
+        font-size:100%;
+        line-height:130%;
+        text-decoration:none;
+        /* font-weight:bold;color:#565656; */
+        cursor:pointer;
+        padding:5px 10px 6px 7px; /* Links */
+        }
+
+        .buttons button{
+        width:auto;
+        overflow:visible;
+        padding:4px 10px 3px 7px; /* IE6 */
+        }
+
+        .buttons button[type]{
+        padding:5px 10px 5px 7px; /* Firefox */
+        line-height:17px; /* Safari */
+        }
+
+        *:first-child+html button[type]{
+        padding:4px 10px 3px 7px; /* IE7 */
+        }
+
+        .buttons button img, .buttons a img{
+        margin:0 3px -3px 0 !important;
+        padding:0;
+        border:none;
+        width:16px;
+        height:16px;
+        }
+
+
+        /* ]]> */
+    </style>
+
+</head>
+<body>
+<div class="container">
+    <div class="column span-16 last" style="text-align: right">
+        <!--        <h1 class="alt">White Label Co Liquor Party Offer<img alt="" id="ajax-loader" style="display:none; margin-bottom: 0px; margin-left: 5px" src="/images/ajax-loader.gif"></h1>-->
+        <h1 class="alt">White Label Co Liquor Party Offer</h1>
+
+    </div>
+
+    <hr>
+
+    <div class="column span-6 colborder sidebar">
+        <hr class="space">
+
+        <span class="lift:Menu.builder"></span>
+
+        <div class="lift:Msgs?showAll=true"></div>
+        <hr class="space"/>
+    </div>
+
+    <div class="column span-17 last" style="text-align: left">
+        <div id="content">The main content will get bound here</div>
+    </div>
+
+
+    <hr>
+
+    <div class="column span-23 last" style="text-align: center">
+        <h4 class="alt">
+            <a href="http://www.liftweb.net"><i>Lift</i></a>
+            is Copyright 2007-2014 WorldWide Conferencing, LLC.
+            Distributed under an Apache 2.0 License.</h4>
+    </div>
+
+
+</div>
+</body>
+</html>

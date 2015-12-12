@@ -1,0 +1,36 @@
+#db.driver=fill in a driver you support, liftweb offered first "org.h2.Driver"
+db.driver=org.postgresql.Driver
+
+# choose available port and suitable host and driver url (liftweb offered "jdbc:h2:lift_proto.db;AUTO_SERVER=TRUE")
+db.url=jdbc:postgresql://localhost:5432
+#specify db.user, db.password for dev if required. Phil Derome's toy environment does not require this.
+
+# time out in ms when we consume a web api.
+http.ClientConnTimeOut=5000
+# different value to prove a point
+http.ClientReadTimeOut=8000
+lcboDomainURL=http://lcboapi.com
+
+
+product.maxSampleSize=150
+# implied with LCBO tests
+product.lcboMaxPerPage=100
+# implied with LCBO tests
+product.lcboMinPerPage=10
+product.CategoriesMap={"wine":"Wine","spirits":"Spirits","beer":"Beer","ciders":"Ciders","coolers":"Ready-to-Drink/Coolers","non-Alc":"Non-Alc"}
+#No order on a map, so we impose an order on the keys
+product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
+product.Category=wine
+
+user.latitude=43.462
+user.longitude=-79.654
+
+# Cornwall-Trafalgar Oakville, ON
+store.Id=486
+store.maxSampleSize=3
+store.lcboMaxPerPage=100
+store.lcboMinPerPage=10
+
+
+
+
