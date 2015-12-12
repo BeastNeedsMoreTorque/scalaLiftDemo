@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+
+<head>
+    <meta content="text/html; charset=UTF-8" http-equiv="content-type"/>
+    <title>Home</title>
+</head>
+<!-- Some Liftweb templates start below, but they contain no code and no business logic, equivalent of MVC routes do not need to be set up
+     Just bind the required div with class/function with data-lift attribute-->
+<body data-lift-content-id="main">
+<div id="main" data-lift="surround?with=default;at=content">
+    <h4>Play around with buttons</h4>
+    You will be presented with a random LCBO product available at the store you enter (numeric code) matching that
+    category.<br><br>
+    <script type="text/javascript" data-lift="JavaScriptTail"> <!-- for document.onload ->
+
+
+
+    </script>
+    <span data-lift="CategorySelect">
+      <span class="options">
+         <input type="radio" value="Option 1">
+          <!--   will never show up as such, and whole div radio will be rewritten by ProductSelect comet. It's needed so that we can do a match and apply a XML node transformation -->
+      </span>
+    </span><br>
+
+    <div>
+        <span id="geolocation"></span><br>
+      <span data-lift="StoreSelect">
+        Store#: <input>
+      </span>
+    </div>
+
+    <div class="buttons">
+        <span data-lift="comet?type=ProductSelect">
+          <button>Recommend</button>
+        </span>
+        <span data-lift="comet?type=ProductConsume">
+          <button>Consume</button>
+        </span>
+        <span data-lift="Cancel.button">
+          <button>Cancel</button>
+        </span>
+    </div>
+    <br><br>  <!-- Need enough spacing beneath the buttons-->
+    <span data-lift="comet?type=ConfirmationReceiver">
+      <span>liquor confirmation goes here</span>
+    </span>
+    <span data-lift="comet?type=ProductDisplay">
+      <span id="selectConfirmation"></span><br>
+      <img id="productImg" src="#"/><br>
+        <!--ProductSelect comet actor will resolve src with proper url if available -->
+       <li id="productPackage"></li>
+       <li class="clearable">package units</li>
+        <!--generate other product items on the fly as simple li elements; keep a first dummy one not clearable so ...-->
+    </span>
+
+    <div data-lift="comet?type=GetStores">
+        <button>showStore</button>
+        <span id="storeContent"></span>
+    </div>
+
+    <script src="scripts/scripts.js" type="text/javascript"></script>
+</div>
+
+
+<script src="/ajax_request/liftAjax.js" type="text/javascript"></script>
+
+</body>
+</html>
