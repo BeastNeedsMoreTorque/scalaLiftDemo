@@ -30,8 +30,7 @@ object ProductExchange extends LiftActor with ListenerManager {
    * to the ProductExchange.  We cache it minimally, and then update all the listeners.
     */
   override def lowPriority = {
-    case x: Either[ClearInstruction @unchecked, Product @unchecked] =>
-      data = x
-      updateListeners()
-  }
+      // use partial function for the callback to our publisher ProductExchange, we filter one type of data, cache it so that upon rendering we capture it and act accordingly
+      case p: Either[ClearInstruction, Product] => data = p; updateListeners()
+    }
 }
