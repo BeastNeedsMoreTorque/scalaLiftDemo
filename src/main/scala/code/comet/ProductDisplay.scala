@@ -18,7 +18,7 @@ class ProductDisplay extends CometActor with CometListener with Loggable {
   // listen for data published by other snippets notifying us of new data to act upon.
   override def lowPriority = {
     // use partial function
-    case p: Either[ClearInstruction, Product] =>
+    case p: Either[ClearInstruction @unchecked, Product @unchecked] =>
       prod = p
       reRender()
   }

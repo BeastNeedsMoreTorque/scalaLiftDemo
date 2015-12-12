@@ -3,13 +3,13 @@ Outcome: Addressed Dec 11 2015 with DB.use and reading up on Boot.scala which su
 
 rationalize Get template for Store and Product
 Forum info has example that works for single object extract at a time, not for a collection on children nodes. Could not make it work, but separated
-logic between Product and Store.
+logic between Product and Store. They relied on Manifest API, deprecated after Scala 2.10.
 
 get JS to feed in (via JSON) data server for geolocation
 
 Have default geolocation and specify to user that it is a default due to lack of input
 
-Use version control
+Use version control. Using GIT, now need to backup files as Gitub private is for a fee.
 
 Use more packages, possibly finer grain
 
@@ -17,6 +17,6 @@ Question API usage more frequently (e.g. Props queerness)
 
 sbt: simply use jetty:start (not container:start). Upgrade to latest.
 
-Upgrade scala, read release notes
+Upgrade scala (2.11.7 is latest as of Fall 2015)
 
-Upgrade liftweb fairly aggressively, read release notes
+Upgrade liftweb fairly aggressively (2.6 is latest as of Fall 2015), read release notes

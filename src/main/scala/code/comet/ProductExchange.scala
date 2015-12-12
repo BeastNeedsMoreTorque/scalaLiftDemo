@@ -30,7 +30,7 @@ object ProductExchange extends LiftActor with ListenerManager {
    * to the ProductExchange.  We cache it minimally, and then update all the listeners.
     */
   override def lowPriority = {
-    case x: Either[ClearInstruction, Product] =>
+    case x: Either[ClearInstruction @unchecked, Product @unchecked] =>
       data = x
       updateListeners()
   }
