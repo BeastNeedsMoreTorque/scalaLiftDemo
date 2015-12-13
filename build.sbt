@@ -24,10 +24,10 @@ libraryDependencies ++= Seq (
     "postgresql"        % "postgresql"          % "9.1-901.jdbc4",
     "org.eclipse.jetty" % "jetty-webapp"        % "8.1.7.v20120910"  % "container,test",
     "org.eclipse.jetty" % "jetty-plus"          % "8.1.7.v20120910"  % "container,test", // For Jetty Config
-    "org.eclipse.jetty.orbit" % "javax.servlet" % "3.0.0.v201112011016" % "container,test" artifacts Artifact("javax.servlet", "jar", "jar"),
     "org.specs2"        %% "specs2"             % "2.3.12"             % "test",
     "ch.qos.logback"    % "logback-classic"     % "1.0.13"
   )
+//"org.eclipse.jetty.orbit" % "javax.servlet" % "3.0.0.v201112011016" % "container,test" artifacts Artifact("javax.servlet", "jar", "jar"),
 
 enablePlugins(JettyPlugin)  // so we can do jetty:start jetty:stop in sbt https://github.com/earldouglas/xsbt-web-plugin/blob/master/docs/2.0.md
 containerPort := 8080  // applicable when running from sbt, not with the jetty container plug-in in IDEA.
