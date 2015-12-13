@@ -25,7 +25,7 @@ class ProductDisplay extends CometActor with CometListener with Loggable {
     case p: ProductMessage => msg = p; reRender()
   }
 
-  // render the component by showing product content if that's the latest available or nothing if we received a clear instruction (ClearInstruction)
+  // render the component by showing product content if that's the latest available or nothing if we received a clear instruction (Empty Product Box)
   def render = {
     msg.product match {
       case Full(p) =>
