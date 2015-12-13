@@ -9,7 +9,8 @@ import net.liftweb.util.Helpers._
 object LongTime {
 
   def end = {
-    Thread.sleep(3000)
+    import scala.language.postfixOps
+    Thread.sleep(3 seconds)
     now.toString
   }
   def render =

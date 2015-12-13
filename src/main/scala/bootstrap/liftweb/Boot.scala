@@ -82,8 +82,6 @@ class Boot {
     LiftRules.htmlProperties.default.set((r: Req) =>
       new Html5Properties(r.userAgent))
 
-    //  LiftRules.useXhtmlMimeType = false
-
     // Make a transaction span the whole HTTP request
     S.addAround(DB.buildLoanWrapper)
 
