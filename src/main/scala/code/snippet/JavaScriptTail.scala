@@ -13,7 +13,5 @@ import net.liftweb.util.Helpers._
   */
 class JavaScriptTail {
   def render =
-    "*" #> <lift:tail>
-      {Script(OnLoad(JsRaw("lcboViewer.start()")))}
-    </lift:tail>
+    "*" #> <lift:tail> {Script(OnLoad(JsRaw("lcboViewer.start()")))} </lift:tail>
 }

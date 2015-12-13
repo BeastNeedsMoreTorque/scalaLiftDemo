@@ -15,9 +15,9 @@ scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked",
 libraryDependencies ++= {
   val liftVersion = "2.6.2"
   Seq(
-    "net.liftweb" %% "lift-webkit" % liftVersion % "compile" withSources(),
-    "net.liftweb" %% "lift-mapper" % liftVersion % "compile->default" withSources(),
-    "net.liftweb" %% "lift-wizard" % liftVersion % "compile->default" withSources(),
+    "net.liftweb"     %% "lift-webkit" % liftVersion % "compile" withSources(),
+    "net.liftweb"     %% "lift-mapper" % liftVersion % "compile->default" withSources(),
+    "net.liftweb"     %% "lift-wizard" % liftVersion % "compile->default" withSources(),
     "net.liftmodules" %% "lift-jquery-module_2.6" % "2.8" withSources())
 }
 libraryDependencies ++= Seq (
@@ -26,11 +26,10 @@ libraryDependencies ++= Seq (
     "org.eclipse.jetty" % "jetty-plus"          % "8.1.7.v20120910"  % "container,test", // For Jetty Config
     "org.eclipse.jetty.orbit" % "javax.servlet" % "3.0.0.v201112011016" % "container,test" artifacts Artifact("javax.servlet", "jar", "jar"),
     "org.specs2"        %% "specs2"             % "2.3.12"             % "test",
-    "ch.qos.logback" % "logback-classic" % "1.0.13"
+    "ch.qos.logback"    % "logback-classic"     % "1.0.13"
   )
 
-// by default, it listens on port 8080; use the following to override
-//port in container.Configuration := 8081
-
-enablePlugins(JettyPlugin)
-
+enablePlugins(JettyPlugin)  // so we can do jetty:start jetty:stop in sbt https://github.com/earldouglas/xsbt-web-plugin/blob/master/docs/2.0.md
+containerPort := 8080  // applicable when running from sbt, not with the jetty container plug-in in IDEA.
+// Can also do triggered execution: > ~jetty:start
+//enablePlugins(TomcatPlugin) // for Tomcat container instead.

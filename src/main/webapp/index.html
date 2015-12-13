@@ -47,20 +47,25 @@
     <span data-lift="comet?type=ConfirmationReceiver">
       <span>liquor confirmation goes here</span>
     </span>
-    <span data-lift="comet?type=ProductDisplay">
+    <div data-lift="comet?type=ProductDisplay">
       <span id="selectConfirmation"></span><br>
       <img id="productImg" src="#"/><br>
         <!--ProductSelect comet actor will resolve src with proper url if available -->
        <li id="productPackage"></li>
        <li class="clearable">package units</li>
         <!--generate other product items on the fly as simple li elements; keep a first dummy one not clearable so ...-->
-    </span>
+    </div>
 
     <div data-lift="comet?type=GetStores">
         <button>showStore</button>
         <span id="storeContent"></span>
     </div>
-
+    <div data-lift="LazyLoad">
+      <span data-lift="LongTime">Started this computation
+        at<span id="start">start</span> and it completed
+        at<span id="end">end</span>.
+      </span>
+    </div>
     <script src="scripts/scripts.js" type="text/javascript"></script>
 </div>
 

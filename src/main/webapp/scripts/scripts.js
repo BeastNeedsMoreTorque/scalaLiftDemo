@@ -1,5 +1,5 @@
 "use strict";
-// Global variable, singleton LCBOviewer
+// Global variable, singleton lcboViewer
 var lcboViewer = (function() {
 
   return {

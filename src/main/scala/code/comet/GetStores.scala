@@ -33,8 +33,10 @@ class GetStores extends CometActor with CometListener with Loggable {
         }
       case util.Failure(ex) => S.error(s"Unable to locate store using user reference point ($latitude, $longitude) with error $ex"); Empty
     }
-    reRender()
-    Noop // async instructs ourselves to redraw (reRender, a CometActor method).
+    store.dmap{Noop} { (s: Store) =>
+      StoreExchange ! DisplayStoreInstruction()
+      S.clearCurrentNotices
+    }  // async instructs ourselves to redraw (reRender, a CometActor method).
   }
 
   def render = {
