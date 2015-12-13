@@ -11,7 +11,7 @@ object StoreExchange extends LiftActor with ListenerManager {
   def createUpdate = DisplayStoreInstruction()
 
   override def lowPriority = {
-    case i: DisplayStoreInstruction =>
+    case i: DisplayStoreInstruction =>  // effectively, just an instruction to refresh not to obtain new info.
       updateListeners()
   }
 }

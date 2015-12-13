@@ -1,9 +1,10 @@
 package code.comet
 
-import code.model.{ClearInstruction, Product}
+import code.model.ProductMessage
 import net.liftweb._
 import http._
 import actor._
+import net.liftweb.common.Empty
 
 /**
   * Created by philippederome on 2015-11-29.
@@ -12,9 +13,7 @@ import actor._
  * "product" item will be processed at once ("product" because it might represent nothing as Left part of Either as ClearInstruction).
  */
 object ProductExchange extends LiftActor with ListenerManager {
-  private var data: Either[ClearInstruction, Product] = Left(ClearInstruction())
-  // private state
-  private var currentIsProd = false
+  private var msg = ProductMessage(Empty) // private state
 
   /**
     * When we update the listeners, what do we send?
@@ -22,7 +21,7 @@ object ProductExchange extends LiftActor with ListenerManager {
    * so it can be shared with lots of threads without any
    * danger or locking. One strong argument against mutable types, which I don't use directly in this project.
    */
-  def createUpdate = data
+  def createUpdate = msg
 
   /**
    * process product/ClearInstruction that are sent to the Actor.  In
@@ -31,6 +30,6 @@ object ProductExchange extends LiftActor with ListenerManager {
     */
   override def lowPriority = {
       // use partial function for the callback to our publisher ProductExchange, we filter one type of data, cache it so that upon rendering we capture it and act accordingly
-      case p: Either[ClearInstruction, Product] => data = p; updateListeners()
+      case p: ProductMessage => msg = p; updateListeners()
     }
 }

@@ -1,12 +1,14 @@
 package code.comet
 
-import code.model._
+import code.model.{Product, ProductMessage, PersistProductIDAsDB, ProductProvider}
 import code.snippet.SessionCache.{TheStore, TheCategory}
 import net.liftweb.common._
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds.Noop
 import net.liftweb.http.{CometListener, CometActor, S, SHtml}
 import net.liftweb.util.{Props, CssSel}
+import net.liftweb.util.Helpers._
+
 
 /**
   * This snippet contains state only via HTTP session (A Liftweb snippet is a web page fragment that has autonomous existence equivalent to a page with framework
@@ -20,13 +22,16 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
   private val provider = new ProductProvider() with PersistProductIDAsDB
   // Dependency Injection (another part of the website could use a DB table!)
   private val maxSampleSize = Props.getInt("product.maxSampleSize", 10)
-  private var displayInstructions: Either[ClearInstruction, Product] = Left(ClearInstruction()) // private state indicating whether to show product when one is defined (Right of Either) or clear instruction not to show old product
-  // and in this context here whether to enable or disable the Recommend button (clear instruction means enable button, product being present means disable).
+  private var msg = ProductMessage() // private state indicating whether to show product when one is defined
+  // and in this context here whether to enable or disable the Recommend button (empty means enable button, Full (product) being present means disable).
 
   def registerWith = ProductExchange // our publisher to whom we register interest
 
+  import scala.language.postfixOps
+  override def lifespan = Full(120 seconds)
+
   override def lowPriority = {
-    case p: Either[ClearInstruction, Product] => displayInstructions = p; reRender()
+    case p: ProductMessage =>  msg = p; reRender()
   }
 
   def render = {
@@ -57,14 +62,14 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
             prod.dmap {
               Noop
             } { p: Product =>
-              ProductExchange ! Right(p) // Sends out to Comet Actors AND SELF asynchronously the event that this product can now be rendered.
+              ProductExchange ! ProductMessage(Full(p)) // Sends out to Comet Actors AND SELF asynchronously the event that this product can now be rendered.
               S.clearCurrentNotices // clear error message to make way for normal layout representing normal condition.
             }
           case _ => S.error(s"Enter a number > 0 for Store") // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter
         }
-      displayInstructions match {
-        case Left(c) => maySelect() // normal processing  (ProductConsumer does it the other way around as it plays opposite role as to when it should be active)
-        case Right(p) => Noop // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable for a series of clicks on button before we have time to disable it
+      msg.product match {
+        case Full(p) => Noop // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable for a series of clicks on button before we have time to disable it
+        case _ => maySelect() // normal processing  (ProductConsume does it the other way around as it plays opposite role as to when it should be active)
       }
     }
 
@@ -72,11 +77,11 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
     // Note: toggling of buttons is useful to prevent excessive consecutive requests of same that would be too fast and unmanageable (flow control since we SIMULATE consumption)
     // We also do flow control in recommend handler to discard consecutive click events.
     val addImgElem: CssSel = "button *+" #> <img src="/images/recommend.png" alt=" "/>
-    displayInstructions match {
-      case Left(c) =>
-        "button" #> SHtml.ajaxButton("Recommend", () => recommend()) & addImgElem // case is "Clear Product" meaning none applicable and thus we need to recommend, so set up ajax CB recommend that will do server side work and finally JS work, also label button with word Recommend
-      case Right(p) =>
+    msg.product match {
+      case Full(p) =>
         "button" #> disable & addImgElem // toggle to disable button. For Left case, we also toggle but don't need to explicitly enable since first instruction is to rewrite completely the DOM element and that removes the disabled attribute.
+      case _ =>
+        "button" #> SHtml.ajaxButton("Recommend", () => recommend()) & addImgElem // case is "No Product" meaning none applicable and thus we need to recommend, so set up ajax CB recommend that will do server side work and finally JS work, also label button with word Recommend
     }
   }
 }
