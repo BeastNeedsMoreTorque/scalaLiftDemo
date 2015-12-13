@@ -1,15 +1,19 @@
 Issue: lack of transaction handling (handled by default in Boot.scala).
 Outcome: Addressed Dec 11 2015 with DB.use and reading up on Boot.scala which supports transactions for the time of a http request.
+Tested with a sleep on Dec 12.
+
+Dec 13: comet implementation actually publishes to all browsers on all hosts, not original intent to have it tied to a user session!
 
 rationalize Get template for Store and Product
 Forum info has example that works for single object extract at a time, not for a collection on children nodes. Could not make it work, but separated
-logic between Product and Store. They relied on Manifest API, deprecated after Scala 2.10.
+logic between Product and Store. They relied on Manifest API.
 
 get JS to feed in (via JSON) data server for geolocation
 
 Have default geolocation and specify to user that it is a default due to lack of input
 
 Use version control. Using GIT, now need to backup files as Gitub private is for a fee.
+Implemented as of Dec 12. Need backups.
 
 Use more packages, possibly finer grain
 
