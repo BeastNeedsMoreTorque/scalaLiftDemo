@@ -13,8 +13,6 @@
     <h4>Play around with buttons</h4>
     You will be presented with a random LCBO product available at the store you enter (numeric code) matching that
     category.<br><br>
-    <script type="text/javascript" data-lift="JavaScriptTail"> <!-- for document.onload ->
-
     </script>
     <span data-lift="CategorySelect">
       <span class="options">
@@ -25,10 +23,15 @@
 
     <div>
         <span data-lift="comet?type=StoreSelect">
+          <span id="geolocationLAT"></span>
+          <span id="geolocationLON"></span>
+          <span id="geolocation"></span><br>
+<br>
           Store#: <input id="StoreId">
       </span>
     </div>
     <div data-lift="comet?type=GetStores">
+        Store 2#: <input id="StoreId2">
         <span id="storeContent"></span><br>
         <button>showStore</button>
     </div>
@@ -63,6 +66,17 @@
         at <span id="end">end</span>.
       </span>
     </div>
+
+       <script type="text/javascript">  /* <![CDATA[ */
+        $(window).load(function(){
+        /*alert('starting up');*/
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(lcboViewer.showPosition);
+        } else {
+            $("#geolocation").html("Geolocation is not supported by this browser.");
+        }
+       }); /* ]]> */
+    </script>
     <script src="scripts/scripts.js" type="text/javascript"></script>
 </div>
 
