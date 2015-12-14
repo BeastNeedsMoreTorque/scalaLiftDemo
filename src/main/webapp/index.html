@@ -15,8 +15,6 @@
     category.<br><br>
     <script type="text/javascript" data-lift="JavaScriptTail"> <!-- for document.onload ->
 
-
-
     </script>
     <span data-lift="CategorySelect">
       <span class="options">
@@ -26,10 +24,13 @@
     </span><br>
 
     <div>
-        <span id="geolocation"></span><br>
-      <span data-lift="StoreSelect">
-        Store#: <input>
+        <span data-lift="comet?type=StoreSelect">
+          Store#: <input id="StoreId">
       </span>
+    </div>
+    <div data-lift="comet?type=GetStores">
+        <span id="storeContent"></span><br>
+        <button>showStore</button>
     </div>
 
     <div class="buttons">
@@ -45,7 +46,7 @@
     </div>
     <br><br>  <!-- Need enough spacing beneath the buttons-->
     <span data-lift="comet?type=ConfirmationReceiver">
-      <span>liquor confirmation goes here</span>
+      <span id="confirmMsg">liquor confirmation goes here</span>
     </span>
     <div data-lift="comet?type=ProductDisplay">
       <span id="selectConfirmation"></span><br>
@@ -56,10 +57,6 @@
         <!--generate other product items on the fly as simple li elements; keep a first dummy one not clearable so ...-->
     </div>
 
-    <div data-lift="comet?type=GetStores">
-        <button>showStore</button>
-        <span id="storeContent"></span>
-    </div>
     <div data-lift="LazyLoad">
       <span data-lift="LongTime">Started this computation
         at <span id="start">start</span> and it completed

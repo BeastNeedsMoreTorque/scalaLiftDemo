@@ -1,12 +1,12 @@
 package code.comet
 
-import code.model.{DisplayStoreInstruction, Store, StoreProvider}
+import code.model.{ Store, StoreProvider}
 import net.liftweb.common._
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.{S, CometActor, CometListener, SHtml}
 import net.liftweb.util.Props
-
+import scala.xml.Text
 /**
   * Created by philippederome on 2015-12-09.
   */
@@ -15,17 +15,17 @@ class GetStores extends CometActor with CometListener with Loggable {
   // Dependency Injection (another part of the website could use a DB table!)
   private val latitude: String = Props.get("user.latitude", "")
   private val longitude: String = Props.get("user.longitude", "")
-  private var store: Box[Store] = Empty
+  private var msgStore = Store()
 
-  def registerWith = StoreExchange // our publisher to whom we register interest
+  def registerWith = StoreProductExchange // our publisher to whom we register interest
 
   override def lowPriority = {
-    // use partial function for the callback to our publisher StoreExchange, we filter one type of data, cache it so that upon rendering we capture it and act accordingly
-    case s: DisplayStoreInstruction => reRender()
+    // use partial function for the callback to our publisher StoreProductExchange/StoreExchange, we filter one type of data, cache it so that upon rendering we capture it and act accordingly
+    case s: Store => msgStore = s; reRender()
   }
 
   def locate: JsCmd = {
-    store = provider.findStore(latitude, longitude) match {
+    val store = provider.findStore(latitude, longitude) match {
       case util.Success(x) =>
         x or {
           S.notice(s"no store identified at all!?");
@@ -34,18 +34,18 @@ class GetStores extends CometActor with CometListener with Loggable {
       case util.Failure(ex) => S.error(s"Unable to locate store using user reference point ($latitude, $longitude) with error $ex"); Empty
     }
     store.dmap{Noop} { (s: Store) =>
-      StoreExchange ! DisplayStoreInstruction()
+      StoreProductExchange ! s
       S.clearCurrentNotices
     }  // async instructs ourselves to redraw (reRender, a CometActor method).
   }
 
   def render = {
-    "#storeContent" #> store.dmap {
-      ""
-    } {
-      _.toString
-    } &
-      "button [onclick]" #> SHtml.ajaxInvoke(() => {
+    def content = msgStore.id match {
+      case badId if badId <= 0 => ""
+      case _ => msgStore.toString + " from your chosen location"
+    }
+    "#storeContent" #> content &
+    "button [onclick]" #> SHtml.ajaxInvoke(() => {
         locate
       })
   }
