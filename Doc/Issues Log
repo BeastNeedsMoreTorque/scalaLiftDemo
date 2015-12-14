@@ -4,6 +4,8 @@ Tested with a sleep on Dec 12.
 
 Dec 13: comet implementation actually publishes to all browsers on all hosts, not original intent to have it tied to a user session!
 
+Push geolocation with Ajax to web server to set Session data... Or lazy-load directly with timeout...
+
 rationalize Get template for Store and Product
 Forum info has example that works for single object extract at a time, not for a collection on children nodes. Could not make it work, but separated
 logic between Product and Store. They relied on Manifest API.

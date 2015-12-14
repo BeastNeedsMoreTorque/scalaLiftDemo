@@ -49,15 +49,14 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
         TheStore.is match {
           // validates expected numeric input TheStore (a http session attribute) and when valid, do real handling of accessing LCBO data
           case s if s > 0 =>
-            val cat = TheCategory.is.openOr("")
-            val prod = provider.recommend(maxSampleSize, s, cat) match {
+            val prod = provider.recommend(maxSampleSize, s, TheCategory.is) match {
               // we want to distinguish error messages to user to provide better diagnostics.
               case util.Success(p) =>
                 p or {
-                  S.notice(s"no product available for category $cat");
+                  S.notice(s"no product available for category ${TheCategory.is}")
                   Empty
                 } // returns prod normally but if empty, send a notice of error and return empty.
-              case util.Failure(ex) => S.error(s"Unable to choose product of category $cat with error $ex"); Empty
+              case util.Failure(ex) => S.error(s"Unable to choose product of category ${TheCategory.is} with error $ex"); Empty
             }
             ConfirmationExchange ! "" // sends a clear string for the confirmation receiver comet actor in all cases since user clicked button.
             prod.dmap {

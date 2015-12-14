@@ -38,9 +38,9 @@ object CategorySelect {
   def render =
     ".options" #> LabelStyle.toForm(SHtml.ajaxRadio(
       LiquorCategory.sortedSeq,
-      SessionCache.TheCategory.get,
+      Full(TheCategory.is),
       (s: String) => {
-        TheCategory.set(Full(s));
+        TheCategory.set(s);
         Noop
       }))
 
