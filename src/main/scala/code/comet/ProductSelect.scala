@@ -1,6 +1,6 @@
 package code.comet
 
-import code.model.{Product, ProductMessage, PersistProductIDAsDB, ProductProvider}
+import code.model._
 import code.snippet.SessionCache.{TheStore, TheCategory}
 import net.liftweb.common._
 import net.liftweb.http.js.JsCmd
@@ -8,7 +8,6 @@ import net.liftweb.http.js.JsCmds.Noop
 import net.liftweb.http.{CometListener, CometActor, S, SHtml}
 import net.liftweb.util.{Props, CssSel}
 import net.liftweb.util.Helpers._
-
 
 /**
   * This snippet contains state only via HTTP session (A Liftweb snippet is a web page fragment that has autonomous existence equivalent to a page with framework
@@ -25,13 +24,15 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
   private var msg = ProductMessage() // private state indicating whether to show product when one is defined
   // and in this context here whether to enable or disable the Recommend button (empty means enable button, Full (product) being present means disable).
 
-  def registerWith = ProductExchange // our publisher to whom we register interest
+  def registerWith = StoreProductExchange // our publisher to whom we register interest
 
   import scala.language.postfixOps
   override def lifespan = Full(120 seconds)
 
   override def lowPriority = {
-    case p: ProductMessage =>  msg = p; reRender()
+    case p: ProductMessage =>
+      msg = p
+      reRender()
   }
 
   def render = {
@@ -40,7 +41,7 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
       * Most of the logic is to distinguish different error handling cases, so that some troubleshooting can take place with some context.
       * @return a JsCmd, i.e. generated JavaScript that the browser invokes in response to an earlier asynchronous form as Liftweb takes that JsCmd for browser to execute.
       *         Prior to that JsCmd, we can execute required code in server side.
-      *         We eventually re-render to toggle buttons after action takes place (as a result of our publishing to Actors ProductExchange and ConfirmationExchange).
+      *         We eventually re-render to toggle buttons after action takes place (as a result of our publishing to Actors StoreProductExchange and ConfirmationExchange).
       *         These actors and their messages effectively coordinate ProductSelect and ProductConsumer as well as ProductDisplay.
       */
     def recommend(): JsCmd = {
@@ -62,7 +63,7 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
             prod.dmap {
               Noop
             } { p: Product =>
-              ProductExchange ! ProductMessage(Full(p)) // Sends out to Comet Actors AND SELF asynchronously the event that this product can now be rendered.
+              StoreProductExchange ! ProductMessage(Full(p)) // Sends out to Comet Actors AND SELF asynchronously the event that this product can now be rendered.
               S.clearCurrentNotices // clear error message to make way for normal layout representing normal condition.
             }
           case _ => S.error(s"Enter a number > 0 for Store") // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter

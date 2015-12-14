@@ -24,6 +24,6 @@ class ConfirmationReceiver extends CometActor with CometListener with Loggable {
   }
 
   // render the component by showing confirmation (string) content
-  def render = "*" #> confirm
+  def render = "#confirmMsg" #> confirm
 }
 
