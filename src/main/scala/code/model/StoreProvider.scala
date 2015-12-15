@@ -20,10 +20,10 @@ class StoreProvider extends pagerRestClient with Loggable {
 
   def MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
 
-  def findStore(latitude: String, longitude: String): Try[Box[Store]] = {
+  def findStore(geo: GeoCoordinates): Try[Box[Store]] = {
     val url = s"$LcboDomainURL/stores?where_not=is_dead" +
-      additionalParam("lat", latitude) +
-      additionalParam("lon", longitude)
+      additionalParam("lat", geo.lat) +
+      additionalParam("lon", geo.lon)
     Try {
       collectStoresOnAPage(List[Store](), url, MaxSampleSize, pageNo = 1).headOption
     }

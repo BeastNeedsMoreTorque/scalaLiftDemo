@@ -1,7 +1,7 @@
 package code.comet
 
 import code.model.{ Store, StoreProvider}
-import code.snippet.SessionCache.{TheLongitude, TheLatitude}
+import code.snippet.SessionCache.TheUserCoordinates
 import net.liftweb.common._
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds._
@@ -21,30 +21,28 @@ class GetStores extends CometActor with CometListener with Loggable {
     // use partial function for the callback to our publisher StoreProductExchange/StoreExchange, we filter one type of data, cache it so that upon rendering we capture it and act accordingly
     case s: Store =>
       msgStore = s
-      storeId = Some(s.id.toString)
+      storeId = if (s.id <= 0) None else Some(s.id.toString)
       reRender()
   }
 
   def locate: JsCmd = {
-    val store = provider.findStore(TheLatitude.is, TheLongitude.is) match {
+    val store: Store = provider.findStore(TheUserCoordinates.is) match {
       case util.Success(x) =>
-        x or {
+        x openOr {
           S.notice(s"no store identified at all!?")
-          Empty
+          Store()
         }
-      case util.Failure(ex) => S.error(s"Unable to locate store using user reference point (${TheLatitude.is}, ${TheLongitude.is}) with error $ex"); Empty
+      case util.Failure(ex) => S.error(s"Unable to locate store using user reference point ${TheUserCoordinates.is} with error $ex"); Store()
     }
-    store.dmap{Noop} { (s: Store) =>
-      StoreProductExchange ! s
-      S.clearCurrentNotices
-    }  // async instructs ourselves to redraw (reRender, a CometActor method).
+    StoreProductExchange ! store // async instructs ourselves to redraw (reRender, a CometActor method).
+    if (store.id <=0) Noop
+    else S.clearCurrentNotices
   }
 
   def render = {
-    def content = msgStore.id match {
-      case badId if badId <= 0 => ""
-      case _ => msgStore.toString + " from your chosen location"
-    }
+    val content =
+      if (msgStore.id <= 0)  None
+      else Some(msgStore.toString + " from your chosen location")
 
     "#StoreId2 [value]" #> storeId &  // html input element has no element only attributes, so here we specify the value attribute.
     "#storeContent" #> content &
