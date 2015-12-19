@@ -1,4 +1,4 @@
-package code.model
+package code.Rest
 
 import net.liftweb.util.Props
 

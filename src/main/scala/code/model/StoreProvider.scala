@@ -1,5 +1,6 @@
 package code.model
 
+import code.Rest.pagerRestClient
 import net.liftweb.util.Props
 
 import scala.util.Try
