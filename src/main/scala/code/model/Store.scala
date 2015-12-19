@@ -13,6 +13,8 @@ import scala.xml.Node
 case class Store(id: Int = 0,
                  is_dead: Boolean = true,
                  name: String = "",
+                 address_line_1: String ="",
+                 city: String ="",
                  distance_in_meters: Int = 0) extends Loggable {
   // intentional aliasing allowing more standard naming convention.
   val isDead = is_dead
@@ -23,7 +25,7 @@ case class Store(id: Int = 0,
     f"$v%1.1f KM(s)"
   }
 
-  override def toString = s"$id, $name; distance is:$distanceInKMs"
+  override def toString = s"$id, name: $name, Address: $address_line_1, city: $city, distance is:$distanceInKMs"
 }
 
 object Store extends Loggable {

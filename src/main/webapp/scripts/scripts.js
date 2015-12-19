@@ -19,8 +19,9 @@ var lcboViewer = (function() {
               type: 'GET',
               success: function(data, status){
                   var coords = position.coords;
-                  var storeDesc = 'You are located at (' + coords.latitude.toPrecision(6) + ',' + coords.longitude.toPrecision(6) +
-                      '), which is at ' + data.distance_in_meters/1000.0 + ' kms from branch '+ data.name  ;
+                  var storeDesc = 'You are located at (' + coords.latitude.toFixed(4) + ',' + coords.longitude.toFixed(4) +
+                      '), which is at ' + (data.distance_in_meters/1000.0).toFixed(2) + ' kms from branch '+ data.name +
+                       ' located at ' + data.address_line_1 + ' in ' + data.city;
                   $("#storeNearby").html(storeDesc);
                   },
               error: function(data, status){
