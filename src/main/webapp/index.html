@@ -13,27 +13,24 @@
     <h4>Play around with buttons</h4>
     You will be presented with a random LCBO product available at the store you enter (numeric code) matching that
     category.<br><br>
-    </script>
     <span data-lift="CategorySelect">
       <span class="options">
          <input type="radio" value="Option 1">
-          <!--   will never show up as such, and whole div radio will be rewritten by ProductSelect comet. It's needed so that we can do a match and apply a XML node transformation -->
       </span>
     </span><br>
 
-    <div>
-        <span data-lift="comet?type=StoreSelect">
-          <span id="geolocationLAT"></span>
-          <span id="geolocationLON"></span>
-          <span id="geolocation"></span><br>
-<br>
-          Store#: <input id="StoreId">
-      </span>
+<form data-lift="form.ajax">
+    <div data-lift="AjaxAttr">
+         <input id="button1" type="submit" value="Apple">
     </div>
-    <div data-lift="comet?type=GetStores">
-        Store 2#: <input id="StoreId2">
+</form>
+    <div data-lift="GetStores">
+         <span id="geolocationLAT"></span>
+         <span id="geolocationLON"></span>
+         <span id="geolocation"></span><br><br>
+        Store #: <input id="storeId" readonly>
         <span id="storeContent"></span><br>
-        <button>showStore</button>
+        <button hidden>showStore</button>
     </div>
 
     <div class="buttons">
@@ -69,7 +66,7 @@
 
        <script type="text/javascript">  /* <![CDATA[ */
         $(window).load(function(){
-        /*alert('starting up');*/
+        setInterval ( "lcboViewer.sendPosition()", 10000 );
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(lcboViewer.showPosition);
         } else {

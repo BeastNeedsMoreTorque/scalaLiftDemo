@@ -24,7 +24,7 @@ class StoreSelect extends CometActor with CometListener with Loggable{
     // use partial function
     case s: Store => // is this Model-View-Controller in one spot? Ha ha.
       TheStore.set(s.id)
-      SetHtml("storeId", Text(s.id.toString))
+      SetHtml("storeId2", Text(s.id.toString))
       reRender()
   }
 
