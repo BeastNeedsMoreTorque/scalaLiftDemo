@@ -25,8 +25,8 @@ product.Category=wine
 user.latitude=43.462
 user.longitude=-79.654
 
-# Cornwall-Trafalgar Oakville, ON
-store.Id=486
+# downtown Toronto
+store.Id=1
 store.maxSampleSize=3
 store.lcboMaxPerPage=100
 store.lcboMinPerPage=10

@@ -48,6 +48,10 @@ class Boot {
     def sitemap = SiteMap(
       Menu.i("Home") / "index" >> User.AddUserMenusAfter, // the simple way to declare a menu
 
+        //  Menu.i("GEO") / "geo" >> User.AddUserMenusAfter, // the simple way to declare a menu
+     // Menu.i("PROD_DISPLAY") / "product-display" >> User.AddUserMenusAfter, // the simple way to declare a menu
+    //  Menu(Loc("Geo", Link(List("geo"), true, "/geo"),
+      //  "Geo Content")),
       // more complex because this menu allows anything in the
       // /static path to be visible
       Menu(Loc("Static", Link(List("static"), true, "/static/index"),
@@ -75,6 +79,23 @@ class Boot {
     // Force the request to be UTF-8
     LiftRules.early.append(_.setCharacterEncoding("UTF-8"))
 
+//    LiftRules.statelessRewrite.prepend(NamedPF("ProductExampleRewrite") {
+ //     case RewriteRequest(
+ //     ParsePath("product" :: product :: Nil, _, _,_), _, _) =>
+  //      RewriteResponse(
+  //        "product-display" :: Nil, Map("product" -> product)
+  //      )
+  //  })
+
+    //   LiftRules.dispatch.append(MyRest) // stateful -- associated with a servlet container session
+    import net.liftweb.http.{LiftRules,RewriteRequest, RewriteResponse,ParsePath}
+
+    LiftRules.statefulRewrite.append {
+      case RewriteRequest(ParsePath( "lat" :: lat :: "lon" :: lon :: Nil, _, true,false), GetRequest, http) =>
+        println(s"geo: $lat $lon")
+        RewriteResponse("geo" :: Nil,
+          Map("lat" -> lat, "lon" -> lon))
+    }
     // What is the function to test if a user is logged in?
     LiftRules.loggedInTest = Full(() => User.loggedIn_?)
 
