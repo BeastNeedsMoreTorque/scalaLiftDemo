@@ -1,7 +1,10 @@
-package code.model
+package code.Rest
 
 import java.net.{HttpURLConnection, URL}
 
+/**
+  * Created by philippederome on 2015-12-19.
+  */
 trait RestClient {
 
   /**

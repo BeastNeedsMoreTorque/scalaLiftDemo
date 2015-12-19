@@ -2,6 +2,7 @@ package code
 package model
 
 import java.io.IOException
+import code.Rest.pagerRestClient
 import net.liftweb.common.{Loggable, Box}
 
 import scala.util.{Random, Try}

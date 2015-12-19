@@ -14,7 +14,7 @@ class ProductDisplay extends CometActor with CometListener with Loggable {
   private var msg = ProductMessage(Empty) // private state
 
   // register this component with the Actor in order to receive notifications
-  def registerWith = StoreProductExchange
+  def registerWith = ProductExchange
 
   import scala.language.postfixOps
   override def lifespan = Full(120 seconds)

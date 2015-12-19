@@ -24,7 +24,7 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
   private var msg = ProductMessage() // private state indicating whether to show product when one is defined
   // and in this context here whether to enable or disable the Recommend button (empty means enable button, Full (product) being present means disable).
 
-  def registerWith = StoreProductExchange // our publisher to whom we register interest
+  def registerWith = ProductExchange // our publisher to whom we register interest
 
   import scala.language.postfixOps
   override def lifespan = Full(120 seconds)
@@ -41,12 +41,12 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
       * Most of the logic is to distinguish different error handling cases, so that some troubleshooting can take place with some context.
       * @return a JsCmd, i.e. generated JavaScript that the browser invokes in response to an earlier asynchronous form as Liftweb takes that JsCmd for browser to execute.
       *         Prior to that JsCmd, we can execute required code in server side.
-      *         We eventually re-render to toggle buttons after action takes place (as a result of our publishing to Actors StoreProductExchange and ConfirmationExchange).
+      *         We eventually re-render to toggle buttons after action takes place (as a result of our publishing to Actors ProductExchange and ConfirmationExchange).
       *         These actors and their messages effectively coordinate ProductSelect and ProductConsumer as well as ProductDisplay.
       */
     def recommend(): JsCmd = {
       def maySelect(): JsCmd =
-        TheStore.is match {
+        TheStore.is.id match {
           // validates expected numeric input TheStore (a http session attribute) and when valid, do real handling of accessing LCBO data
           case s if s > 0 =>
             val prod = provider.recommend(maxSampleSize, s, TheCategory.is) match {
@@ -62,7 +62,7 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
             prod.dmap {
               Noop
             } { p: Product =>
-              StoreProductExchange ! ProductMessage(Full(p)) // Sends out to Comet Actors AND SELF asynchronously the event that this product can now be rendered.
+              ProductExchange ! ProductMessage(Full(p)) // Sends out to Comet Actors AND SELF asynchronously the event that this product can now be rendered.
               S.clearCurrentNotices // clear error message to make way for normal layout representing normal condition.
             }
           case _ => S.error(s"Enter a number > 0 for Store") // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter

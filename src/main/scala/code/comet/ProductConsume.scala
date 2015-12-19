@@ -19,10 +19,10 @@ class ProductConsume extends CometActor with CometListener with CSSUtils with Lo
   import scala.language.postfixOps
   override def lifespan = Full(120 seconds)
 
-  def registerWith = StoreProductExchange // our publisher to whom we register interest
+  def registerWith = ProductExchange // our publisher to whom we register interest
 
   override def lowPriority = {
-    // use partial function for the callback to our publisher StoreProductExchange, we filter one type of data, cache it so that upon rendering we capture it and act accordingly
+    // use partial function for the callback to our publisher ProductExchange, we filter one type of data, cache it so that upon rendering we capture it and act accordingly
     case p: ProductMessage => msg = p; reRender()
   }
 
@@ -32,7 +32,7 @@ class ProductConsume extends CometActor with CometListener with CSSUtils with Lo
         provider.consume(p) match {
           case util.Success((userName, count)) =>
             ConfirmationExchange ! s"${p.name} has now been purchased $count time(s), $userName"
-            StoreProductExchange ! ProductMessage(Empty) // Sends out to other snippets or comet actors (and self to disable self button) aynchronously event to clear contents of a product display as it's no longer applicable
+            ProductExchange ! ProductMessage(Empty) // Sends out to other snippets or comet actors (and self to disable self button) aynchronously event to clear contents of a product display as it's no longer applicable
             S.clearCurrentNotices // clears error message now that this is good, to get a clean screen.
           case util.Failure(ex) => S.error(s"Unable to sell you product ${p.name} with error '$ex'")
         }

@@ -1,6 +1,6 @@
 package code.snippet
 
-import code.model.GeoCoordinates
+import code.model.{Store, GeoCoordinates}
 import net.liftweb.common.{Full, Box}
 import net.liftweb.http.SessionVar
 import net.liftweb.util.Props
@@ -20,7 +20,7 @@ object SessionCache {
 
   object TheCategory extends SessionVar[String](defaultCategory)
 
-  object TheStore extends SessionVar[Int](defaultStore)
+  object TheStore extends SessionVar[Store](Store(id=defaultStore))
 
   object TheUserCoordinates extends SessionVar[GeoCoordinates](GeoCoordinates(defaultLatitude, defaultLongitude))
 }
