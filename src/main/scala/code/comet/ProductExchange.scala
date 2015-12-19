@@ -1,6 +1,6 @@
 package code.comet
 
-import code.model.{Store, ProductMessage}
+import code.model.ProductMessage
 import net.liftweb._
 import http._
 import actor._
