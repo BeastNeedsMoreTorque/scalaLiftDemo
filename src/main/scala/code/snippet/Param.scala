@@ -6,9 +6,7 @@ import util.Helpers._
 import common._
 import http._
 import sitemap._
-import java.util.Date
 
-import scala.xml.NodeSeq
 
 object Param {
   // Create a menu for /param/somedata
@@ -18,7 +16,6 @@ object Param {
   lazy val loc = menu.toLoc
 
   def render: CssSel = {
-
   println(s"in Param.render! $loc")
   "*" #> "Hello" // crashes loc.currentValue.map(_.theParam)
   }
