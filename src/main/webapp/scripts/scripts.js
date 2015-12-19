@@ -9,7 +9,8 @@ var lcboViewer = (function() {
           console.log(currPosition);
           var geoJS = JSON.stringify({lat: currPosition.latitude, lon: currPosition.longitude});
           console.log(geoJS);
-          $.ajax({url: '/geo/lat/' + currPosition.latitude + '/lon/' +currPosition.longitude,
+          //$.ajax({url: '/geo/lat/' + currPosition.latitude + '/lon/' +currPosition.longitude,
+          $.ajax({url: '/lat/' + currPosition.latitude + '/lon/' +currPosition.longitude,
                  type: 'GET',
                  success: function(data, status){
                    //console.log("Success Data: " + data );

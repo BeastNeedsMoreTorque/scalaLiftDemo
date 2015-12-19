@@ -1,6 +1,7 @@
 package bootstrap.liftweb
 
 import code.model._
+import code.snippet.GetStores
 import net.liftmodules.JQueryModule
 import net.liftweb._
 import net.liftweb.common._
@@ -93,6 +94,7 @@ class Boot {
     LiftRules.statefulRewrite.append {
       case RewriteRequest(ParsePath( "lat" :: lat :: "lon" :: lon :: Nil, _, true,false), GetRequest, http) =>
         println(s"geo: $lat $lon")
+        GetStores.locate(GeoCoordinates(lat, lon))
         RewriteResponse("geo" :: Nil,
           Map("lat" -> lat, "lon" -> lon))
     }
