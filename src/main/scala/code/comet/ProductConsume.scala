@@ -12,9 +12,7 @@ import net.liftweb.util.Helpers._
   * Created by philippederome on 2015-12-05.
   */
 class ProductConsume extends CometActor with CometListener with CSSUtils with Loggable {
-  private val provider: ProductProvider = new ProductProvider() with PersistProductIDAsDB
-  // Dependency Injection (another part of the website could use a DB table!)
-  private var msg: ProductMessage = ProductMessage()  // private state indicating whether to show product when one is defined
+  private var msg = ProductMessage()  // private state indicating whether to show product when one is defined
 
   import scala.language.postfixOps
   override def lifespan = Full(120 seconds)
@@ -29,7 +27,7 @@ class ProductConsume extends CometActor with CometListener with CSSUtils with Lo
   def render = {
     def consume(): JsCmd = {
       def mayConsume(p: Product): JsCmd = {
-        provider.consume(p) match {
+        Product.consume(p) match {
           case util.Success((userName, count)) =>
             ConfirmationExchange ! s"${p.name} has now been purchased $count time(s), $userName"
             ProductExchange ! ProductMessage(Empty) // Sends out to other snippets or comet actors (and self to disable self button) aynchronously event to clear contents of a product display as it's no longer applicable

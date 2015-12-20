@@ -62,11 +62,13 @@ object Store extends pagerRestClient with Loggable {
       case util.Success(Full(x)) =>
         TheStore.set(x)
         Full(x)
-      case _ => Empty
+      case util.Success(Empty) => logger.error("unable to find closest store info"); Empty
+      case util.Failure(x) => logger.error(s"unable to find closest store with error $x"); Empty
+      case _ => logger.error("unknown error in finding closest store"); Empty
     }
   }
 
-  def findStore(lat: String, lon: String): Try[Box[Store]] = {
+  private def findStore(lat: String, lon: String): Try[Box[Store]] = {
     val url = s"$LcboDomainURL/stores?where_not=is_dead" +
       additionalParam("lat", lat) +
       additionalParam("lon", lon)
@@ -81,7 +83,7 @@ object Store extends pagerRestClient with Loggable {
   @throws(classOf[java.net.SocketTimeoutException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @scala.annotation.tailrec
-  final def collectStoresOnAPage(accumItems: List[Store],
+  private final def collectStoresOnAPage(accumItems: List[Store],
                                  urlRoot: String,
                                  requiredSize: Int,
                                  pageNo: Int): List[Store] = {
