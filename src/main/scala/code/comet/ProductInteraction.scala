@@ -16,7 +16,7 @@ import net.liftweb.util.Helpers._
   * Much html and Javascript is generated here thanks to the capabilities of liftweb. Similar general comments apply more or less for other comet listeners and to snippets.
   * Created by philippederome on 15-10-26.
   */
-class ProductRecommend extends CometActor with CometListener with CSSUtils with Loggable {
+class ProductInteraction extends CometActor with CometListener with CSSUtils with Loggable {
   private val maxSampleSize = Props.getInt("product.maxSampleSize", 10)
   private var msg = ProductMessage() // private state indicating whether to show product when one is defined
   // and in this context here whether to enable or disable the Recommend button (empty means enable button, Full (product) being present means disable).
@@ -32,7 +32,7 @@ class ProductRecommend extends CometActor with CometListener with CSSUtils with 
       reRender()
   }
 
-  def render = renderRecommend & renderConsume
+  def render = renderRecommend & renderConsume & renderCancel
 
   def renderRecommend = {
     /**
@@ -41,7 +41,7 @@ class ProductRecommend extends CometActor with CometListener with CSSUtils with 
       * @return a JsCmd, i.e. generated JavaScript that the browser invokes in response to an earlier asynchronous form as Liftweb takes that JsCmd for browser to execute.
       *         Prior to that JsCmd, we can execute required code in server side.
       *         We eventually re-render to toggle buttons after action takes place (as a result of our publishing to Actors ProductExchange and ConfirmationExchange).
-      *         These actors and their messages effectively coordinate ProductRecommend and ProductConsumer as well as ProductDisplay.
+      *         These actors and their messages effectively coordinate ProductInteraction and ProductConsumer as well as ProductDisplay.
       */
     def recommend(): JsCmd = {
       def maySelect(): JsCmd =
@@ -75,7 +75,7 @@ class ProductRecommend extends CometActor with CometListener with CSSUtils with 
     // binding using Liftweb method of CSS selectors, left-hand side for each line match a number of DOM elements, whereas RHS takes an action on selected elements.
     // Note: toggling of buttons is useful to prevent excessive consecutive requests of same that would be too fast and unmanageable (flow control since we SIMULATE consumption)
     // We also do flow control in recommend handler to discard consecutive click events.
-    val addImgElem: CssSel = "#recommend *+" #> <img src="/images/recommend.png" alt=" "/>
+    val addImgElem: CssSel = "#recommend *+" #> <img src="/images/recommend.png" alt="recommend represented as question mark"/>
     msg.product match {
       case Full(p) =>
         "#recommend" #> disable & addImgElem // toggle to disable button. For Left case, we also toggle but don't need to explicitly enable since first instruction is to rewrite completely the DOM element and that removes the disabled attribute.
@@ -103,7 +103,7 @@ class ProductRecommend extends CometActor with CometListener with CSSUtils with 
 
     // binding using Liftweb method of CSS selectors, left-hand side for each line match a number of DOM elements, whereas RHS takes an action on selected elements.
     // Rendering below is in parallel when using & at EOL or sequential when using andThen. Sequence is independent from html element sequence.
-    val addImgElem: CssSel = "#consume *+" #> <img src="/images/winesmall.png" alt=" "/>
+    val addImgElem: CssSel = "#consume *+" #> <img src="/images/winesmall.png" alt="consume represented as glass of wine"/>
     msg.product match {
       case Full(p) =>
         "#consume" #> SHtml.ajaxButton("Consume", () => consume()) & addImgElem // rewrite the button DOM element by specifying its label and that its callback is AJAX and function consume, which will execute JS in browser when done
@@ -111,5 +111,13 @@ class ProductRecommend extends CometActor with CometListener with CSSUtils with 
         "#consume" #> disable & addImgElem // disables button by setting required disabled attribute. We do this when there's nothing to display/consume
     }
   }
+
+  def renderCancel =
+    "#cancel [onclick]" #> SHtml.ajaxInvoke(() => {
+      // AJAX as always, no downside to use it.
+      ConfirmationExchange ! ""
+      ProductExchange ! ProductMessage(Empty) // Sends out to other snippets asynchronously event to clear contents of a product display as it's no longer applicable
+    }) &
+      "#cancel *+" #> <img src="/images/cancel.png" alt="cancel represented as X"/> // since above completely wiped out the XML (HTML5) node, we just lost the nice image with button, so add it back by adding a DOM element with img underneath the button.
 
 }

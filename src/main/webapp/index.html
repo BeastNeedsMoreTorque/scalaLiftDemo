@@ -29,12 +29,10 @@
     </div>
 
     <div class="buttons">
-        <span data-lift="comet?type=ProductRecommend">
+        <span data-lift="comet?type=ProductInteraction">
           <button id="recommend">Recommend</button>
           <button id="consume">Consume</button>
-        </span>
-        <span data-lift="Cancel.button">
-          <button>Cancel</button>
+          <button id="cancel">Cancel</button>
         </span>
     </div>
     <br><br>  <!-- Need enough spacing beneath the buttons-->
@@ -44,7 +42,7 @@
     <div data-lift="comet?type=ProductDisplay">
       <span id="selectConfirmation"></span><br>
       <img id="productImg" src="#"/><br>
-        <!--ProductRecommend comet actor will resolve src with proper url if available -->
+        <!--ProductInteraction comet actor will resolve src with proper url if available -->
        <li id="productPackage"></li>
        <li class="clearable">package units</li>
         <!--generate other product items on the fly as simple li elements; keep a first dummy one not clearable so ...-->
