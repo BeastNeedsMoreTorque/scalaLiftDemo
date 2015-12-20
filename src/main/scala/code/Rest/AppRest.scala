@@ -1,33 +1,37 @@
 package code.Rest
 
-import code.model.{GeoCoordinates, Store}
-import net.liftweb.http._
+import code.model.Store
+import net.liftweb.http.rest.RestHelper
+import net.liftweb.json.JsonAST.JValue
+import scala.xml.Node
 
 /**
-  * Created by philippederome on 2015-12-16.
+  * Created by philippederome on 2015-12-19.
+  * @see http://simply.liftweb.net/index-5.3.html#prev
   */
-
-object AppRest  {
+object AppRest extends RestHelper {
 
   /*
-   * Find /store/lat/43.0/lon/-80.0.json (TEST!)
-   * Find /store/lat/43.0/lon/-80.0.xml
+   * Serve the URL, but have a helpful error message when you
+   * return a 404 if the item is not found
+   * @see http://simply.liftweb.net/index-5.3.html#prev
+   * Find /store/lat/43.0/lon/-80.0.json
+   * Find /store/lat/43.0/lon/-80.0.xml (tested!)
    */
-  lazy val findClosestStore: LiftRules.DispatchPF = {
-    case Req("store" :: "lat" :: lat :: "lon" :: lon :: Nil, //  path
-    suffix, // suffix
-    GetRequest) =>
-      () =>  Store.find(lat, lon).map( toResponse(suffix, _))
-  }
+  serve {
+    case "store" :: "lat" :: lat :: "lon" :: lon :: Nil JsonGet _ =>
+      for {
+      // find the store, and if it's not found,
+      // return a nice message for the 404
+        store <- Store.find(lat, lon) ?~ "Store Not Found"
+      } yield store: JValue
 
-  /*
-   * Given a suffix and a store, make a LiftResponse
-   */
-  private def toResponse(suffix: String, s: Store) = {
-    suffix match {
-      case "xml" => XmlResponse(s)
-      case _ => JsonResponse(s)
-    }
-  }
+    case "store" :: "lat" :: lat :: "lon" :: lon :: Nil XmlGet _ =>
+      for {
+      // find the store, and if it's not found,
+      // return a nice message for the 404
+        store <- Store.find(lat, lon) ?~ "Store Not Found"
+      } yield store: Node
 
+  }
 }
