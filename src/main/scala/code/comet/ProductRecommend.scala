@@ -32,7 +32,7 @@ class ProductRecommend extends CometActor with CometListener with CSSUtils with 
       reRender()
   }
 
-  def render = renderRecommend
+  def render = renderRecommend & renderConsume
 
   def renderRecommend = {
     /**
@@ -75,12 +75,41 @@ class ProductRecommend extends CometActor with CometListener with CSSUtils with 
     // binding using Liftweb method of CSS selectors, left-hand side for each line match a number of DOM elements, whereas RHS takes an action on selected elements.
     // Note: toggling of buttons is useful to prevent excessive consecutive requests of same that would be too fast and unmanageable (flow control since we SIMULATE consumption)
     // We also do flow control in recommend handler to discard consecutive click events.
-    val addImgElem: CssSel = "button *+" #> <img src="/images/recommend.png" alt=" "/>
+    val addImgElem: CssSel = "#recommend *+" #> <img src="/images/recommend.png" alt=" "/>
     msg.product match {
       case Full(p) =>
-        "button" #> disable & addImgElem // toggle to disable button. For Left case, we also toggle but don't need to explicitly enable since first instruction is to rewrite completely the DOM element and that removes the disabled attribute.
+        "#recommend" #> disable & addImgElem // toggle to disable button. For Left case, we also toggle but don't need to explicitly enable since first instruction is to rewrite completely the DOM element and that removes the disabled attribute.
       case _ =>
-        "button" #> SHtml.ajaxButton("Recommend", () => recommend()) & addImgElem // case is "No Product" meaning none applicable and thus we need to recommend, so set up ajax CB recommend that will do server side work and finally JS work, also label button with word Recommend
+        "#recommend" #> SHtml.ajaxButton("Recommend", () => recommend()) & addImgElem // case is "No Product" meaning none applicable and thus we need to recommend, so set up ajax CB recommend that will do server side work and finally JS work, also label button with word Recommend
     }
   }
+
+  def renderConsume = {
+    def consume(): JsCmd = {
+      def mayConsume(p: Product): JsCmd = {
+        Product.consume(p) match {
+          case util.Success((userName, count)) =>
+            ConfirmationExchange ! s"${p.name} has now been purchased $count time(s), $userName"
+            ProductExchange ! ProductMessage(Empty) // Sends out to other snippets or comet actors (and self to disable self button) aynchronously event to clear contents of a product display as it's no longer applicable
+            S.clearCurrentNotices // clears error message now that this is good, to get a clean screen.
+          case util.Failure(ex) => S.error(s"Unable to sell you product ${p.name} with error '$ex'")
+        }
+      }
+      msg.product match {
+        case Full(p)  => mayConsume(p) // we got notified that we have a product that can be consumed and user expressed interest in consuming. So, try it as a simulation by doing a DB store.
+        case _ => Noop // ignore consecutive clicks, ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
+      }
+    }
+
+    // binding using Liftweb method of CSS selectors, left-hand side for each line match a number of DOM elements, whereas RHS takes an action on selected elements.
+    // Rendering below is in parallel when using & at EOL or sequential when using andThen. Sequence is independent from html element sequence.
+    val addImgElem: CssSel = "#consume *+" #> <img src="/images/winesmall.png" alt=" "/>
+    msg.product match {
+      case Full(p) =>
+        "#consume" #> SHtml.ajaxButton("Consume", () => consume()) & addImgElem // rewrite the button DOM element by specifying its label and that its callback is AJAX and function consume, which will execute JS in browser when done
+      case _ =>
+        "#consume" #> disable & addImgElem // disables button by setting required disabled attribute. We do this when there's nothing to display/consume
+    }
+  }
+
 }
