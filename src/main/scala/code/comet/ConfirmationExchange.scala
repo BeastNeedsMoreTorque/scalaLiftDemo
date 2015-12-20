@@ -10,8 +10,6 @@ import actor._
 object ConfirmationExchange extends LiftActor with ListenerManager {
   private var msg: String = ""
 
-  /**
-      */
   def createUpdate = msg
 
   /**
