@@ -9,14 +9,8 @@ import net.liftweb.util.Props
   */
 object SessionCache {
   private val defaultCategory = Props.get("product.Category", "wine")
-  // None defined is acceptable though not great.
-  private val defaultStore = Props.getInt("store.Id", 1)
-  private val defaultLatitude: String = Props.get("user.latitude", "")
-  private val defaultLongitude: String = Props.get("user.longitude", "")
-
-  // if 1 it's HWY 401 & Weston.
+  private val defaultStore = Props.getInt("store.Id", 1)                  // if 1 it's HWY 401 & Weston.
 
   object TheCategory extends SessionVar[String](defaultCategory)
-
   object TheStore extends SessionVar[Store](Store(id=defaultStore))
 }
