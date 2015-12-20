@@ -76,8 +76,8 @@ class Boot {
     // Force the request to be UTF-8
     LiftRules.early.append(_.setCharacterEncoding("UTF-8"))
 
-    // Sends user location to determine closest store.
-    LiftRules.dispatch.append(AppRest.findClosestStore)
+    // Sends user location to determine closest store and possibly additional services.
+    LiftRules.dispatch.append(AppRest)
 
     // What is the function to test if a user is logged in?
     LiftRules.loggedInTest = Full(() => User.loggedIn_?)

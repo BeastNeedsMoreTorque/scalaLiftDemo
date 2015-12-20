@@ -18,7 +18,7 @@ var lcboViewer = (function() {
           // Show coordinates now, later on a map centered at position
           if (typeof position != 'undefined') currPosition = position.coords;
           $.ajax({
-              url: '/store/lat/' + currPosition.latitude.toString().replace('.',  ',') + '/lon/' +currPosition.longitude.toString().replace('.', ','), // use commas to help liftweb Req parsing in REST
+              url: '/store/lat/' + currPosition.latitude.toString().replace('.',  ',') + '/lon/' +currPosition.longitude.toString().replace('.', ',')+ '.json', // use commas to help liftweb Req parsing in REST
               type: 'GET',
               success: function(data, status){
                   var coords = position.coords;
