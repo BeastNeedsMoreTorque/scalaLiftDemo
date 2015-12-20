@@ -1,6 +1,6 @@
 package code.model
 
-import code.Rest.{pagerRestClient,DotDecimalString}
+import code.Rest.pagerRestClient
 import code.snippet.SessionCache.TheStore
 import net.liftweb.common.{Full, Empty, Box, Loggable}
 import net.liftweb.json._
