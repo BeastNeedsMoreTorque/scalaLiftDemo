@@ -17,9 +17,6 @@ import net.liftweb.util.Helpers._
   * Created by philippederome on 15-10-26.
   */
 class ProductSelect extends CometActor with CometListener with CSSUtils with Loggable {
-
-  private val provider = new ProductProvider() with PersistProductIDAsDB
-  // Dependency Injection (another part of the website could use a DB table!)
   private val maxSampleSize = Props.getInt("product.maxSampleSize", 10)
   private var msg = ProductMessage() // private state indicating whether to show product when one is defined
   // and in this context here whether to enable or disable the Recommend button (empty means enable button, Full (product) being present means disable).
@@ -49,7 +46,7 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
         TheStore.is.id match {
           // validates expected numeric input TheStore (a http session attribute) and when valid, do real handling of accessing LCBO data
           case s if s > 0 =>
-            val prod = provider.recommend(maxSampleSize, s, TheCategory.is) match {
+            val prod = Product.recommend(maxSampleSize, s, TheCategory.is) match {
               // we want to distinguish error messages to user to provide better diagnostics.
               case util.Success(p) =>
                 p or {
