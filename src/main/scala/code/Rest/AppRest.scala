@@ -3,7 +3,6 @@ package code.Rest
 import code.model.{GeoCoordinates, Store}
 import net.liftweb.http._
 
-
 /**
   * Created by philippederome on 2015-12-16.
   */
@@ -18,8 +17,7 @@ object AppRest  {
     case Req("store" :: "lat" :: lat :: "lon" :: lon :: Nil, //  path
     suffix, // suffix
     GetRequest) =>
-      () => Store.find(GeoCoordinates(lat, lon)).map(toResponse(suffix, _))
-
+      () =>  Store.find(lat, lon).map( toResponse(suffix, _))
   }
 
   /*

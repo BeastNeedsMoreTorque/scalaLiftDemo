@@ -2,12 +2,10 @@ package code.model
 
 import code.Rest.pagerRestClient
 import net.liftweb.util.Props
-
-import scala.util.Try
-
 import net.liftweb.json.DefaultFormats
 import net.liftweb.common.{Loggable, Box}
 import net.liftweb.json.JsonParser.parse
+import scala.util.Try
 
 /**
   * @author Phil Derome

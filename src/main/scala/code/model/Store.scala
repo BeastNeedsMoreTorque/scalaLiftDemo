@@ -51,7 +51,9 @@ object Store extends Loggable {
   /**
     * Find the closest store by coordinates
     */
-  def find(geo: GeoCoordinates): Box[Store] = synchronized {
+  def find( lat: String,  lon: String): Box[Store] = synchronized {
+    def appendDecimal(s: String) =  { if (s.indexOf(',') >=0) s.replace(',', '.')  else s + ".0" } // work around Liftweb Req parsing that extracts suffix after first period and not last one.
+    val geo = GeoCoordinates(appendDecimal(lat), appendDecimal(lon))
     TheUserCoordinates.set(geo)
     provider.findStore(geo) match {
       case util.Success(Full(x)) =>
