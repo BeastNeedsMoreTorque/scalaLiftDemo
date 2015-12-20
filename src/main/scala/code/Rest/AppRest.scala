@@ -5,33 +5,38 @@ import net.liftweb.http.rest.RestHelper
 import net.liftweb.json.JsonAST.JValue
 import scala.xml.Node
 
+object DotDecimalString {  // extractor for below
+  def apply(s: String): String = s
+  def unapply(s: String): Option[String] = if (s.indexOf(',') >=0) Some(s.replace(',', '.'))  else Some(s + ".0")
+}
+
 /**
   * Created by philippederome on 2015-12-19.
   * @see http://simply.liftweb.net/index-5.3.html#prev
   */
 object AppRest extends RestHelper {
-
   /*
    * Serve the URL, but have a helpful error message when you
    * return a 404 if the item is not found
    * @see http://simply.liftweb.net/index-5.3.html#prev
+   * @see http://simply.liftweb.net/index-Chapter-11.html
+   * @see https://www.assembla.com/spaces/liftweb/wiki/REST_Web_Services
    * Find /store/lat/43.0/lon/-80.0.json
    * Find /store/lat/43.0/lon/-80.0.xml (tested!)
    */
   serve {
-    case "store" :: "lat" :: lat :: "lon" :: lon :: Nil JsonGet _ =>
+    case "store" :: "lat" :: DotDecimalString(lat) :: "lon" :: DotDecimalString(lon) :: Nil JsonGet _ =>
       for {
       // find the store, and if it's not found,
       // return a nice message for the 404
         store <- Store.find(lat, lon) ?~ "Store Not Found"
-      } yield store: JValue
+      } yield store: JValue  // JValue is key to generate JSON (see converters in Store)
 
-    case "store" :: "lat" :: lat :: "lon" :: lon :: Nil XmlGet _ =>
+    case "store" :: "lat" :: DotDecimalString(lat)  :: "lon" :: DotDecimalString(lon)  :: Nil XmlGet _ =>
       for {
       // find the store, and if it's not found,
       // return a nice message for the 404
         store <- Store.find(lat, lon) ?~ "Store Not Found"
-      } yield store: Node
-
+      } yield store: Node  // Node is what generates XML (see converters in Store)
   }
 }
