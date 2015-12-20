@@ -5,10 +5,6 @@ import net.liftweb.http.rest.RestHelper
 import net.liftweb.json.JsonAST.JValue
 import scala.xml.Node
 
-object DotDecimalString {  // extractor for below
-  def apply(s: String): String = s
-  def unapply(s: String): Option[String] = if (s.indexOf(',') >=0) Some(s.replace(',', '.'))  else Some(s + ".0")
-}
 
 /**
   * Created by philippederome on 2015-12-19.
@@ -39,4 +35,6 @@ object AppRest extends RestHelper {
         store <- Store.find(lat, lon) ?~ "Store Not Found"
       } yield store: Node  // Node is what generates XML (see converters in Store)
   }
+
+
 }

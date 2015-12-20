@@ -16,7 +16,7 @@ import net.liftweb.util.Helpers._
   * Much html and Javascript is generated here thanks to the capabilities of liftweb. Similar general comments apply more or less for other comet listeners and to snippets.
   * Created by philippederome on 15-10-26.
   */
-class ProductSelect extends CometActor with CometListener with CSSUtils with Loggable {
+class ProductRecommend extends CometActor with CometListener with CSSUtils with Loggable {
   private val maxSampleSize = Props.getInt("product.maxSampleSize", 10)
   private var msg = ProductMessage() // private state indicating whether to show product when one is defined
   // and in this context here whether to enable or disable the Recommend button (empty means enable button, Full (product) being present means disable).
@@ -32,14 +32,16 @@ class ProductSelect extends CometActor with CometListener with CSSUtils with Log
       reRender()
   }
 
-  def render = {
+  def render = renderRecommend
+
+  def renderRecommend = {
     /**
       * provides a recommendation to a user for a product at LCBO at the selected store if valid.
       * Most of the logic is to distinguish different error handling cases, so that some troubleshooting can take place with some context.
       * @return a JsCmd, i.e. generated JavaScript that the browser invokes in response to an earlier asynchronous form as Liftweb takes that JsCmd for browser to execute.
       *         Prior to that JsCmd, we can execute required code in server side.
       *         We eventually re-render to toggle buttons after action takes place (as a result of our publishing to Actors ProductExchange and ConfirmationExchange).
-      *         These actors and their messages effectively coordinate ProductSelect and ProductConsumer as well as ProductDisplay.
+      *         These actors and their messages effectively coordinate ProductRecommend and ProductConsumer as well as ProductDisplay.
       */
     def recommend(): JsCmd = {
       def maySelect(): JsCmd =

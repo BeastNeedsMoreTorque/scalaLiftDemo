@@ -24,7 +24,9 @@ class ProductConsume extends CometActor with CometListener with CSSUtils with Lo
     case p: ProductMessage => msg = p; reRender()
   }
 
-  def render = {
+  def render = renderConsume
+
+  def renderConsume = {
     def consume(): JsCmd = {
       def mayConsume(p: Product): JsCmd = {
         Product.consume(p) match {
