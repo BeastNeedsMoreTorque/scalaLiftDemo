@@ -26,6 +26,11 @@ var lcboViewer = (function() {
      };
 
     return {
+        toggleButtonPair: function(onButt1, offButt2) {
+           document.getElementById(onButt1).disabled = false;
+           document.getElementById(offButt2).disabled = 'disabled';
+        },
+        
         fetchStoreFromPosition: function() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(fetchStore);
