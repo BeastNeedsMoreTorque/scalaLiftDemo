@@ -27,8 +27,8 @@ var lcboViewer = (function() {
 
     return {
         toggleButtonPair: function(onButt1, offButt2) {
-           document.getElementById(onButt1).disabled = false;
-           document.getElementById(offButt2).disabled = 'disabled';
+           document.getElementsByName(onButt1)[0].disabled = false;
+           document.getElementsByName(offButt2)[0].disabled = 'disabled';
         },
         
         fetchStoreFromPosition: function() {

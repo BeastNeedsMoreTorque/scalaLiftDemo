@@ -19,34 +19,29 @@
       </span>
     </span><br>
 
-<form data-lift="form.ajax"> <!-- experimental -->
-    <div data-lift="AjaxAttr">
-         <input id="button1" type="submit" value="Apple" hidden>
-    </div>
-</form>
-    <div >
+    <div>
          <span id="storeNearby"></span><br><br>
     </div>
 
+    <span data-lift="ProductInteraction">
+
     <div class="buttons">
-        <span data-lift="ProductInteraction">
-          <button id="recommend">Recommend</button>
-          <button id="consume">Consume</button>
-          <button id="cancel">Cancel</button>
-        </span>
+          <button name="recommend" value="recommend">Recommend</button>
+          <button name="consume" value="consume">Consume</button>
+          <button name="cancel" value="cancel">Cancel</button>
     </div>
     <br><br>  <!-- Need enough spacing beneath the buttons-->
-    <span data-lift="comet?type=ConfirmationReceiver">
-      <span id="confirmMsg">liquor confirmation goes here</span>
-    </span>
-    <div data-lift="comet?type=ProductDisplay">
-      <span id="selectConfirmation"></span><br>
-      <img id="productImg" src="#"/><br>
-        <!--ProductInteraction comet actor will resolve src with proper url if available -->
-       <li id="productPackage"></li>
-       <li class="clearable">package units</li>
+        <span id="confirmMsg">liquor confirmation goes here</span>
+        <div id="prodDisplay" hidden>
+          <span id="selectConfirmation"></span><br>
+          <img id="productImg" src="#"/><br>
+          <!--ProductInteraction comet actor will resolve src with proper url if available -->
+           <li id="productPackage"></li>
+           <li class="clearable">package units</li>
+        </div>
         <!--generate other product items on the fly as simple li elements; keep a first dummy one not clearable so ...-->
-    </div>
+    </span>
+
     <div data-lift="with-resource-id">
       <script>  /* <![CDATA[ */
           $(window).load(function(){

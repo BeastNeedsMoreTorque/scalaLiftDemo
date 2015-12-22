@@ -57,12 +57,12 @@ case class Product(id: Int,
   def createProductLIElemVals: List[String] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
     s"Package: $Package" ::
-      s"Package Units: $totalPackageUnits" ::
-      "Price: $" + price ::
-      s"Alcohol content: $alcoholContent" ::
-      s"Origin: $origin" ::
-      s"Volume: $volumeInLitre" ::
-      Nil
+    s"Package Units: $totalPackageUnits" ::
+    "Price: $" + price ::
+    s"Alcohol content: $alcoholContent" ::
+    s"Origin: $origin" ::
+    s"Volume: $volumeInLitre" ::
+    Nil
 }
 
 object Product extends pagerRestClient with Loggable {
