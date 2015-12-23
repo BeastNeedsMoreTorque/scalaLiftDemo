@@ -30,7 +30,7 @@ class DBProduct extends LongKeyedMapper[DBProduct] with CreatedUpdated  {
 
   object total_package_units extends MappedInt(this)
 
-  object primary_category extends MappedString(this, 20)
+  object primary_category extends MappedString(this, 40)
 
   object name extends MappedString(this, 80)
 

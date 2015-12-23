@@ -1,6 +1,5 @@
 package code.snippet
 
-import code.comet.{CSSUtils, ProductExchange}
 import code.model._
 import code.snippet.SessionCache.{TheCategory, TheStore}
 import net.liftweb.common._
@@ -11,7 +10,7 @@ import net.liftweb.http.js.jquery.JqJsCmds.jsExpToJsCmd
 import net.liftweb.http.{S, SHtml}
 import net.liftweb.util.Helpers._
 import net.liftweb.util.{ClearClearable, CssSel, Props}
-
+import net.liftweb.common.Box
 
 /**
   * This snippet contains state only via HTTP session (A Liftweb snippet is a web page fragment that has autonomous existence equivalent to a page with framework
@@ -20,9 +19,9 @@ import net.liftweb.util.{ClearClearable, CssSel, Props}
   * Much html and Javascript is generated here thanks to the capabilities of liftweb. Similar general comments apply more or less for other comet listeners and to snippets.
   * Created by philippederome on 15-10-26.
   */
-class ProductInteraction extends CSSUtils with Loggable {
+class ProductInteraction extends Loggable {
   private val maxSampleSize = Props.getInt("product.maxSampleSize", 10)
-  private var msg = ProductMessage() // private state indicating whether to show product when one is defined
+  private var product: Box[Product] = Empty // private state indicating whether to show product when one is defined
   // and in this context here whether to enable or disable the Recommend button (empty means enable button, Full (product) being present means disable).
   private var confirm = ""
   private val toggleButtonsToConsumeJS = JsRaw("lcboViewer.toggleButtonPair( 'consume', 'recommend')")
@@ -38,7 +37,7 @@ class ProductInteraction extends CSSUtils with Loggable {
   private val showProdDisplayJS: JsCmd = jsExpToJsCmd(JsRaw("document.getElementById('prodDisplay').removeAttribute('hidden')"))
 
   def render = {
-    val buttonPairCssSel: CssSel = msg.product match {
+    val buttonPairCssSel: CssSel = product match {
       case Full(p) =>
        "#selectConfirmation" #> s"For social time, we suggest you: ${p.name}"  // assigns RHS text message as value of DOM element selectConfirmation
         "li *" #> p.createProductLIElemVals & // generates many html li items on the fly one per list entry.
@@ -77,19 +76,19 @@ class ProductInteraction extends CSSUtils with Loggable {
             Noop
           } { p: Product =>
             println(s"recommend got prod to display ${prodDisplayJS(p)}")
-            msg = ProductMessage(Full(p))
-            ProductExchange ! msg // Sends out to Comet Actors AND SELF asynchronously the event that this product can now be rendered.
+            product = Full(p)
             S.clearCurrentNotices
             prodDisplayJS(p) // clear error message to make way for normal layout representing normal condition.
           }
         case _ => S.error(s"Enter a number > 0 for Store") // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter
       }
 
-    msg.product match {
+    product match {
       case Full(p) => prodDisplayJS(p) // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable for a series of clicks on button before we have time to disable it
       case _ =>
         println(s"recommend conf: $confirm ${setConfirmJS(confirm).toString} ")
-        maySelect() & toggleButtonsToConsumeJS & showProdDisplayJS & setConfirmJS(confirm)  // normal processing  (ProductConsume does it the other way around as it plays opposite role as to when it should be active)
+        val firstCmd = maySelect()
+        firstCmd & toggleButtonsToConsumeJS & showProdDisplayJS & setConfirmJS(confirm)  // normal processing  (ProductConsume does it the other way around as it plays opposite role as to when it should be active)
     }
   }
 
@@ -98,14 +97,13 @@ class ProductInteraction extends CSSUtils with Loggable {
       Product.consume(p) match {
         case util.Success((userName, count)) =>
           confirm =s"${p.name} has now been purchased $count time(s), $userName"
-          msg = ProductMessage(Empty)
-          ProductExchange ! msg // Sends out to other snippets or comet actors (and self to disable self button) aynchronously event to clear contents of a product display as it's no longer applicable
+          product = Empty
           S.clearCurrentNotices // clears error message now that this is good, to get a clean screen.
         case util.Failure(ex) => S.error(s"Unable to sell you product ${p.name} with error '$ex'")
       }
     }
 
-    msg.product match {
+    product match {
       case Full(p)  =>
         val firstCmd = mayConsume(p)
         val lastCmd = setConfirmJS(confirm)
@@ -117,9 +115,8 @@ class ProductInteraction extends CSSUtils with Loggable {
 
   def cancel(): JsCmd = {
     confirm = ""
-    msg = ProductMessage(Empty)
-    ProductExchange ! msg // Sends out to other snippets asynchronously event to clear contents of a product display as it's no longer applicable
-    toggleButtonsToRecommendJS & setConfirmJS(confirm)
+    product = Empty
+    toggleButtonsToRecommendJS & setConfirmJS(confirm) & hideProdDisplayJS
   }
 
 }
