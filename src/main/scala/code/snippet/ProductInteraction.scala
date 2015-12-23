@@ -8,7 +8,7 @@ import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.{S, SHtml}
 import net.liftweb.util.Helpers._
-import net.liftweb.util.{ClearClearable, CssSel, Props}
+import net.liftweb.util.Props
 import scala.xml.Text
 
 /**
@@ -25,12 +25,15 @@ object ProductInteraction extends Loggable {
     val toggleButtonsToConsumeJS = Call("lcboViewer.toggleButtonPair", "consume", "recommend")
     val toggleButtonsToRecommendJS = Call("lcboViewer.toggleButtonPair","recommend", "consume")
     def setConfirmJS = SetHtml("confirmMsg", Text(TheSelectionConfirmation.is))
+    def socialTimeJS(t: String) = SetHtml("selectConfirmation", Text(t))
+
     def prodAttributesJS(p: Product) = {
       val nodeSeq = for (x <- p.createProductLIElemVals) yield <li>{x}</li>
       SetHtml("prodAttributes", nodeSeq)
     }
     def prodDisplayJS(prod: Product) =
       SetHtml("prodImg", <img src={prod.imageThumbUrl}/>) &
+      socialTimeJS(s"For social time, we suggest you: ${prod.name}") &
       prodAttributesJS(prod) &
       JsShowId("prodDisplay")
     val hideProdDisplayJS =  JsHideId("prodDisplay")
@@ -38,7 +41,7 @@ object ProductInteraction extends Loggable {
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
     // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
     def cancelCbJS = toggleButtonsToRecommendJS & setConfirmJS & hideProdDisplayJS
-    def consumeCbJS = toggleButtonsToRecommendJS & hideProdDisplayJS & setConfirmJS
+    def consumeCbJS = toggleButtonsToRecommendJS & socialTimeJS("") & hideProdDisplayJS & setConfirmJS
     def recommendCbJS = toggleButtonsToConsumeJS & setConfirmJS
 
     def recommend(): JsCmd = {
@@ -101,18 +104,8 @@ object ProductInteraction extends Loggable {
       TheProduct.set(Empty)
       cancelCbJS
     }
-
-    val buttonPairCssSel: CssSel = TheProduct.is match {
-      case Full(p) =>
-       "#selectConfirmation" #> s"For social time, we suggest you: ${p.name}"  // assigns RHS text message as value of DOM element selectConfirmation
-        "li *" #> p.createProductLIElemVals & // generates many html li items on the fly one per list entry.
-        ClearClearable // ensures list items appear only once (not duplicated)
-      case _ =>
-        "li [hidden+]" #> "true"
-    }
-    val addConsumeImgElem: CssSel = "@consume *+" #> <img src="/images/winesmall.png" alt="consume represented as glass of wine"/>
-    val addRecommendImgElem: CssSel = "@recommend *+" #> <img src="/images/recommend.png" alt="recommend represented as question mark"/>
-    val addCancelImgElem: CssSel = "@cancel *+" #> <img src="/images/cancel.png" alt="cancel represented as X"/>
+    // render transforms a xml/html node, in this case it assigns the onclick attribute to all the buttons
+    // using CSS selector * [onclick], leaving content alone (text and image)
     "* [onclick]" #> SHtml.ajaxCall(JsRaw("this.value"), { (s: String) =>
        s match {
          case "consume" => consume()
@@ -120,8 +113,6 @@ object ProductInteraction extends Loggable {
          case "cancel" => cancel()
          case _ => Noop
        }
-    }) & buttonPairCssSel & addCancelImgElem & addRecommendImgElem & addConsumeImgElem &
-    "#confirmMsg *"  #> TheSelectionConfirmation.is
- }
-
+    })
+  }
 }
