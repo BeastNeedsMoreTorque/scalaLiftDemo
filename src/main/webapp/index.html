@@ -25,16 +25,16 @@
 
     <span data-lift="ProductInteraction">
       <div class="buttons">
-          <button name="recommend" value="recommend">Recommend<img src="/images/recommend.png" alt="recommend represented as question mark"/></button>
-          <button name="consume" value="consume" disabled="disabled">Consume<img src="/images/winesmall.png" alt="consume represented as glass of wine"/></button>
-          <button name="cancel" value="cancel">Cancel<img src="/images/cancel.png" alt="cancel represented as X"/></button>
+          <button name="recommend" value="recommend">Recommend<img src="/images/recommend.png" alt="recommend: question mark"/></button>
+          <button name="consume" value="consume" disabled="disabled">Consume<img src="/images/winesmall.png" alt="consume: glass of wine"/></button>
+          <button name="cancel" value="cancel">Cancel<img src="/images/cancel.png" alt="cancel: X"/></button>
       </div>
       <br><br>  <!-- Need enough spacing beneath the buttons-->
-        <span id="confirmMsg"></span>
+        <span id="transactionConfirmation"></span>
         <div id="prodDisplay" hidden>
           <span id="selectConfirmation"></span><br>
           <span id="prodImg"><img src="#"/></span><br>
-          <span id="prodAttributes">         <!--generate other product items on the fly as simple li elements; keep a first dummy one not clearable so ...-->
+          <span id="prodAttributes">   <!--generate other product items on the fly as simple li elements-->
           </span>
       </div>
     </span>
