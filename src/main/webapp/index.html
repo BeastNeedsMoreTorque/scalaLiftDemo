@@ -20,37 +20,33 @@
     </span><br>
 
     <div>
-         <span id="storeNearby"></span><br><br>
+        <span id="storeNearby"></span><br><br>
     </div>
 
     <span data-lift="ProductInteraction">
-
-    <div class="buttons">
+      <div class="buttons">
           <button name="recommend" value="recommend">Recommend</button>
           <button name="consume" value="consume" disabled="disabled">Consume</button>
           <button name="cancel" value="cancel">Cancel</button>
-    </div>
-    <br><br>  <!-- Need enough spacing beneath the buttons-->
+      </div>
+      <br><br>  <!-- Need enough spacing beneath the buttons-->
         <span id="confirmMsg">liquor confirmation goes here</span>
         <div id="prodDisplay" hidden>
           <span id="selectConfirmation"></span><br>
-          <span id="productImg"><img src="#"/></span><br>
-          <!--ProductInteraction comet actor will resolve src with proper url if available -->
-            <span id="prodAttributes">
-                <li id="productPackage"></li>
-                <li class="clearable">package units</li>
-            </span>
-
-        </div>
-        <!--generate other product items on the fly as simple li elements; keep a first dummy one not clearable so ...-->
+          <span id="prodImg"><img src="#"/></span><br>
+          <span id="prodAttributes">         <!--generate other product items on the fly as simple li elements; keep a first dummy one not clearable so ...-->
+             <li id="productPackage"></li>
+             <li class="clearable">package units</li>
+          </span>
+      </div>
     </span>
 
-      <script>  /* <![CDATA[ */
-          $(window).load(function(){
-              lcboViewer.fetchStoreFromPosition();
-          }); /* ]]> */
-      </script>
-      <script src="scripts/scripts.js"></script>
+    <script>  /* <![CDATA[ */
+        $(window).load(function(){
+            lcboViewer.fetchStoreFromPosition();
+        }); /* ]]> */
+    </script>
+    <script src="scripts/scripts.js"></script>
 </div>
 
 <script src="/ajax_request/liftAjax.js" type="text/javascript"></script>
