@@ -26,3 +26,12 @@ sbt: simply use jetty:start (not container:start). Upgrade to latest.
 Upgrade scala (2.11.7 is latest as of Fall 2015)
 
 Upgrade liftweb fairly aggressively (2.6 is latest as of Fall 2015), read release notes
+
+Dec 22: bugs
+forcing data category (coolers) too large for product.primary_category causes a crash instead of catching exception nicely.
+
+Seeing crappy Unmapped Lift-like parameter seen in request [/]: F1248216611878RCLVMO
+when using snippets instead of comet and mixing up login/logout with 2 sessions in the same browser.
+1) login on one tab as id1, logout on 2nd tab, login as different user id2 on 2nd tab, come back to 1st tab without logging out (user is new but now buttons trigger these errors).
+
+Consume does not always work after a product selection.
