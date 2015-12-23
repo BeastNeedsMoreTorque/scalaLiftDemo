@@ -24,8 +24,8 @@ object ProductInteraction extends Loggable {
   def render = {
     val toggleButtonsToConsumeJS = Call("lcboViewer.toggleButtonPair", "consume", "recommend")
     val toggleButtonsToRecommendJS = Call("lcboViewer.toggleButtonPair","recommend", "consume")
-    def setConfirmJS = SetHtml("confirmMsg", Text(TheSelectionConfirmation.is))
-    def socialTimeJS(t: String) = SetHtml("selectConfirmation", Text(t))
+    def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(TransactionConfirmation.is))
+    def selectConfirmationJS(t: String) = SetHtml("selectConfirmation", Text(t))
 
     def prodAttributesJS(p: Product) = {
       val nodeSeq = for (x <- p.createProductLIElemVals) yield <li>{x}</li>
@@ -33,16 +33,16 @@ object ProductInteraction extends Loggable {
     }
     def prodDisplayJS(prod: Product) =
       SetHtml("prodImg", <img src={prod.imageThumbUrl}/>) &
-      socialTimeJS(s"For social time, we suggest you: ${prod.name}") &
+        selectConfirmationJS(s"For social time, we suggest you: ${prod.name}") &
       prodAttributesJS(prod) &
       JsShowId("prodDisplay")
     val hideProdDisplayJS =  JsHideId("prodDisplay")
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
     // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
-    def cancelCbJS = toggleButtonsToRecommendJS & setConfirmJS & hideProdDisplayJS
-    def consumeCbJS = toggleButtonsToRecommendJS & socialTimeJS("") & hideProdDisplayJS & setConfirmJS
-    def recommendCbJS = toggleButtonsToConsumeJS & setConfirmJS
+    def cancelCbJS = toggleButtonsToRecommendJS & transactionConfirmationJS & hideProdDisplayJS
+    def consumeCbJS = toggleButtonsToRecommendJS & selectConfirmationJS("") & hideProdDisplayJS & transactionConfirmationJS
+    def recommendCbJS = toggleButtonsToConsumeJS & transactionConfirmationJS
 
     def recommend(): JsCmd = {
       def maySelect(): JsCmd =
@@ -59,7 +59,7 @@ object ProductInteraction extends Loggable {
                 } // returns prod normally but if empty, send a notice of error and return empty.
               case util.Failure(ex) => S.error(s"Unable to choose product of category ${TheCategory.is} with error $ex"); Empty
             }
-            TheSelectionConfirmation.set("")
+            TransactionConfirmation.set("")
             prod.dmap {
               Noop
             } { p: Product =>
@@ -84,7 +84,7 @@ object ProductInteraction extends Loggable {
       def mayConsume(p: Product): JsCmd = {
         Product.consume(p) match {
           case util.Success((userName, count)) =>
-            TheSelectionConfirmation.set(s"${p.name} has now been purchased $count time(s), $userName")
+            TransactionConfirmation.set(s"${p.name} has now been purchased $count time(s), $userName")
             TheProduct.set(Empty)
             S.clearCurrentNotices // clears error message now that this is good, to get a clean screen.
           case util.Failure(ex) => S.error(s"Unable to sell you product ${p.name} with error '$ex'")
@@ -100,7 +100,7 @@ object ProductInteraction extends Loggable {
     }
 
     def cancel(): JsCmd = {
-      TheSelectionConfirmation.set("")
+      TransactionConfirmation.set("")
       TheProduct.set(Empty)
       cancelCbJS
     }
