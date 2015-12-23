@@ -87,8 +87,7 @@ class ProductInteraction extends Loggable {
       case Full(p) => prodDisplayJS(p) // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable for a series of clicks on button before we have time to disable it
       case _ =>
         println(s"recommend conf: $confirm ${setConfirmJS(confirm).toString} ")
-        val firstCmd = maySelect()
-        firstCmd & toggleButtonsToConsumeJS & showProdDisplayJS & setConfirmJS(confirm)  // normal processing  (ProductConsume does it the other way around as it plays opposite role as to when it should be active)
+        maySelect() & toggleButtonsToConsumeJS & showProdDisplayJS & setConfirmJS(confirm)  // normal processing  (ProductConsume does it the other way around as it plays opposite role as to when it should be active)
     }
   }
 
@@ -105,10 +104,8 @@ class ProductInteraction extends Loggable {
 
     product match {
       case Full(p)  =>
-        val firstCmd = mayConsume(p)
-        val lastCmd = setConfirmJS(confirm)
-        println(s"consume conf: $confirm ${lastCmd.toString}")
-        firstCmd & toggleButtonsToRecommendJS & hideProdDisplayJS & lastCmd  // we got notified that we have a product that can be consumed and user expressed interest in consuming. So, try it as a simulation by doing a DB store.
+        println(s"consume conf: $confirm ${setConfirmJS(confirm)}")
+        mayConsume(p) & toggleButtonsToRecommendJS & hideProdDisplayJS & setConfirmJS(confirm)  // we got notified that we have a product that can be consumed and user expressed interest in consuming. So, try it as a simulation by doing a DB store.
       case _ => Noop // ignore consecutive clicks, ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
     }
   }
