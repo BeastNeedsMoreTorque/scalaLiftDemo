@@ -1,6 +1,7 @@
 package code.snippet
 
-import code.model.Store
+import code.model.{Product, Store}
+import net.liftweb.common.{Empty, Box}
 import net.liftweb.http.SessionVar
 import net.liftweb.util.Props
 
@@ -13,4 +14,7 @@ object SessionCache {
 
   object TheCategory extends SessionVar[String](defaultCategory)
   object TheStore extends SessionVar[Store](Store(id=defaultStore))
+  object TheProduct extends SessionVar[Box[Product]](Empty)
+  object TheSelectionConfirmation extends SessionVar[String]("")
+
 }
