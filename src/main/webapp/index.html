@@ -27,14 +27,14 @@
 
     <div class="buttons">
           <button name="recommend" value="recommend">Recommend</button>
-          <button name="consume" value="consume">Consume</button>
+          <button name="consume" value="consume" disabled="disabled">Consume</button>
           <button name="cancel" value="cancel">Cancel</button>
     </div>
     <br><br>  <!-- Need enough spacing beneath the buttons-->
         <span id="confirmMsg">liquor confirmation goes here</span>
         <div id="prodDisplay" hidden>
           <span id="selectConfirmation"></span><br>
-          <img id="productImg" src="#"/><br>
+          <span id="productImg"><img src="#"/></span><br>
           <!--ProductInteraction comet actor will resolve src with proper url if available -->
            <li id="productPackage"></li>
            <li class="clearable">package units</li>
