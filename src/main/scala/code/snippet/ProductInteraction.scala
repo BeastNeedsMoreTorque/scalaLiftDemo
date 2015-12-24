@@ -24,16 +24,22 @@ object ProductInteraction extends Loggable {
   def render = {
     val toggleButtonsToConsumeJS = Call("lcboViewer.toggleButtonPair", "consume", "recommend")
     val toggleButtonsToRecommendJS = Call("lcboViewer.toggleButtonPair","recommend", "consume")
-    def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(TransactionConfirmation.is))
+    def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
     def selectConfirmationJS(t: String) = SetHtml("selectConfirmation", Text(t))
 
+    /**
+      * Generates a list of <li></li> elements as nodes of element prodAttributes
+      *
+      * @param p Product
+      * @return a JsCmd that is JavaScript Lift will execute
+      */
     def prodAttributesJS(p: Product) = {
       val nodeSeq = for (x <- p.createProductLIElemVals) yield <li>{x}</li>
       SetHtml("prodAttributes", nodeSeq)
     }
     def prodDisplayJS(prod: Product) =
       SetHtml("prodImg", <img src={prod.imageThumbUrl}/>) &
-        selectConfirmationJS(s"For social time, we suggest you: ${prod.name}") &
+      selectConfirmationJS(s"For social time, we suggest you: ${prod.name}") &
       prodAttributesJS(prod) &
       JsShowId("prodDisplay")
     val hideProdDisplayJS =  JsHideId("prodDisplay")
@@ -44,34 +50,32 @@ object ProductInteraction extends Loggable {
     def consumeCbJS = toggleButtonsToRecommendJS & selectConfirmationJS("") & hideProdDisplayJS & transactionConfirmationJS
     def recommendCbJS = toggleButtonsToConsumeJS & transactionConfirmationJS
 
-    def recommend(): JsCmd = {
+    def recommend() = {
       def maySelect(): JsCmd =
-        TheStore.is.id match {
+        theStore.is.id match {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
           case s if s > 0 =>
-            val prod = Product.recommend(maxSampleSize, s, TheCategory.is) match {
+            val prod = Product.recommend(maxSampleSize, s, theCategory.is) match {
               // we want to distinguish error messages to user to provide better diagnostics.
               case util.Success(p) =>
                 p or {
-                  S.notice(s"no product available for category ${TheCategory.is}")
+                  S.notice(s"no product available for category ${theCategory.is}")
                   Empty
                 } // returns prod normally but if empty, send a notice of error and return empty.
-              case util.Failure(ex) => S.error(s"Unable to choose product of category ${TheCategory.is} with error $ex"); Empty
+              case util.Failure(ex) => S.error(s"Unable to choose product of category ${theCategory.is} with error $ex"); Empty
             }
-            TransactionConfirmation.set("")
-            prod.dmap {
-              Noop
-            } { p: Product =>
-              TheProduct.set(Full(p))
-              S.clearCurrentNotices // clear error message to make way for normal layout representing normal condition.
-              prodDisplayJS(p)
+            transactionConfirmation.set("")
+            prod.dmap { Noop } { p: Product =>
+                theProduct.set(Full(p))
+                S.clearCurrentNotices // clear error message to make way for normal layout representing normal condition.
+                prodDisplayJS(p)
             }
           case _ => S.error(s"Enter a number > 0 for Store")
           // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter
         }
 
-      TheProduct.is match {
+      theProduct.is match {
         case Full(p) => prodDisplayJS(p)
         // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
         // for a series of clicks on button before we have time to disable it
@@ -80,18 +84,18 @@ object ProductInteraction extends Loggable {
       }
     }
 
-    def consume(): JsCmd = {
+    def consume() = {
       def mayConsume(p: Product): JsCmd = {
         Product.consume(p) match {
           case util.Success((userName, count)) =>
-            TransactionConfirmation.set(s"${p.name} has now been purchased $count time(s), $userName")
-            TheProduct.set(Empty)
+            transactionConfirmation.set(s"${p.name} has now been purchased $count time(s), $userName")
+            theProduct.set(Empty)
             S.clearCurrentNotices // clears error message now that this is good, to get a clean screen.
           case util.Failure(ex) => S.error(s"Unable to sell you product ${p.name} with error '$ex'")
         }
       }
 
-      TheProduct.is match {
+      theProduct.is match {
         case Full(p)  => mayConsume(p) & consumeCbJS
           // we got notified that we have a product that can be consumed and user expressed interest in consuming.
           // So, try it as a simulation by doing a DB store.
@@ -99,14 +103,14 @@ object ProductInteraction extends Loggable {
       }
     }
 
-    def cancel(): JsCmd = {
-      TransactionConfirmation.set("")
-      TheProduct.set(Empty)
+    def cancel() = {
+      transactionConfirmation.set("")
+      theProduct.set(Empty)
       cancelCbJS
     }
     // render transforms a xml/html node, in this case it assigns the onclick attribute to all the buttons
     // using CSS selector * [onclick], leaving content alone (text and image)
-    "* [onclick]" #> SHtml.ajaxCall(JsRaw("this.value"), { (s: String) =>
+    "* [onclick]" #> SHtml.ajaxCall(JsRaw("this.value"), { s =>
        s match {
          case "consume" => consume()
          case "recommend" => recommend()
