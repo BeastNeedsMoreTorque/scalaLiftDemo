@@ -12,9 +12,9 @@ object SessionCache {
   private val defaultCategory = Props.get("product.Category", "wine")
   private val defaultStore = Props.getInt("store.Id", 1)                  // if 1 it's HWY 401 & Weston.
 
-  object TheCategory extends SessionVar[String](defaultCategory)
-  object TheStore extends SessionVar[Store](Store(id=defaultStore))
-  object TheProduct extends SessionVar[Box[Product]](Empty)
-  object TransactionConfirmation extends SessionVar[String]("")
+  object theCategory extends SessionVar[String](defaultCategory)
+  object theStore extends SessionVar[Store](Store(id=defaultStore))
+  object theProduct extends SessionVar[Box[Product]](Empty)
+  object transactionConfirmation extends SessionVar[String]("")
 
 }

@@ -1,7 +1,7 @@
 package code.snippet
 
 import code.model.LiquorCategory
-import code.snippet.SessionCache.TheCategory
+import code.snippet.SessionCache.theCategory
 import net.liftweb.common.Full
 import net.liftweb.http.SHtml
 import net.liftweb.http.SHtml.{ChoiceHolder, ChoiceItem}
@@ -38,9 +38,9 @@ object CategorySelect {
   def render =
     ".options" #> LabelStyle.toForm(SHtml.ajaxRadio(
       LiquorCategory.sortedSeq,
-      Full(TheCategory.is),
+      Full(theCategory.is),
       (s: String) => {
-        TheCategory.set(s);
+        theCategory.set(s);
         Noop
       }))
 

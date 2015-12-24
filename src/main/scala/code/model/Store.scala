@@ -1,7 +1,6 @@
 package code.model
 
-import code.Rest.pagerRestClient
-import code.snippet.SessionCache.TheStore
+
 import net.liftweb.common.{Full, Empty, Box, Loggable}
 import net.liftweb.json._
 import net.liftweb.util.Props
@@ -10,6 +9,8 @@ import net.liftweb.json.JsonParser.parse
 import scala.util.Try
 import scala.xml.Node
 
+import code.Rest.pagerRestClient
+import code.snippet.SessionCache.theStore
 /**
   * Created by philippederome on 15-11-01.
   * This is captured from JSON parsing.
@@ -60,7 +61,7 @@ object Store extends pagerRestClient with Loggable {
   def find( lat: String,  lon: String): Box[Store] = synchronized {
     findStore(lat, lon) match {
       case util.Success(Full(x)) =>
-        TheStore.set(x)
+        theStore.set(x)
         Full(x)
       case util.Success(Empty) => logger.error("unable to find closest store info"); Empty
       case util.Failure(x) => logger.error(s"unable to find closest store with error $x"); Empty
