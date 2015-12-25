@@ -4,14 +4,18 @@ import code.model.LiquorCategory
 import code.snippet.SessionCache.theCategory
 import net.liftweb.common.Empty
 import net.liftweb.http.SHtml
-import net.liftweb.http.js.JsCmds.Noop
+import net.liftweb.http.js.JE.Call
+import net.liftweb.http.js.JsCmds._
+import net.liftweb.http.js.JsCmd
 import net.liftweb.util.Helpers._
 
 /**
   * Created by philippederome on 2015-12-05.
   */
 object CategorySelect {
-  private val radioOptions = LiquorCategory.sortedSeq.map{(s: String) => RadioElements(s, <img src={LiquorCategory.toImg(s)}/>)}
+  private val radioOptions = LiquorCategory.sortedSeq.map{(s: String) => RadioElements(s, <img id={s+"Img"} src={LiquorCategory.toImg(s)}/>)}
+
+  def setCategoryBorderJS(elt: String): JsCmd = Call("lcboViewer.categoryAction", s"${elt}Img")
 
   /**
     * save radio button selection as next default to avoid annoying resetting to original default and make it session persistent
@@ -27,7 +31,7 @@ object CategorySelect {
     radioOptions, Empty,
     (choice: RadioElements) => {
       theCategory.set(choice.name)
-      Noop
+      setCategoryBorderJS(choice.name)
     })) andThen
       "input [hidden]" #> "true"  // to hide the classic circle of the radio button (needs to be scheduled after prior NodeSeq transformation
   }
