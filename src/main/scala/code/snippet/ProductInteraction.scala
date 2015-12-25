@@ -11,7 +11,6 @@ import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 import scala.xml._
 
-
 /**
   * This snippet contains state only via HTTP session (A Liftweb snippet is a web page fragment that has autonomous existence
   * equivalent to a page with framework
@@ -22,9 +21,9 @@ import scala.xml._
 object ProductInteraction extends Loggable {
   private val maxSampleSize = Props.getInt("product.maxSampleSize", 10)
   private val radioOptions =
-    RadioElements("recommend", <img id="recommendImg" src="/images/recommend.png" alt="recommend: question mark"/>) ::
-    RadioElements("consume", <img id="consumeImg" src="/images/winesmall.png" alt="consume: glass of wine"/>) ::
-    RadioElements("cancel", <img id="cancelImg" src="/images/cancel.png" alt="cancel: X"/>) ::
+    RadioElements("recommend", <img id="recommendImg" src="/images/recommend.jpg" alt="recommend: question mark"/>) ::
+    RadioElements("consume", <img id="consumeImg" src="/images/winesmall.jpg" alt="consume: glass of wine"/>) ::
+    RadioElements("cancel", <img id="cancelImg" src="/images/cancel.jpg" alt="cancel: X"/>) ::
     Nil
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
   def setBorderJS(elt: String) = Call("lcboViewer.frameAction", s"${elt}Img")
