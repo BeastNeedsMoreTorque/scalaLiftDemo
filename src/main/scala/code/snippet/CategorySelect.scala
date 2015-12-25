@@ -2,7 +2,7 @@ package code.snippet
 
 import code.model.LiquorCategory
 import code.snippet.SessionCache.theCategory
-import net.liftweb.common.Empty
+import net.liftweb.common.Full
 import net.liftweb.http.SHtml
 import net.liftweb.http.js.JE.Call
 import net.liftweb.http.js.JsCmds._
@@ -13,7 +13,15 @@ import net.liftweb.util.Helpers._
   * Created by philippederome on 2015-12-05.
   */
 object CategorySelect {
-  private val radioOptions = LiquorCategory.sortedSeq.map{(s: String) => RadioElements(s, <img id={s+"Img"} src={LiquorCategory.toImg(s)}/>)}
+  private val defaultCategoryName = SessionCache.defaultCategory
+  private val DOMId = defaultCategoryName+"Img"
+  private val defaultOption = RadioElements(defaultCategoryName, <img id={DOMId} style='border:2px solid grey' src={LiquorCategory.toImg(defaultCategoryName)}/>)
+  private val radioOptions = LiquorCategory.sortedSeq.map { (s: String) =>
+    if (s == defaultCategoryName)
+      defaultOption  // selected with style that frames it
+    else
+      RadioElements (s, <img id={s + "Img"} src={LiquorCategory.toImg(s)}/>) // not selected, no added style
+    }
 
   def setCategoryBorderJS(elt: String): JsCmd = Call("lcboViewer.categoryAction", s"${elt}Img")
 
@@ -28,11 +36,11 @@ object CategorySelect {
     */
   def render = {
     ".options" #> LabelStyle.toForm(SHtml.ajaxRadio(
-    radioOptions, Empty,
-    (choice: RadioElements) => {
-      theCategory.set(choice.name)
-      setCategoryBorderJS(choice.name)
-    })) andThen
-      "input [hidden]" #> "true"  // to hide the classic circle of the radio button (needs to be scheduled after prior NodeSeq transformation
+      radioOptions, Full(defaultOption),
+      (choice: RadioElements) => {
+        theCategory.set(choice.name)
+        setCategoryBorderJS(choice.name)
+      })) andThen
+    "input [hidden]" #> "true"  // to hide the classic circle of the radio button (needs to be scheduled after prior NodeSeq transformation
   }
 }
