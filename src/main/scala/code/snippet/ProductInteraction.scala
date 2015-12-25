@@ -3,6 +3,7 @@ package code.snippet
 import code.model._
 import code.snippet.SessionCache._
 import net.liftweb.common._
+import net.liftweb.http.js.JE.Call
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.{S, SHtml}
@@ -21,11 +22,12 @@ import scala.xml._
 object ProductInteraction extends Loggable {
   private val maxSampleSize = Props.getInt("product.maxSampleSize", 10)
   private val radioOptions =
-    RadioElements("recommend", <img src="/images/recommend.png" alt="recommend: question mark"/>) ::
-    RadioElements("consume", <img src="/images/winesmall.png" alt="consume: glass of wine"/>) ::
-    RadioElements("cancel", <img src="/images/cancel.png" alt="cancel: X"/>) ::
+    RadioElements("recommend", <img id="recommendImg" src="/images/recommend.png" alt="recommend: question mark"/>) ::
+    RadioElements("consume", <img id="consumeImg" src="/images/winesmall.png" alt="consume: glass of wine"/>) ::
+    RadioElements("cancel", <img id="cancelImg" src="/images/cancel.png" alt="cancel: X"/>) ::
     Nil
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
+  def setBorderJS(elt: String) = Call("lcboViewer.frameAction", s"${elt}Img")
 
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
@@ -117,9 +119,9 @@ object ProductInteraction extends Loggable {
     ".options" #> LabelStyle.toForm( SHtml.ajaxRadio( radioOptions, Empty,
        (choice: RadioElements) => {
          choice.name match {
-           case "consume" => consume()
-           case "recommend" => recommend()
-           case "cancel" => cancel()
+           case "consume" => consume() & setBorderJS(choice.name)
+           case "recommend" => recommend() & setBorderJS(choice.name)
+           case "cancel" => cancel() & setBorderJS(choice.name)
            case _ => Noop // for safety
         }
       })) andThen
