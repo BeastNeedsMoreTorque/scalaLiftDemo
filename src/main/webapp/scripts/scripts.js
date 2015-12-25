@@ -6,6 +6,7 @@
 var lcboViewer = (function() {
     var currPosition = null;
     var productButtonImgs = ["consumeImg", "cancelImg", "recommendImg"];
+    var categoryButtonImgs = ["wineImg", "spiritsImg", "beerImg", "coolersImg", "cidersImg", "non-AlcImg"];
 
     var fetchStore = function(position) {
         // Show coordinates and store now, later, on a map centered at position
@@ -32,6 +33,18 @@ var lcboViewer = (function() {
                 navigator.geolocation.getCurrentPosition(fetchStore);
             } else  {
                 $("#storeNearby").html("Geolocation is not supported by this browser.");
+            }
+        },
+
+       categoryAction: function(elt) {
+            var i;
+            for (i = 0; i < categoryButtonImgs.length; i++) {
+                var el = categoryButtonImgs[i];
+                if (el != elt) {
+                    document.getElementById(el).removeAttribute('style');
+                } else {
+                    document.getElementById(el).setAttribute('style', 'border:2px solid grey');
+                }
             }
         },
 
