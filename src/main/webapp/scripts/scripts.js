@@ -5,6 +5,8 @@
 // Currently supported Store  (see lcboapi.com): id, name, is_dead, distance_in_meters (from specified location), address_line_1, city
 var lcboViewer = (function() {
     var currPosition = null;
+    var productButtonImgs = ["consumeImg", "cancelImg", "recommendImg"];
+
     var fetchStore = function(position) {
         // Show coordinates and store now, later, on a map centered at position
         if (typeof position != 'undefined') currPosition = position.coords;
@@ -30,6 +32,18 @@ var lcboViewer = (function() {
                 navigator.geolocation.getCurrentPosition(fetchStore);
             } else  {
                 $("#storeNearby").html("Geolocation is not supported by this browser.");
+            }
+        },
+
+       frameAction: function(elt) {
+            var i;
+            for (i = 0; i < productButtonImgs.length; i++) {
+                var el = productButtonImgs[i];
+                if (el != elt) {
+                    document.getElementById(el).removeAttribute('style');
+                } else {
+                    document.getElementById(el).setAttribute('style', 'border:2px solid grey');
+                }
             }
         }
     }
