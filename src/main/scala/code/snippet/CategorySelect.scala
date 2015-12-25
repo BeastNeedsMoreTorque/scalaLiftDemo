@@ -2,29 +2,16 @@ package code.snippet
 
 import code.model.LiquorCategory
 import code.snippet.SessionCache.theCategory
-import net.liftweb.common.Full
+import net.liftweb.common.Empty
 import net.liftweb.http.SHtml
-import net.liftweb.http.SHtml.{ChoiceHolder, ChoiceItem}
 import net.liftweb.http.js.JsCmds.Noop
 import net.liftweb.util.Helpers._
-
-import scala.xml.NodeSeq
 
 /**
   * Created by philippederome on 2015-12-05.
   */
 object CategorySelect {
-
-  object LabelStyle {
-    def htmlize[T](item: ChoiceItem[T]): NodeSeq =
-      <label class="radio">
-        {item.xhtml}{item.key.toString}
-      </label>
-
-    def toForm[T](holder: ChoiceHolder[T]): NodeSeq = {
-      holder.items.flatMap(htmlize)
-    }
-  }
+  private val radioOptions = LiquorCategory.sortedSeq.map{(s: String) => RadioElements(s, <img src={LiquorCategory.toImg(s)}/>)}
 
   /**
     * save radio button selection as next default to avoid annoying resetting to original default and make it session persistent
@@ -35,13 +22,13 @@ object CategorySelect {
     * @see http://chimera.labs.oreilly.com/books/1234000000030/ch03.html#_solution_29
     * @see http://stackoverflow.com/questions/15879991/get-checkbox-and-radio-button-value-in-lift
     */
-  def render =
+  def render = {
     ".options" #> LabelStyle.toForm(SHtml.ajaxRadio(
-      LiquorCategory.sortedSeq,
-      Full(theCategory.is),
-      (s: String) => {
-        theCategory.set(s);
-        Noop
-      }))
-
+    radioOptions, Empty,
+    (choice: RadioElements) => {
+      theCategory.set(choice.name)
+      Noop
+    })) andThen
+      "input [hidden]" #> "true"  // to hide the classic circle of the radio button (needs to be scheduled after prior NodeSeq transformation
+  }
 }

@@ -3,7 +3,6 @@ package code.snippet
 import code.model._
 import code.snippet.SessionCache._
 import net.liftweb.common._
-import net.liftweb.http.SHtml.{ChoiceHolder, ChoiceItem}
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.{S, SHtml}
@@ -26,20 +25,8 @@ object ProductInteraction extends Loggable {
     RadioElements("consume", <img src="/images/winesmall.png" alt="consume: glass of wine"/>) ::
     RadioElements("cancel", <img src="/images/cancel.png" alt="cancel: X"/>) ::
     Nil
+  private val hideProdDisplayJS =  JsHideId("prodDisplay")
 
-  case class RadioElements(name: String, img: NodeSeq) {}
-  object LabelStyle {
-    def htmlize(item: ChoiceItem[RadioElements]): NodeSeq = {
-      val ns: NodeSeq = item.xhtml ++ item.key.img
-      <label class="radio">
-        {ns}{item.key.name}
-      </label>
-    }
-
-    def toForm(holder: ChoiceHolder[RadioElements]): NodeSeq = {
-      holder.items.flatMap(htmlize)
-    }
-  }
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
     def selectConfirmationJS(t: String) = SetHtml("selectConfirmation", Text(t))
@@ -58,7 +45,6 @@ object ProductInteraction extends Loggable {
       selectConfirmationJS(s"For social time, we suggest you: ${prod.name}") &
       prodAttributesJS(prod) &
       JsShowId("prodDisplay")
-    val hideProdDisplayJS =  JsHideId("prodDisplay")
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
     // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
