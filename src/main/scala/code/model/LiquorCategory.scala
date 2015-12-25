@@ -15,9 +15,18 @@ object LiquorCategory {
     val v = for (elem <- list.children.toVector) yield elem.values // contains vector of (String, String)
     v.map(_.asInstanceOf[(String, String)]).toMap[String, String] // could throw if contents that are configured are in wrong format (violating assumption of pairs (String,String)...
   }
+  def toPrimaryCategory(s: String) = catToPrimaryCatMap(s) // maps user selection to a category that is a pattern recognizable by LCBO in queries.
+
+  private val catToImgMap: Map[String, String] = {
+    // we could chain the operations below, but for clarity we spell them out individually
+    val productCategoriesImgMapAsStr = Props.get("product.CategoriesImageMap", "") // get it in JSON format
+    val list = parse(productCategoriesImgMapAsStr) // contains list of JField(String, JString(String))
+    val v = for (elem <- list.children.toVector) yield elem.values // contains vector of (String, String)
+    v.map(_.asInstanceOf[(String, String)]).toMap[String, String] // could throw if contents that are configured are in wrong format (violating assumption of pairs (String,String)...
+  }
+  def toImg(s: String) = catToImgMap(s)
 
   val sortedSeq = Props.get("product.Categories", "wine:beer").split(":").toSeq // give wine and beer at a minimum, provides iterable sequence of categories users can select from.
   // The list coincides with LCBO pattern keys for searches by design, but it could be made independent if needed.
 
-  def toPrimaryCategory(s: String) = catToPrimaryCatMap(s) // maps user selection to a category that is a pattern recognizable by LCBO in queries.
 }

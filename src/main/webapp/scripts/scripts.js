@@ -13,9 +13,8 @@ var lcboViewer = (function() {
             type: 'GET',
             success: function(data, status){
                 var coords = position.coords;
-                // #storeNearby: You are located at (x,y), which is XYZ.NN kms from branch <name> located at <address> in <city>
-                var storeDesc = 'You are located at (' + coords.latitude.toFixed(4) + ',' + coords.longitude.toFixed(4) +
-                    '), which is at ' + (data.distance_in_meters/1000.0).toFixed(2) + ' kms from branch '+ data.name +
+                // #storeNearby: You are XYZ.NN kms from branch <name> located at <address> in <city>
+                var storeDesc = 'You are ' + (data.distance_in_meters/1000.0).toFixed(2) + ' kms from branch '+ data.name +
                     ' located at ' + data.address_line_1 + ' in ' + data.city;
                 $("#storeNearby").html(storeDesc);
                 },
