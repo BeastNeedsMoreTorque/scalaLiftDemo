@@ -78,14 +78,10 @@ object Product extends pagerRestClient with Loggable {
     */
   def recommend(maxSampleSize: Int, store: Int, category: String): Try[Box[Product]] = {
     Try {
-      val randomIndex1 = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-      val prods = productListByStoreCategory(randomIndex1, store = store, category)
-      val randomIndex2 = if (prods.size < randomIndex1) // an exercise in avoiding a var for a single variable randomIdex for FP fans. Arguable that it's needed.
-        Random nextInt math.min(randomIndex1, prods.size) // adjusts for inventory being too small
-      else
-        randomIndex1
-
-      prods.take(randomIndex2 + 1).takeRight(1).headOption // pick up the one dictated by randomIndex (must take at least 1 even if randomIndex is 0)
+      val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
+      val prods = productListByStoreCategory(randomIndex+1, store, category)  // index is 0-based but requiredSize is 1-based so add 1,
+      prods.take(randomIndex + 1).takeRight(1).headOption
+      // First take will return full collection if index is too large, and prods' size should be > 0 unless there really is nothing.
     }
   }
 
@@ -127,10 +123,9 @@ object Product extends pagerRestClient with Loggable {
                                         requiredSize: Int,
                                         pageNo: Int,
                                         myFilter: Product => Boolean = { p: Product => true }): List[Product] = {
-    val pageSize = math.max(MinPerPage,
-      math.min(MaxPerPage, requiredSize)) // constrained between minPerPage and maxPerPage.
+
     // specify the URI for the LCBO api url for liquor selection
-    val uri = urlRoot + additionalParam("per_page", pageSize) + additionalParam("page", pageNo)
+    val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)  // get as many as possible on a page because we could have few matches.
     logger.info(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
