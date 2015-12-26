@@ -5,7 +5,7 @@ resolvers ++= Seq("snapshots"     at "https://oss.sonatype.org/content/repositor
                   "staging"       at "https://oss.sonatype.org/content/repositories/staging",
                   "releases"      at "https://oss.sonatype.org/content/repositories/releases"
                  )
-unmanagedResourceDirectories in Test <+= (baseDirectory) { _ / "src/main/webapp" }
+unmanagedResourceDirectories in Test <+= baseDirectory { _ / "src/main/webapp" }
 scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked", "-Dusejavacp=true")
 
 // log4j/slf4j is not standard for liftweb so we use ch.qos.logback (https://www.assembla.com/wiki/show/liftweb/Logging)
