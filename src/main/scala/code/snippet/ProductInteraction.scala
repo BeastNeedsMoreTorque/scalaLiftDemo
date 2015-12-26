@@ -7,6 +7,7 @@ import net.liftweb.http.js.JE.Call
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.{S, SHtml}
+import net.liftweb.json.JsonParser._
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 import scala.xml._
@@ -20,13 +21,27 @@ import scala.xml._
   */
 object ProductInteraction extends Loggable {
   private val maxSampleSize = Props.getInt("product.maxSampleSize", 10)
-  private val radioOptions =
-    RadioElements("recommend", <img id="recommendImg" src="/images/recommend.jpg" alt="recommend: question mark"/>) ::
-    RadioElements("consume", <img id="consumeImg" src="/images/winesmall.jpg" alt="consume: glass of wine"/>) ::
-    RadioElements("cancel", <img id="cancelImg" src="/images/cancel.jpg" alt="cancel: X"/>) ::
-    Nil
+
+  private val interactionsToImgMap: Map[String, String] = {
+    val interactionsToImgMapAsStr = Props.get("product.interactionsImageMap", "") // get it in JSON format
+    val list = parse(interactionsToImgMapAsStr) // contains list of JField(String, JString(String))
+    val v = for (elem <- list.children.toVector) yield elem.values // contains vector of (String, String)
+    v.map(_.asInstanceOf[(String, String)]).toMap[String, String] // could throw if contents that are configured are in wrong format (violating assumption of pairs (String,String)...
+  }
+  def toImg(s: String) = interactionsToImgMap(s)
+
+  private val interactions = List("recommend", "consume", "cancel")
+  private val defaultInteractionName = "cancel"
+  private val DOMId = defaultInteractionName+"Img"
+  private val radioOptions = interactions.map { (s: String) =>
+    if (s == defaultInteractionName)
+      RadioElements.defaultOption(defaultInteractionName, DOMId, toImg )  // selected with style that frames it
+    else
+      RadioElements (s, <img id={s + "Img"} src={toImg(s)}/>) // not selected, no added style
+  }
+
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
-  def setBorderJS(elt: String) = Call("lcboViewer.frameAction", s"${elt}Img")
+  def setBorderJS(elt: String) = Call("lcboViewer.interactAction", s"${elt}Img")
 
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
