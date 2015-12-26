@@ -33,12 +33,7 @@ object ProductInteraction extends Loggable {
   private val interactions = List("recommend", "consume", "cancel")
   private val defaultInteractionName = "cancel"
   private val DOMId = defaultInteractionName+"Img"
-  private val radioOptions = interactions.map { (s: String) =>
-    if (s == defaultInteractionName)
-      RadioElements.defaultOption(defaultInteractionName, DOMId, toImg )  // selected with style that frames it
-    else
-      RadioElements (s, <img id={s + "Img"} src={toImg(s)}/>) // not selected, no added style
-  }
+  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( interactions, defaultInteractionName, DOMId, toImg)
 
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
   def setBorderJS(elt: String) = Call("lcboViewer.interactAction", s"${elt}Img")
