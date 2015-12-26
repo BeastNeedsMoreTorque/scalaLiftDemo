@@ -23,6 +23,7 @@ var lcboViewer = (function() {
                 },
             error: function(data, status){
                 console.log("Error Data: " + data + "\nStatus: " + status );
+                alert("Unable to locate nearest store from your location" );
             }
         });
      };

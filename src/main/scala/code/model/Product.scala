@@ -3,11 +3,13 @@ package code.model
 import java.io.IOException
 
 import code.Rest.pagerRestClient
-import net.liftweb.common.{Box, Loggable}
+import net.liftweb.common._
 import net.liftweb.json.JsonParser._
 import net.liftweb.json.{DefaultFormats, MappingException}
 
-import scala.util.{Random, Try}
+import scala.util.Random
+import net.liftweb.util.Helpers.tryo
+
 
 /**
   * Created by philippederome on 15-11-01.
@@ -76,29 +78,29 @@ object Product extends pagerRestClient with Loggable {
     * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category.
     * @return
     */
-  def recommend(maxSampleSize: Int, store: Int, category: String): Try[Box[Product]] = {
-    Try {
+  def recommend(maxSampleSize: Int, store: Int, category: String): Box[Product] =
+    tryo {
       val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
       val prods = productListByStoreCategory(randomIndex+1, store, category)  // index is 0-based but requiredSize is 1-based so add 1,
-      prods.take(randomIndex + 1).takeRight(1).headOption
+      prods.take(randomIndex + 1).takeRight(1).head
       // First take will return full collection if index is too large, and prods' size should be > 0 unless there really is nothing.
     }
-  }
+
 
   /**
     * Purchases a product by increasing user-product count (amount) in database as a way to monitor usage..
     * @param product contains a product
-    * @return a Try to force exception reporting further up, capturing how many times user has consumed product.
+    * @return a Box capturing any exception to be reported further up, capturing how many times user has consumed product.
     */
-  def consume(product: Product): Try[(String, Long)] = DBProduct.persist(product) // yeah, could do other things such as real payment transaction and exchange of asset.
+  def consume(product: Product): Box[(String, Long)] = DBProduct.persist(product) // yeah, could do other things such as real payment transaction and exchange of asset.
 
   /**
-    * LCBO client JSON query handler. So naturally, the code is hard-coded towards the structure of LCBO documents with tokens as is.
+    * LCBO client JSON query handler. So naturally, the code is specifically written with the structure of LCBO documents in mind, with tokens as is.
     * For Liftweb JSON extraction after parse,
     * @see https://github.com/lift/lift/tree/master/framework/lift-base/lift-json/
     *      don't go to more pages than user implicitly requests via requiredSize that should not be exceeded.
     *      Would Streams collection be handy for paging here? Depends on consumption usage perhaps.
-    *      Uses tail recursion (might prevent us from advertizing exceptions with a Try return type?).
+    *      Uses tail recursion.
     * @param accumItems accumulator to facilitate tail recursion
     * @param urlRoot a LCBO product query without the details of paging, which we handle here
     * @param requiredSize required size of products that are asked for. May get less if there are fewer matches, but will not go above that size.
@@ -160,7 +162,7 @@ object Product extends pagerRestClient with Loggable {
     * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
     * for pattern match LCBO uses lower case but for actual product category it's upper case, so to make comparisons, we will need to account for that
     * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
-    * @param requiredSize upper bound on #items we need. Try to match it if possible.
+    * @param requiredSize upper bound on #items we need. Attempt to match it if enough supply is available.
     * @param store id  of Store at LCBO
     * @param category wine, spirits, and so on
     * @return collection of LCBO products while throwing.

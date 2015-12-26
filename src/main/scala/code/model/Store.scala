@@ -1,13 +1,13 @@
 package code.model
 
 
-import net.liftweb.common.{Full, Empty, Box, Loggable}
+import net.liftweb.common.{Full, Empty, Box,Failure, Loggable}
 import net.liftweb.json._
 import net.liftweb.util.Props
+import net.liftweb.util.Helpers.tryo
 import net.liftweb.json.JsonParser.parse
 
 import scala.language.implicitConversions
-import scala.util.Try
 import scala.xml.Node
 
 import code.Rest.pagerRestClient
@@ -61,22 +61,23 @@ object Store extends pagerRestClient with Loggable {
     */
   def find( lat: String,  lon: String): Box[Store] = synchronized {
     findStore(lat, lon) match {
-      case util.Success(Full(x)) =>
+      case Full(x) =>
         theStore.set(x)
         Full(x)
-      case util.Success(Empty) => logger.error("unable to find closest store info"); Empty
-      case util.Failure(x) => logger.error(s"unable to find closest store with error $x"); Empty
-      case _ => logger.error("unknown error in finding closest store"); Empty
+      case Failure(msg, exc, ch) =>
+        logger.error(s"unable to find closest store with error $msg exception $exc")
+        Empty
+      case Empty =>
+        logger.error("unable to find closest store info")
+        Empty
     }
   }
 
-  private def findStore(lat: String, lon: String): Try[Box[Store]] = {
+  private def findStore(lat: String, lon: String): Box[Store] = {
     val url = s"$LcboDomainURL/stores?where_not=is_dead" +
       additionalParam("lat", lat) +
       additionalParam("lon", lon)
-    Try {
-      collectStoresOnAPage(List[Store](), url, MaxSampleSize, pageNo = 1).headOption
-    }
+      tryo(collectStoresOnAPage(List[Store](), url, MaxSampleSize, pageNo = 1).head)
   }
 
   @throws(classOf[net.liftweb.json.MappingException])
@@ -89,10 +90,7 @@ object Store extends pagerRestClient with Loggable {
                                  urlRoot: String,
                                  requiredSize: Int,
                                  pageNo: Int): List[Store] = {
-    val pageSize = math.max(MinPerPage,
-      math.min(MaxPerPage, requiredSize)) // constrained between minPerPage and maxPerPage.
-    // specify the URI for the LCBO api url for liquor selection
-    val uri = urlRoot + additionalParam("per_page", pageSize) + additionalParam("page", pageNo)
+    val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)
     logger.info(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
