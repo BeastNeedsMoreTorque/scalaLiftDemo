@@ -12,7 +12,7 @@ case class RadioElements(name: String, img: NodeSeq) {}
 object RadioElements {
   val styleForSelectedRadio = Props.get("radioButtonsSelectStyle", "")
   def defaultOption(defaultName: String, DOMId: String, toImg: (String) => String) =
-    RadioElements(defaultName, <img id={DOMId} style={styleForSelectedRadio} src={toImg(defaultName)}/>)
+    RadioElements(defaultName, <img id={DOMId} style={styleForSelectedRadio} src={toImg(defaultName)}/>)  // maybe adding button could work?
 
   def radioOptions(it: Seq[String], defaultName : String, DOMId: String, toImg: (String) => String): Seq[RadioElements] = it.map { (s: String) =>
     if (s == defaultName)

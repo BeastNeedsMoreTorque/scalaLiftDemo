@@ -6,6 +6,7 @@ import net.liftweb.json._
 import net.liftweb.util.Props
 import net.liftweb.json.JsonParser.parse
 
+import scala.language.implicitConversions
 import scala.util.Try
 import scala.xml.Node
 
