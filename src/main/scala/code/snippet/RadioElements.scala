@@ -13,6 +13,13 @@ object RadioElements {
   val styleForSelectedRadio = Props.get("radioButtonsSelectStyle", "")
   def defaultOption(defaultName: String, DOMId: String, toImg: (String) => String) =
     RadioElements(defaultName, <img id={DOMId} style={styleForSelectedRadio} src={toImg(defaultName)}/>)
+
+  def radioOptions(it: Seq[String], defaultName : String, DOMId: String, toImg: (String) => String): Seq[RadioElements] = it.map { (s: String) =>
+    if (s == defaultName)
+      RadioElements.defaultOption(defaultName, DOMId, toImg )  // selected with style that frames it
+    else
+      RadioElements (s, <img id={s + "Img"} src={toImg(s)}/>) // not selected, no added style
+  }
 }
 
 object LabelStyle {

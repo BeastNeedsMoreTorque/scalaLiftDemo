@@ -16,12 +16,7 @@ object CategorySelect {
   private val defaultCategoryName = SessionCache.defaultCategory
   private val DOMId = defaultCategoryName+"Img"
   private val defaultOption = RadioElements.defaultOption(defaultCategoryName, DOMId, LiquorCategory.toImg )  // selected with style that frames it
-  private val radioOptions = LiquorCategory.sortedSeq.map { (s: String) =>
-    if (s == defaultCategoryName)
-      defaultOption
-    else
-      RadioElements (s, <img id={s + "Img"} src={LiquorCategory.toImg(s)}/>) // not selected, no added style
-    }
+  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.sortedSeq, defaultCategoryName, DOMId, LiquorCategory.toImg)
 
   def setCategoryBorderJS(elt: String): JsCmd = Call("lcboViewer.categoryAction", s"${elt}Img")
 
