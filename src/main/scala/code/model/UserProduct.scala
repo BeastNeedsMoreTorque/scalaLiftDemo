@@ -3,7 +3,6 @@ package code.model
 import net.liftweb.common.Loggable
 import net.liftweb.mapper._
 
-import scala.util.Try
 
 // this code makes a case for value of unit testing since it took me a while to get it right... Let's set it up!
 object UserProduct extends UserProduct with LongKeyedMetaMapper[UserProduct] with Loggable {
@@ -11,15 +10,14 @@ object UserProduct extends UserProduct with LongKeyedMetaMapper[UserProduct] wit
     * The join table UserProducts is increasing by one the row matching user in Users and prod in DBProduct or initialized to 1 on creation of relationship.
     * @param user the database user row consuming the product
     * @param prod the database DBProduct row that has its consumption increased by the user
-    * @return a Try on the user's first name as is registered and the count of times the product has been consumed, accounting for this consumption.
+    * @return a Box on the user's first name as is registered and the count of times the product has been consumed, accounting for this consumption.
+    *         Box captures exception and forces report handling further up with value Failure.
     */
-  def consume(user: User, prod: DBProduct): Try[(String, Long)] = {
+  def consume(user: User, prod: DBProduct): (String, Long) = {
     // get a UserProducts list matching by user then by product id, that is meant to be of size 0-1 but theoretically more if buggy.
-    Try {
-      val userProdsList = UserProduct.
-        findAll(By(UserProduct.user, user.id.get)).
-        filter(_.product.get == prod.id.get)
-
+    val userProdsList = UserProduct.
+      findAll(By(UserProduct.user, user.id.get)).
+      filter(_.product.get == prod.id.get)
       // when list is non-empty update entry by incrementing by one else create/insert a new entry to DB
       val elem = userProdsList.headOption.map { first =>
         first.selectionsCount.set(first.selectionsCount.get + 1)
@@ -34,7 +32,6 @@ object UserProduct extends UserProduct with LongKeyedMetaMapper[UserProduct] wit
           saveMe() // persist on insert specifying minimal info with defaults specified by case class, so here only two columns are explicit to satisfy FK.
         (user.firstName.get, 1.toLong)
       }
-    }
   }
 }
 

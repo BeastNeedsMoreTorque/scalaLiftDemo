@@ -68,16 +68,13 @@ object ProductInteraction extends Loggable {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
           case s if s > 0 =>
+            transactionConfirmation.set("")
             val prod = Product.recommend(maxSampleSize, s, theCategory.is) match {
               // we want to distinguish error messages to user to provide better diagnostics.
-              case util.Success(p) =>
-                p or {
-                  S.notice(s"no product available for category ${theCategory.is}")
-                  Empty
-                } // returns prod normally but if empty, send a notice of error and return empty.
-              case util.Failure(ex) => S.error(s"Unable to choose product of category ${theCategory.is} with error $ex"); Empty
+              case Full(p) => Full(p) // returns prod normally but if empty, send a notice of error and return empty.
+              case Failure(m, ex, ch) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
+              case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
             }
-            transactionConfirmation.set("")
             prod.dmap { Noop } { p: Product =>
                 theProduct.set(Full(p))
                 S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
@@ -101,11 +98,17 @@ object ProductInteraction extends Loggable {
     def consume() = {
       def mayConsume(p: Product): JsCmd = {
         Product.consume(p) match {
-          case util.Success((userName, count)) =>
+          case Full((userName, count)) =>
             transactionConfirmation.set(s"${p.name} has now been purchased $count time(s), $userName")
             theProduct.set(Empty)
             S.error("") // workaround clearCurrentNotices clears error message now that this is good, to get a clean screen.
-          case util.Failure(ex) => S.error(s"Unable to sell you product ${p.name} with error '$ex'")
+            Noop
+          case Failure(x, ex, ch) =>
+            S.error(s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
+            Noop
+          case Empty =>
+            S.error(s"Unable to sell you product ${p.name}")
+            Noop
         }
       }
 

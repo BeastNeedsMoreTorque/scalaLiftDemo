@@ -2,8 +2,8 @@ package code.model
 
 import net.liftweb.mapper._
 import net.liftweb.common._
-
-import scala.util.{Try, Failure}
+import net.liftweb.common.Failure
+import net.liftweb.util.Helpers.tryo
 
 /**
   * Created by philippederome on 15-11-01.
@@ -65,7 +65,7 @@ with LongKeyedMetaMapper[DBProduct] with Loggable {
     * @return the user who requested the product and the number of times the user has purchased this product as a pair/tuple.
     *         May throw
     */
-  def persist(p: Product): Try[(String, Long)] = {
+  def persist(p: Product): Box[(String, Long)] = {
     def createProduct: DBProduct = {
       // store in same format as received by provider so that un-serializing if required will be same logic.
       DBProduct.create.
@@ -84,21 +84,23 @@ with LongKeyedMetaMapper[DBProduct] with Loggable {
     }
 
     User.currentUser.dmap {
-      val fail: Try[(String, Long)] = Failure[(String, Long)](new IllegalArgumentException("unable to store transaction, Login first!"))
+      val fail: Box[(String, Long)] = Failure("unable to store transaction, Login first!")
       fail
     } { user => // normal case
       val prod = DBProduct.find(By(DBProduct.lcbo_id, p.id)) // db column lcbo_id matches memory id (same name as JSON field)
       // update it with new details; we could verify that there is a difference between LCBO and our version first...
       // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
       // Use openOr on Box prod so that if non-empty, we update it, otherwise we create and save the product.
-      DB.use(DefaultConnectionIdentifier) {
-        // avoids two round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct
-        // and it got stored at same time as UserProduct (monitoring Postgres).
-        connection =>
-          val newProd = prod.map(_.price_in_cents(p.price_in_cents).
-            image_thumb_url(p.image_thumb_url).
-            saveMe()) openOr createProduct
-          UserProduct.consume(user, newProd) // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
+      tryo {
+        DB.use(DefaultConnectionIdentifier) {
+          // avoids two round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct
+          // and it got stored at same time as UserProduct (monitoring Postgres).
+          connection =>
+            val newProd = prod.map(_.price_in_cents(p.price_in_cents).
+              image_thumb_url(p.image_thumb_url).
+              saveMe()) openOr createProduct
+            UserProduct.consume(user, newProd) // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
+        }
       }
     }
   }
