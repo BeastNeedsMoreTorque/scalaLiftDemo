@@ -15,10 +15,10 @@ import net.liftweb.util.Helpers._
 object CategorySelect {
   private val defaultCategoryName = SessionCache.defaultCategory
   private val DOMId = defaultCategoryName+"Img"
-  private val defaultOption = RadioElements(defaultCategoryName, <img id={DOMId} style='border:2px solid grey' src={LiquorCategory.toImg(defaultCategoryName)}/>)
+  private val defaultOption = RadioElements.defaultOption(defaultCategoryName, DOMId, LiquorCategory.toImg )  // selected with style that frames it
   private val radioOptions = LiquorCategory.sortedSeq.map { (s: String) =>
     if (s == defaultCategoryName)
-      defaultOption  // selected with style that frames it
+      defaultOption
     else
       RadioElements (s, <img id={s + "Img"} src={LiquorCategory.toImg(s)}/>) // not selected, no added style
     }

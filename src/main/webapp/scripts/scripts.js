@@ -27,6 +27,18 @@ var lcboViewer = (function() {
         });
      };
 
+    var frameRadioImage = function(elt, elementsSet) {
+        var i;
+        for (i = 0; i < elementsSet.length; i++) {
+            var el = elementsSet[i];
+            if (el != elt) {
+                $("#"+el).removeAttr('style');
+            } else {
+                $("#"+el).attr('style', 'border:2px solid grey');
+            }
+        }
+    };
+
     return {
         fetchStoreFromPosition: function() {
             if (navigator.geolocation) {
@@ -37,28 +49,12 @@ var lcboViewer = (function() {
         },
 
        categoryAction: function(elt) {
-            var i;
-            for (i = 0; i < categoryButtonImgs.length; i++) {
-                var el = categoryButtonImgs[i];
-                if (el != elt) {
-                    document.getElementById(el).removeAttribute('style');
-                } else {
-                    document.getElementById(el).setAttribute('style', 'border:2px solid grey');
-                }
-            }
+            frameRadioImage(elt, categoryButtonImgs);
         },
 
-       frameAction: function(elt) {
-            var i;
-            for (i = 0; i < productButtonImgs.length; i++) {
-                var el = productButtonImgs[i];
-                if (el != elt) {
-                    document.getElementById(el).removeAttribute('style');
-                } else {
-                    document.getElementById(el).setAttribute('style', 'border:2px solid grey');
-                }
-            }
-        }
+       interactAction: function(elt) {
+            frameRadioImage(elt, productButtonImgs);
+       }
     }
 }());
 
