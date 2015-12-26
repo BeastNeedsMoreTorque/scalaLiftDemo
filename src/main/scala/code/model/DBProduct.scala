@@ -91,6 +91,7 @@ with LongKeyedMetaMapper[DBProduct] with Loggable {
       // update it with new details; we could verify that there is a difference between LCBO and our version first...
       // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
       // Use openOr on Box prod so that if non-empty, we update it, otherwise we create and save the product.
+      // tryo captures database provider errors (column size too small for example, reporting it as an Empty Box with Failure)
       tryo {
         DB.use(DefaultConnectionIdentifier) {
           // avoids two round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct

@@ -12,21 +12,20 @@ case class RadioElements(name: String, img: NodeSeq) {}
 object RadioElements {
   val styleForSelectedRadio = Props.get("radioButtonsSelectStyle", "")
   def defaultOption(defaultName: String, DOMId: String, toImg: (String) => String) =
-    RadioElements(defaultName, <img id={DOMId} style={styleForSelectedRadio} src={toImg(defaultName)}/>)  // maybe adding button could work?
+    RadioElements(defaultName, <img id={DOMId} title={defaultName} style={styleForSelectedRadio} src={toImg(defaultName)}/>)  // maybe adding button could work?
 
   def radioOptions(it: Seq[String], defaultName : String, DOMId: String, toImg: (String) => String): Seq[RadioElements] = it.map { (s: String) =>
     if (s == defaultName)
       RadioElements.defaultOption(defaultName, DOMId, toImg )  // selected with style that frames it
     else
-      RadioElements (s, <img id={s + "Img"} src={toImg(s)}/>) // not selected, no added style
+      RadioElements (s, <img id={s + "Img"} title={s} src={toImg(s)}/>) // not selected, no added style
   }
 }
 
 object LabelStyle {
   def htmlize(item: ChoiceItem[RadioElements]): NodeSeq = {
-    val ns: NodeSeq = item.xhtml ++ item.key.img
     <label class="radio">
-      {ns}{item.key.name}
+      {item.xhtml ++ item.key.img}
     </label>
   }
 
