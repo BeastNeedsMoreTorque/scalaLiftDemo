@@ -35,9 +35,8 @@ var lcboViewer = (function() {
             }
         },
 
-        frameRadioImage: function(elt) {
-           var root = $("#"+elt).parent().parent();  // images have a common grand-parent, deselect all cousins, and select (frame) specified one.
-           var imgElts = root.find("img").get();
+        frameRadioImage: function(container, elt) {
+           var imgElts = $("#"+container).find("img").get();
            var i;
            for (i = 0; i < imgElts.length; i++) {
                if ($(imgElts[i]).attr('id') != $("#"+elt).attr('id')) { // is not there a better way???
