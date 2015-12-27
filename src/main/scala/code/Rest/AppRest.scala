@@ -2,7 +2,7 @@ package code.Rest
 
 import code.model.Store
 import net.liftweb.http.rest.RestHelper
-import net.liftweb.json.JsonAST.JValue
+import net.liftweb.json.Extraction
 import scala.xml.Node
 
 
@@ -26,7 +26,7 @@ object AppRest extends RestHelper {
       // find the store, and if it's not found,
       // return a nice message for the 404
         store <- Store.find(lat, lon) ?~ "Store Not Found"
-      } yield store: JValue  // JValue is key to generate JSON (see converters in Store)
+      } yield     Extraction.decompose(store)
 
     case "store" :: "lat" :: DotDecimalString(lat)  :: "lon" :: DotDecimalString(lon)  :: Nil XmlGet _ =>
       for {
@@ -35,6 +35,5 @@ object AppRest extends RestHelper {
         store <- Store.find(lat, lon) ?~ "Store Not Found"
       } yield store: Node  // Node is what generates XML (see converters in Store)
   }
-
 
 }

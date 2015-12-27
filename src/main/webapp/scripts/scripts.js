@@ -5,9 +5,7 @@
 // Currently supported Store  (see lcboapi.com): id, name, is_dead, distance_in_meters (from specified location), address_line_1, city
 var lcboViewer = (function() {
     var currPosition = null;
-    var productButtonImgs = ["consumeImg", "cancelImg", "recommendImg"];
-    var categoryButtonImgs = ["wineImg", "spiritsImg", "beerImg", "coolersImg", "cidersImg", "non-AlcImg"];
-
+    var imgSelectStyle = 'border:2px solid grey';
     var fetchStore = function(position) {
         // Show coordinates and store now, later, on a map centered at position
         if (typeof position != 'undefined') currPosition = position.coords;
@@ -28,18 +26,6 @@ var lcboViewer = (function() {
         });
      };
 
-    var frameRadioImage = function(elt, elementsSet) {
-        var i;
-        for (i = 0; i < elementsSet.length; i++) {
-            var el = elementsSet[i];
-            if (el != elt) {
-                $("#"+el).removeAttr('style');
-            } else {
-                $("#"+el).attr('style', 'border:2px solid grey');
-            }
-        }
-    };
-
     return {
         fetchStoreFromPosition: function() {
             if (navigator.geolocation) {
@@ -49,13 +35,18 @@ var lcboViewer = (function() {
             }
         },
 
-       categoryAction: function(elt) {
-            frameRadioImage(elt, categoryButtonImgs);
-        },
-
-       interactAction: function(elt) {
-            frameRadioImage(elt, productButtonImgs);
-       }
+        frameRadioImage: function(elt) {
+           var root = $("#"+elt).parent().parent();  // images have a common grand-parent, deselect all cousins, and select (frame) specified one.
+           var imgElts = root.find("img").get();
+           var i;
+           for (i = 0; i < imgElts.length; i++) {
+               if ($(imgElts[i]).attr('id') != $("#"+elt).attr('id')) { // is not there a better way???
+                   $(imgElts[i]).removeAttr('style');
+               } else {
+                   $(imgElts[i]).attr('style', imgSelectStyle);
+               }
+           }
+        }
     }
 }());
 
