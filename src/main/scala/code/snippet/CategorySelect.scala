@@ -33,7 +33,6 @@ object CategorySelect {
       (choice: RadioElements) => {
         theCategory.set(choice.name)
         setCategoryBorderJS(choice.name)
-      })) andThen
-    "input [hidden]" #> "true"  // to hide the classic circle of the radio button (needs to be scheduled after prior NodeSeq transformation
+      }))
   }
 }

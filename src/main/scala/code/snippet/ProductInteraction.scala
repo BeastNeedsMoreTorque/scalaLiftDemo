@@ -132,7 +132,6 @@ object ProductInteraction extends Loggable {
            case "cancel" => cancel() & setBorderJS(choice.name)
            case _ => Noop // for safety
         }
-      })) andThen
-    "input [hidden]" #> "true"  // to hide the classic circle of the radio button (needs to be scheduled after prior NodeSeq transformation
+      }))
   }
 }

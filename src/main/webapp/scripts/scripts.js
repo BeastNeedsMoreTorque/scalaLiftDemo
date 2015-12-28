@@ -64,16 +64,14 @@ var lcboViewer = (function() {
             }
         },
 
-        frameRadioImage: function(container, elt) {
-           var imgElts = $("#"+container).find("img").get();
-           var i;
-           for (i = 0; i < imgElts.length; i++) {
-               if ($(imgElts[i]).attr('name') != elt) {
-                   $(imgElts[i]).removeAttr('class');
-               } else {
-                   $(imgElts[i]).attr('class', imgSelectStyle);
-               }
-           }
+        frameRadioImage: function(container, selected) {
+            var imgElts = $("#"+container).find("img").get();
+            imgElts.forEach(function(element){
+                if ($(element).attr('name') != selected) {
+                   $(element).removeAttr('class');
+                }
+            });
+            $("[name="+selected+"]").attr('class', imgSelectStyle);
         }
     }
 }());
