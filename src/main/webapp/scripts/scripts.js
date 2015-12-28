@@ -15,6 +15,21 @@ var lcboViewer = (function() {
             success: function(data, status){
                 var coords = position.coords;
                 // #storeNearby: You are XYZ.NN kms from branch <name> located at <address> in <city>
+                var latlon = new google.maps.LatLng(data.latitude, data.longitude)
+                var mapholder = document.getElementById('mapholder')
+                mapholder.style.height = '250px';
+                mapholder.style.width = '500px';
+
+                var myOptions = {
+                    center:latlon,zoom:14,
+                    mapTypeId:google.maps.MapTypeId.ROADMAP,
+                    mapTypeControl:false,
+                    navigationControlOptions:{style:google.maps.NavigationControlStyle.SMALL}
+                }
+
+                var map = new google.maps.Map(document.getElementById("mapholder"), myOptions);
+                var marker = new google.maps.Marker({position:latlon,map:map,title:"Closest Liquor Store!"});
+
                 var storeDesc = 'You are ' + (data.distance_in_meters/1000.0).toFixed(2) + ' kms from branch '+ data.name +
                     ' located at ' + data.address_line_1 + ' in ' + data.city;
                 $("#storeNearby").html(storeDesc);

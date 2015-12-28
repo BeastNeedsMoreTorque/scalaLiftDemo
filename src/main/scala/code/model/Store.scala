@@ -18,9 +18,11 @@ import code.snippet.SessionCache.theStore
   */
 case class Store(id: Int = 0,
                  is_dead: Boolean = true,
+                 latitude: Double = 0.0,
+                 longitude: Double = 0.0,
                  name: String = "",
-                 address_line_1: String ="",
-                 city: String ="",
+                 address_line_1: String = "",
+                 city: String = "",
                  distance_in_meters: Int = 0) extends Loggable {
   // intentional aliasing allowing more standard naming convention.
   val isDead = is_dead
