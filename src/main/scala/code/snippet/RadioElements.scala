@@ -10,9 +10,9 @@ import scala.xml.NodeSeq
 case class RadioElements(name: String, img: NodeSeq) {}
 
 object RadioElements {
-  val styleForSelectedRadio = Props.get("radioButtonsSelectStyle", "")
+  val styleForSelectedRadio = "imgframe"
   def defaultOption(defaultName: String, DOMId: String, toImg: (String) => String) =
-    RadioElements(defaultName, <img id={DOMId} title={defaultName} style={styleForSelectedRadio} src={toImg(defaultName)}/>)  // maybe adding button could work?
+    RadioElements(defaultName, <img id={DOMId} title={defaultName} class={styleForSelectedRadio} src={toImg(defaultName)}/>)  // maybe adding button could work?
 
   def radioOptions(it: Seq[String], defaultName : String, DOMId: String, toImg: (String) => String): Seq[RadioElements] = it.map { (s: String) =>
     if (s == defaultName)
