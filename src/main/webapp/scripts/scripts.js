@@ -5,7 +5,7 @@
 // Currently supported Store  (see lcboapi.com): id, name, is_dead, distance_in_meters (from specified location), address_line_1, city
 var lcboViewer = (function() {
     var currPosition = null;
-    var imgSelectStyle = 'border:2px solid grey';
+    var imgSelectStyle = 'imgframe';
     var fetchStore = function(position) {
         // Show coordinates and store now, later, on a map centered at position
         if (typeof position != 'undefined') currPosition = position.coords;
@@ -40,9 +40,9 @@ var lcboViewer = (function() {
            var i;
            for (i = 0; i < imgElts.length; i++) {
                if ($(imgElts[i]).attr('id') != $("#"+elt).attr('id')) { // is not there a better way???
-                   $(imgElts[i]).removeAttr('style');
+                   $(imgElts[i]).removeAttr('class');
                } else {
-                   $(imgElts[i]).attr('style', imgSelectStyle);
+                   $(imgElts[i]).attr('class', imgSelectStyle);
                }
            }
         }
