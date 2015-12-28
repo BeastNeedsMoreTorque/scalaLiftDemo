@@ -11,14 +11,14 @@ case class RadioElements(name: String, img: NodeSeq) {}
 
 object RadioElements {
   val styleForSelectedRadio = "imgframe"
-  def defaultOption(defaultName: String, DOMId: String, toImg: (String) => String) =
-    RadioElements(defaultName, <img id={DOMId} title={defaultName} class={styleForSelectedRadio} src={toImg(defaultName)}/>)  // maybe adding button could work?
+  def defaultOption(defaultName: String, toImg: (String) => String) =
+    RadioElements(defaultName, <img name={defaultName} title={defaultName} class={styleForSelectedRadio} src={toImg(defaultName)}/>)  // maybe adding button could work?
 
-  def radioOptions(it: Seq[String], defaultName : String, DOMId: String, toImg: (String) => String): Seq[RadioElements] = it.map { (s: String) =>
+  def radioOptions(it: Seq[String], defaultName : String, toImg: (String) => String): Seq[RadioElements] = it.map { (s: String) =>
     if (s == defaultName)
-      RadioElements.defaultOption(defaultName, DOMId, toImg )  // selected with style that frames it
+      RadioElements.defaultOption(defaultName, toImg )  // selected with style that frames it
     else
-      RadioElements (s, <img id={s + "Img"} title={s} src={toImg(s)}/>) // not selected, no added style
+      RadioElements (s, <img name={s} title={s} src={toImg(s)}/>) // not selected, no added style
   }
 }
 

@@ -39,7 +39,7 @@ var lcboViewer = (function() {
            var imgElts = $("#"+container).find("img").get();
            var i;
            for (i = 0; i < imgElts.length; i++) {
-               if ($(imgElts[i]).attr('id') != $("#"+elt).attr('id')) { // is not there a better way???
+               if ($(imgElts[i]).attr('name') != elt) {
                    $(imgElts[i]).removeAttr('class');
                } else {
                    $(imgElts[i]).attr('class', imgSelectStyle);

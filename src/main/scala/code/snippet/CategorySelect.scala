@@ -13,12 +13,10 @@ import net.liftweb.util.Helpers._
   * Created by philippederome on 2015-12-05.
   */
 object CategorySelect {
-  private val defaultCategoryName = SessionCache.defaultCategory
-  private val DOMId = defaultCategoryName+"Img"
-  private val defaultOption = RadioElements.defaultOption(defaultCategoryName, DOMId, LiquorCategory.toImg )  // selected with style that frames it
-  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.sortedSeq, defaultCategoryName, DOMId, LiquorCategory.toImg)
+  private val defaultOption = RadioElements.defaultOption(SessionCache.defaultCategory, LiquorCategory.toImg )  // selected with style that frames it
+  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.sortedSeq, SessionCache.defaultCategory, LiquorCategory.toImg)
 
-  def setCategoryBorderJS(elt: String): JsCmd = Call("lcboViewer.frameRadioImage", "prodCategoryContainer", s"${elt}Img")
+  def setCategoryBorderJS(elt: String): JsCmd = Call("lcboViewer.frameRadioImage", "prodCategoryContainer", {elt})
 
   /**
     * save radio button selection as next default to avoid annoying resetting to original default and make it session persistent
