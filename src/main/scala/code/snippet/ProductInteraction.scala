@@ -28,15 +28,11 @@ object ProductInteraction extends Loggable {
     val v = for (elem <- list.children.toVector) yield elem.values // contains vector of (String, String)
     v.map(_.asInstanceOf[(String, String)]).toMap[String, String] // could throw if contents that are configured are in wrong format (violating assumption of pairs (String,String)...
   }
-  def toImg(s: String) = interactionsToImgMap(s)
 
-  private val interactions = List("recommend", "consume", "cancel")
-  private val defaultInteractionName = "cancel"
-  private val DOMId = defaultInteractionName+"Img"
-  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( interactions, defaultInteractionName, DOMId, toImg)
+  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions(  List("recommend", "consume", "cancel"), "cancel", interactionsToImgMap)
 
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
-  def setBorderJS(elt: String) = Call("lcboViewer.frameRadioImage", "prodInteractionContainer", s"${elt}Img")
+  def setBorderJS(elt: String) = Call("lcboViewer.frameRadioImage", "prodInteractionContainer", {elt})
 
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
