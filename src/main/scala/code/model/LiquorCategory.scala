@@ -27,5 +27,4 @@ object LiquorCategory {
 
   val sortedSeq = Props.get("product.Categories", "wine:beer").split(":").toSeq // give wine and beer at a minimum, provides iterable sequence of categories users can select from.
   // The list coincides with LCBO pattern keys for searches by design, but it could be made independent if needed.
-
 }
