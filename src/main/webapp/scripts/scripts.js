@@ -35,8 +35,8 @@ var lcboViewer = (function() {
             success: function(data, status){
                 var latlon = new google.maps.LatLng(data.latitude, data.longitude)
                 var mapholder = document.getElementById('mapholder')
-                mapholder.style.height = '200px';
-                mapholder.style.width = '350px';
+                mapholder.style.height = '250px';
+                mapholder.style.width = '250px';
 
                 var myOptions = {
                     center:latlon,zoom:14,
