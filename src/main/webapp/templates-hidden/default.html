@@ -49,57 +49,13 @@
         background-color: #eee;
         }
 
-        .imgframe {  /* to put a frame around an img that acts like a radio button. */
+        img.imgframe {  /* to put a frame around an img that acts like a radio button. */
         border:2px solid grey;
         }
 
-        .radio input {  /*our custom radio buttons are hidden */
+        .radio input {  /* our custom radio buttons are hidden */
         display:none;
         }
-
-        /* Credit: http://www.particletree.com/features/rediscovering-the-button-element/
-        Took out font-weight as I found it too striking and color to show disable. Also took out font-family to make
-        whole page consistent. */
-        /* BUTTONS */.buttons a, .buttons button{
-        display:block;
-        float:left;
-        margin:0 7px 0 0;
-        background-color:#f5f5f5;
-        border:1px solid #dedede;
-        border-top:1px solid #eee;
-        border-left:1px solid #eee;
-        /* font-family:"Lucida Grande", Tahoma, Arial, Verdana, sans-serif; */
-        font-size:100%;
-        line-height:130%;
-        text-decoration:none;
-        /* font-weight:bold;color:#565656; */
-        cursor:pointer;
-        padding:5px 10px 6px 7px; /* Links */
-        }
-
-        .buttons button{
-        width:auto;
-        overflow:visible;
-        padding:4px 10px 3px 7px; /* IE6 */
-        }
-
-        .buttons button[type]{
-        padding:5px 10px 5px 7px; /* Firefox */
-        line-height:17px; /* Safari */
-        }
-
-        *:first-child+html button[type]{
-        padding:4px 10px 3px 7px; /* IE7 */
-        }
-
-        .buttons button img, .buttons a img{
-        margin:0 3px -3px 0 !important;
-        padding:0;
-        border:none;
-        width:16px;
-        height:16px;
-        }
-
 
         /* ]]> */
     </style>
@@ -122,6 +78,12 @@
 
         <div class="lift:Msgs?showAll=true"></div>
         <hr class="space"/>
+        <div id="storeBlock">
+            <div id="mapholder"></div><br>
+            <span id="storeNearby"></span><br><br>
+        </div>
+
+        <div id="storeData"></div>
     </div>
 
     <div class="column span-17 last" style="text-align: left">
