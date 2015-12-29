@@ -16,6 +16,7 @@ get JS to feed in (via JSON) data server for geolocation
 Done mid/late December with a REST service.
 
 Have default geolocation and specify to user that it is a default due to lack of input
+Done, Dec 29.
 
 Use version control. Using GIT, now need to backup files as Gitub private is for a fee.
 Implemented as of Dec 12. Need backups.

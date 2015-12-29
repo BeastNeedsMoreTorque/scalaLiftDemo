@@ -80,14 +80,18 @@ object ProductInteraction extends Loggable {
           // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter
         }
 
-
-      theProduct.is match {
-        case Full(p) =>
-          S.notice("recommend", "Cancel or consume prior to a secondary recommendation")
-          prodDisplayJS(p)
-        // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
-        // for a series of clicks on button before we have time to disable it
-        case _ => maySelect() & transactionConfirmationJS // normal processing
+      if (User.currentUser.isEmpty) {
+        S.error("recommend", "recommend feature unavailable, Login first!"); Noop
+      }
+      else {
+        theProduct.is match {
+          case Full(p) =>
+            S.notice("recommend", "Cancel or consume prior to a secondary recommendation")
+            prodDisplayJS(p)
+          // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
+          // for a series of clicks on button before we have time to disable it
+          case _ => maySelect() & transactionConfirmationJS // normal processing
+        }
       }
     }
 
