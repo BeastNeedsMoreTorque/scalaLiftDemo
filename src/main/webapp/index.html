@@ -12,37 +12,34 @@
 <div id="main" data-lift="surround?with=default;at=content">
     You will be presented with a random LCBO product available at the store nearest you matching chosen
         category.
-    <br><br>
-    <hr>
+    <br><hr>
     <span data-lift="CategorySelect">
       <div id="prodCategoryContainer"><span class="options">
          <input type="radio" value="Option 1">
       </span></div>
-    </span><br>
+    </span>
     Product <span class="thick">categories</span>: wine, spirits, beer, ciders, coolers, gifts
 
-    <br><br><hr>
+    <br><hr>
 
 
     <span data-lift="ProductInteraction">
       <div id="prodInteractionContainer"><span class="options">
          <input type="radio" value="Option 1" hidden> <!-- there will be three img elements acting as radio buttons with hidden radio buttons-->
-      </span></div><br>
+      </span></div>
         <span class="thick">Actions</span>: recommend, consume, cancel
-      <br><br><hr>
-        <!-- Need enough spacing beneath the buttons-->
-        <span id="transactionConfirmation"></span>
-        <div id="prodDisplay" hidden>
-          <span>
-              <span id="selectConfirmationHead"></span><span id="selectConfirmationContent" class="thick"></span>
-          </span><br><br>
+      <br><hr><!-- Need enough spacing beneath the buttons-->
+      <div id="prodDisplay" hidden>
             <div class="span-8">
-                <span id="prodAttributes"></span>   <!--generate other product items on the fly as simple li elements-->
+              <span>Recommended product:</span><br>
+              <span id="prodAttributes"></span>   <!--generate other product items on the fly as simple li elements-->
             </div>
             <div class="span-8 last">
                 <span id="prodImg"><img src="#"/></span>
             </div>
-        </div>
+      </div>
+      <span id="transactionConfirmation"></span>
+
     </span>
     <script src="//maps.google.com/maps/api/js"></script>
     <script src="scripts/scripts.js"></script>
