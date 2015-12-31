@@ -43,7 +43,7 @@ object ProductInteraction extends Loggable {
       * @return a JsCmd that is JavaScript Lift will execute
       */
     def prodAttributesJS(p: Product) = {
-      val nodeSeq = for (x <- p.createProductLIElemVals) yield <li><span class="prodAttrHead">{x._1}</span> <span class="prodAttrContent">{x._2}</span></li>
+      val nodeSeq = for (x <- p.createProductElemVals) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>
       SetHtml("prodAttributes", nodeSeq)
     }
     def prodDisplayJS(prod: Product) =

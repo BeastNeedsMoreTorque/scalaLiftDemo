@@ -58,10 +58,9 @@ case class Product(id: Int,
 
   /**
     *
-    * @return an ordered list of DOM li element values to be listed in sequence vertically, representing most of the interesting data of the product
-    *         with a first item as label and second item of pair as actual value.
+    * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
-  def createProductLIElemVals: List[(String, String)] =
+  def createProductElemVals: List[(String, String)] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
     ( ("Name: ", s"$name") ::
     ("Primary Category: ", s"$primary_category") ::
