@@ -36,9 +36,6 @@ object ProductInteraction extends Loggable {
 
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
-    def selectConfirmationJS(header: String, content: String) =
-      SetHtml("selectConfirmationHead", Text(header)) &
-      SetHtml("selectConfirmationContent", Text(content))
     /**
       * Generates a list of <li></li> elements as nodes of element prodAttributes
       *
@@ -51,14 +48,13 @@ object ProductInteraction extends Loggable {
     }
     def prodDisplayJS(prod: Product) =
       SetHtml("prodImg", <img src={prod.imageThumbUrl}/>) &
-      selectConfirmationJS("Recommended product: ",  prod.name) &
       prodAttributesJS(prod) &
       JsShowId("prodDisplay")
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
     // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
     def cancelCbJS =  transactionConfirmationJS & hideProdDisplayJS
-    def consumeCbJS =  selectConfirmationJS("", "") & hideProdDisplayJS & transactionConfirmationJS
+    def consumeCbJS = hideProdDisplayJS & transactionConfirmationJS
 
     def recommend() = {
       def maySelect(): JsCmd =
