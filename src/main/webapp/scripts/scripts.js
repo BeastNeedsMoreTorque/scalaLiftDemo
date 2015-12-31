@@ -22,7 +22,9 @@ if (!Array.prototype.forEach)
 // <localhost:port>/store/lat/<lat>/lon/<lon> gives closest store from coordinate(lat,lon).
 // Currently supported Store  (see lcboapi.com): id, name, is_dead, latitude, longitude, distance_in_meters (from specified location), address_line_1, city
 var lcboViewer = (function() {
-    var imgSelectStyle = 'imgframe';
+    var imgSelectStyle = 'selectframe';
+    var imgUnSelectStyle = 'unselectframe';
+
     var defaultOntarioLocationLat= 43.647219;  // Bay & Front LCBO address.
     var defaultOntarioLocationLon= -79.3789987;
 
@@ -84,7 +86,7 @@ var lcboViewer = (function() {
             var imgElts = $("#"+container).find("img").get();
             imgElts.forEach(function(element){
                 if ($(element).attr('name') != selected) {
-                   $(element).removeAttr('class');
+                   $(element).attr('class', imgUnSelectStyle);
                 }
             });
             $("[name="+selected+"]").attr('class', imgSelectStyle);

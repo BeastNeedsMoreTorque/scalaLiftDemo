@@ -13,7 +13,9 @@ import scala.xml.NodeSeq
 case class RadioElements(name: String, img: NodeSeq) {}
 
 object RadioElements {
-  val styleForSelectedRadio = "imgframe"
+  val styleForSelectedRadio = "selectframe"
+  val styleForUnSelectedRadio = "unselectframe"
+
   def defaultOption(defaultName: String, toImg: (String) => String) =
     RadioElements(defaultName, <img name={defaultName} title={defaultName} class={styleForSelectedRadio} src={toImg(defaultName)}/>)  // maybe adding button could work?
 
@@ -21,7 +23,7 @@ object RadioElements {
     if (s == defaultName)
       RadioElements.defaultOption(defaultName, toImg )  // selected with style that frames it
     else
-      RadioElements (s, <img name={s} title={s} src={toImg(s)}/>) // not selected, no added style
+      RadioElements (s, <img name={s} title={s} class={styleForUnSelectedRadio} src={toImg(s)}/>) // not selected, different style
   }
 }
 
