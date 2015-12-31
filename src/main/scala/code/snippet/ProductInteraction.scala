@@ -36,7 +36,9 @@ object ProductInteraction extends Loggable {
 
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
-    def selectConfirmationJS(t: String) = SetHtml("selectConfirmation", Text(t))
+    def selectConfirmationJS(header: String, content: String) =
+      SetHtml("selectConfirmationHead", Text(header)) &
+      SetHtml("selectConfirmationContent", Text(content))
     /**
       * Generates a list of <li></li> elements as nodes of element prodAttributes
       *
@@ -44,19 +46,19 @@ object ProductInteraction extends Loggable {
       * @return a JsCmd that is JavaScript Lift will execute
       */
     def prodAttributesJS(p: Product) = {
-      val nodeSeq = for (x <- p.createProductLIElemVals) yield <li>{x}</li>
+      val nodeSeq = for (x <- p.createProductLIElemVals) yield <li><span class="prodAttrHead">{x._1}</span> <span class="prodAttrContent">{x._2}</span></li>
       SetHtml("prodAttributes", nodeSeq)
     }
     def prodDisplayJS(prod: Product) =
       SetHtml("prodImg", <img src={prod.imageThumbUrl}/>) &
-      selectConfirmationJS(s"For social time, we suggest you: ${prod.name}") &
+      selectConfirmationJS("Recommended product: ",  prod.name) &
       prodAttributesJS(prod) &
       JsShowId("prodDisplay")
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
     // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
     def cancelCbJS =  transactionConfirmationJS & hideProdDisplayJS
-    def consumeCbJS =  selectConfirmationJS("") & hideProdDisplayJS & transactionConfirmationJS
+    def consumeCbJS =  selectConfirmationJS("", "") & hideProdDisplayJS & transactionConfirmationJS
 
     def recommend() = {
       def maySelect(): JsCmd =

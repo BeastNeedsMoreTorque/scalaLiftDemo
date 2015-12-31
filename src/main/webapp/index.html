@@ -10,29 +10,38 @@
      Just bind the required div with class/function with data-lift attribute-->
 <body data-lift-content-id="main">
 <div id="main" data-lift="surround?with=default;at=content">
-    You will be presented with a random LCBO product available at the store, which is near you matching that
+    You will be presented with a random LCBO product available at the store nearest you matching chosen
         category.
     <br><br>
+    <hr>
     <span data-lift="CategorySelect">
       <div id="prodCategoryContainer"><span class="options">
          <input type="radio" value="Option 1">
       </span></div>
     </span><br>
-    Product categories: wine, spirits, beer, ciders, coolers, gifts
+    Product <span class="thick">categories</span>: wine, spirits, beer, ciders, coolers, gifts
 
-    <br><br>
+    <br><br><hr>
+
 
     <span data-lift="ProductInteraction">
       <div id="prodInteractionContainer"><span class="options">
          <input type="radio" value="Option 1" hidden> <!-- there will be three img elements acting as radio buttons with hidden radio buttons-->
       </span></div><br>
-        Actions: recommend, consume, cancel
-      <br><br>  <!-- Need enough spacing beneath the buttons-->
+        <span class="thick">Actions</span>: recommend, consume, cancel
+      <br><br><hr>
+        <!-- Need enough spacing beneath the buttons-->
         <span id="transactionConfirmation"></span>
         <div id="prodDisplay" hidden>
-          <span id="selectConfirmation"></span><br>
-          <span id="prodImg"><img src="#"/></span><br>
-          <span id="prodAttributes"></span>   <!--generate other product items on the fly as simple li elements-->
+          <span>
+              <span id="selectConfirmationHead"></span><span id="selectConfirmationContent" class="thick"></span>
+          </span><br><br>
+            <div class="span-8">
+                <span id="prodAttributes"></span>   <!--generate other product items on the fly as simple li elements-->
+            </div>
+            <div class="span-8 last">
+                <span id="prodImg"><img src="#"/></span>
+            </div>
         </div>
     </span>
     <script src="//maps.google.com/maps/api/js"></script>
