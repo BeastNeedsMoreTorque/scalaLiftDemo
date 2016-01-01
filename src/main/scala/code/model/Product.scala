@@ -67,14 +67,13 @@ case class Product(id: Int,
     ("Secondary Category: ", s"$secondary_category") ::
     ("Varietal: ", s"$varietal") ::
     ("Package: ", s"$Package") ::
-    ("Package Units: ", s"$totalPackageUnits") ::
     ("Volume: ", s"$volumeInLitre") ::
-    ("Price: $",  price) ::
+    ("Price: ",  "$" +s"$price") ::
     ("Description: ", s"$description") ::
     ("Serving Suggestion: ", s"$serving_suggestion") ::
     ("Alcohol content: ", s"$alcoholContent") ::
     ("Origin: ", s"$origin") ::
-    Nil ).filter( {p: (String, String) => p._2 != "null"})
+    Nil ).filter({p: (String, String) => p._2 != "null"})
 }
 
 object Product extends pagerRestClient with Loggable {
