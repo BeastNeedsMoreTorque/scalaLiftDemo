@@ -14,21 +14,25 @@
         category.
     <br><hr>
     <span data-lift="CategorySelect">
-      <div id="prodCategoryContainer"><span class="options">
-         <input type="radio" value="Option 1">
-      </span></div>
+      <div id="prodCategoryContainer" class="box">
+          <span class="options">
+            <input type="radio" value="Option 1">
+          </span>
+          <span class="f1">wine</span ><span class="f1"> spirits</span ><span class="f1">beer</span><span class="f1">ciders</span><span class="f1">coolers</span><span class="f1">gifts</span>
+      </div>
     </span>
-    Product <span class="thick">categories</span>: wine, spirits, beer, ciders, coolers, gifts
-
-    <br><hr>
-
-
     <span data-lift="ProductInteraction">
-      <div id="prodInteractionContainer"><span class="options">
-         <input type="radio" value="Option 1" hidden> <!-- there will be three img elements acting as radio buttons with hidden radio buttons-->
-      </span></div>
-        <span class="thick">Actions</span>: recommend, consume, cancel
-      <br><hr><!-- Need enough spacing beneath the buttons-->
+      <div id="prodInteractionContainer" class="span-7">
+          <div class="box">
+          <span class="options">
+            <input type="radio" value="Option 1" hidden> <!-- there will be three img elements acting as radio buttons with hidden radio buttons-->
+          </span><br>
+          <span class="f2">recommend</span><span class="f2">consume</span><span class="f2">cancel</span>
+          </div>
+      </div>
+      <div class="span-9 last"></div> <!-- filler -->
+
+      <hr> <!--Need enough spacing beneath the buttons-->
       <div id="prodDisplay" hidden>
             <div class="span-8">
               <span>Recommended product:</span><br>
