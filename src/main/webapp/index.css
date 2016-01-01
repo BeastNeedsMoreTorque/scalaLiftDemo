@@ -1,0 +1,28 @@
+/* Specific to index.html, but might be useful in broader context, for now bound only to that index.html file */
+        span.f1 { /* to lay out captions underneath product images */
+        float:left; width: 105px;
+        }
+
+        span.f2 { /* to lay out captions underneath action images */
+        float:left; width: 72px;
+        }
+
+        img.selectframe {  /* to put a noticeable frame around an img that acts like a radio button (on item). */
+        border:4px solid grey;
+        }
+
+        img.unselectframe {  /* to put a plain frame around an img that acts like a radio button (off item). */
+        border:2px solid grey;
+        }
+
+        .radio input {  /* our custom radio buttons are hidden but the images associated with them are visible */
+        display:none;
+        }
+
+        .prodAttrHead {
+        color: grey;/* let whatever a web designer thinks is good edit this, different from content to allow some contrast */
+        }
+
+        .prodAttrContent {
+        /* put whatever a web designer thinks is good here */
+        }
