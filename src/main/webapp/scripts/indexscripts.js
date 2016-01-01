@@ -94,4 +94,8 @@ var lcboViewer = (function() {
     }
 }());
 
+$(window).load(function(){
+    lcboViewer.fetchStoreFromPosition();
+});
+
 
