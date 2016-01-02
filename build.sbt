@@ -15,14 +15,16 @@ scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked",
 
 libraryDependencies ++= {
   val liftVersion = "2.6.2"
-  val record = "net.liftweb" %% "lift-record" % liftVersion
+  val record = "net.liftweb" %% "lift-record" % liftVersion  // database inteface layer
+  val squeryl = "net.liftweb" %% "lift-squeryl-record" % liftVersion % "compile->default" withSources() // Record interface to RDBMS
 
   Seq(
     "net.liftweb"     %% "lift-webkit" % liftVersion % "compile" withSources(),
     "net.liftweb"     %% "lift-mapper" % liftVersion % "compile->default" withSources(),
     "net.liftweb"     %% "lift-wizard" % liftVersion % "compile->default" withSources(),
     record,
-    "net.liftmodules" %% "lift-jquery-module_2.6" % "2.8" withSources())
+    squeryl,
+  "net.liftmodules" %% "lift-jquery-module_2.6" % "2.8" withSources())
 }
 libraryDependencies ++= Seq (
     "postgresql"        % "postgresql"          % "9.1-901.jdbc4",
