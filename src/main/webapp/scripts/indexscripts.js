@@ -2,7 +2,7 @@
 // shim for ECMA-262, http://www.tutorialspoint.com/javascript/array_foreach.htm
 if (!Array.prototype.forEach)
 {
-   Array.prototype.forEach = function(fun /*, thisp*/)
+   Array.prototype.forEach = function(fun, thisp)
    {
       var len = this.length;
       if (typeof fun != "function")
@@ -12,7 +12,7 @@ if (!Array.prototype.forEach)
       for (var i = 0; i < len; i++)
       {
          if (i in this)
-         fun.call(thisp, this[i], i, this);
+         fun.call(thisp, this[i], i, this); // here, we don't really use thisp, but we might eventually need it.
       }
    };
 }

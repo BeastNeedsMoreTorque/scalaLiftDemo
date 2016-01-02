@@ -86,5 +86,9 @@
     <orderEntry type="library" name="SBT: postgresql:postgresql:9.1-901.jdbc4:jar" level="project" />
     <orderEntry type="library" name="SBT: xerces:xercesImpl:2.11.0:jar" level="project" />
     <orderEntry type="library" name="SBT: xml-apis:xml-apis:1.4.01:jar" level="project" />
+    <orderEntry type="library" name="SBT: net.liftweb:lift-record_2.11:2.6.2:jar" level="project" />
+    <orderEntry type="library" name="SBT: cglib:cglib-nodep:2.2:jar" level="project" />
+    <orderEntry type="library" name="SBT: net.liftweb:lift-squeryl-record_2.11:2.6.2:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.squeryl:squeryl_2.11:0.9.5-7:jar" level="project" />
   </component>
 </module>
