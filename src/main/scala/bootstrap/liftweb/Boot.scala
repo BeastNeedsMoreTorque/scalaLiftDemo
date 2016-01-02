@@ -50,7 +50,7 @@ class Boot {
 
   //  if(Props.devMode) {
   //    SquerylRecord.init(() => new PostgreSqlAdapter)  this does not work too well with normal functionality...
-  //    DB.use(DefaultConnectionIdentifier) { connection => MySchema.printDdl }
+  //    DB.use(DefaultConnectionIdentifier) { connection => MainSchema.printDdl }
   //  }
 
     // where to search snippet

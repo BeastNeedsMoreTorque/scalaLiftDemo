@@ -1,6 +1,7 @@
 package code.model
 
-import MySchema._
+import MainSchema._
+import net.liftweb.common._
 import net.liftweb.record.field.{LongField,StringField}
 import net.liftweb.record.{Record, MetaRecord}
 import net.liftweb.squerylrecord.RecordTypeMode._
@@ -30,56 +31,22 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
     *         Exception Handling is done at a higher level since this is an intermediate table for Many-Many relationship
     *         between User and Product; higher level app code should not come here directly.
     */
-  def consume(user: User, prod: DBProduct): (String, Long) = {
-    // get fist UserProduct item matching if available (don't care if there are multiple matches, we use a PK to query!).
-    val userProd: Option[UserProduct] = from(userProducts)(uProd =>
-      where(uProd.user_c === user.id.get and uProd.product === prod.id) select (uProd)).headOption
-    if (userProd.isDefined) {
-    //  val up = userProd.get
-     // up.selectionsCount.set(up.selectionsCount.get + 1)
-      //up.update()
-      update(userProducts)(up =>
-          where(up.user_c === user.id.get and up.product === prod.id)
-          set(up.selectionscount  := up.selectionscount + 1)
-      )
-      (user.firstName.get, userProd.get.selectionscount.get +1)
-    } else {
-      // create/insert new entry
-      UserProduct.createRecord.
-        user_c(user.id.get).
-        product(prod.id).save
-      (user.firstName.get, 1.toLong)
-    }
-  //  val elem = userProd.map { up: UserProduct =>
-   //   up.selectionsCount.set(up.selectionsCount.get + 1)
-   //   up.update()
-   //   (user.firstName.get, up.selectionsCount.get)
-   // }
-  //  elem.getOrElse {
-      // create/insert new entry
-  //    UserProduct.createRecord.
-  //      user_c(user.id.get).
-   //     product(prod.id.get).save
-   //   (user.firstName.get, 1.toLong)
-   // }
+  def consume(user: User, productId: Long): (String, Long) = {
+    // get fist UserProduct item matching if available (don't care if there are multiple matches, we use effectively a pseudo-key to query!).
+    val userProd: Box[UserProduct] = from(userProducts)(uProd =>
+      where(uProd.user_c === user.id.get and uProd.product === productId) select (uProd)).headOption
 
-    //   val userProdsList = UserProduct.
-  //    findAll(By(UserProduct.user, user.id.get)) //.
-    //  filter(_.product.get == prod.id.get)
-      // when list is non-empty update entry by incrementing by one else create/insert a new entry to DB
-   //   val elem = userProdsList.headOption.map { first =>
-   //     first.selectionsCount.set(first.selectionsCount.get + 1)
-    //    first.saveMe()
-   //     (first.user.toOption.get.firstName.get, first.selectionsCount.get)
-   //   }
-   //   elem.getOrElse {
-        // create/insert new entry
-     //   UserProduct.create.
-      //    user(user.id.get).
-      //    product(prod.id.get).
-      //    saveMe() // persist on insert specifying minimal info with defaults specified by case class, so here only two columns are explicit to satisfy FK.
-    //    (user.firstName.get, 1.toLong)
-  //    }
+    val count = userProd.map { s =>
+      update(userProducts)(up =>
+        where(up.id === s.id)
+        set(up.selectionscount  := up.selectionscount.~ + 1))
+      s.selectionscount.get + 1
+    } openOr {
+      // create/insert new entry
+      UserProduct.createRecord.user_c(user.id.get).product(productId).save
+      1.toLong
+    }
+    (user.firstName.get, count)
   }
 }
 
