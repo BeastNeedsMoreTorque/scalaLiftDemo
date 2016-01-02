@@ -13,7 +13,7 @@ import net.liftweb.squerylrecord.KeyedRecord
 import org.squeryl.annotations.Column
 
 /**
-  * Created by philippederome on 15-11-01. Modified 16-01-01 for Squeryl (to replace Mapper)
+  * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * DBProduct: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   * A sister of class Product.
   * Some StringFields take defaults as we specify not null in database but could receive null from LCBO (esp. relevant for image_thumb_url)
