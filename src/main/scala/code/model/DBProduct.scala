@@ -1,6 +1,6 @@
 package code.model
 
-import MySchema._
+import MainSchema._
 import net.liftweb.db.DB
 import net.liftweb.record.field.{LongField,StringField,BooleanField,IntField}
 import net.liftweb.record.{Record, MetaRecord}
@@ -20,7 +20,6 @@ import org.squeryl.annotations.Column
   * name has no default.
   */
 class DBProduct private() extends Record[DBProduct] with KeyedRecord[Long] with CreatedUpdated[DBProduct]  {
-
   def meta = DBProduct
 
   @Column(name="id")
@@ -73,30 +72,26 @@ object DBProduct extends DBProduct with MetaRecord[DBProduct]  {
     }
 
     User.currentUser.dmap {
-      val fail: Box[(String, Long)] = Failure("unable to store transaction, Login first!")
-      fail
+      Failure("unable to store transaction, Login first!").asA[(String, Long)]
     } { user => // normal case
-      val prod: Box[DBProduct] = from(products)(q =>
-        where(q.lcbo_id === p.id) select (q)).headOption  // Squeryl very friendly DSL syntax! db column lcbo_id matches memory id (same name as JSON field)
-
       // update it with new details; we could verify that there is a difference between LCBO and our version first...
       // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
       // Use openOr on Box prod so that if non-empty, we update it, otherwise we create and save the product.
       // tryo captures database provider errors (column size too small for example, reporting it as an Empty Box with Failure)
       tryo {
-        DB.use(DefaultConnectionIdentifier) {
-      // avoids two round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct
-      // and it got stored at same time as UserProduct (monitoring Postgres).
-          connection =>
-            if (prod.isDefined) {
-              update(products)(q =>
-                where(q.lcbo_id === p.id)
-                set(q.price_in_cents := p.price_in_cents,
-                    q.image_thumb_url := p.image_thumb_url)
-                )
-            }
-            val currProd: DBProduct = prod.map(q => q) openOr { val q = createProduct; q.save; q }
-         UserProduct.consume(user, currProd) // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
+       DB.use(DefaultConnectionIdentifier) { connection =>
+         // avoids two/three round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct
+         // and it got stored at same time as UserProduct (monitoring Postgres).
+         // First query before update as update does not give us the PK for the product (a cost consequence for not using same PK as LCBO).
+         val prod: Box[DBProduct] = from(products)(q =>
+           where(q.lcbo_id === p.id) select (q)).headOption  // Squeryl very friendly DSL syntax! db column lcbo_id matches memory id (same name as JSON field)
+
+         update(products)(q =>
+            where(q.lcbo_id === p.id)
+            set(q.price_in_cents := p.price_in_cents,
+              q.image_thumb_url := p.image_thumb_url))
+          val productId = prod.map(q => q.id) openOr { val q = createProduct; q.save; q.id } // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
+          UserProduct.consume(user, productId)
         }
       }
     }
