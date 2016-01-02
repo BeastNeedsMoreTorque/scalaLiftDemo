@@ -28,20 +28,12 @@ class DBProduct private() extends Record[DBProduct] with KeyedRecord[Long] with 
 
   val lcbo_id = new IntField(this) // indexed?
   val is_discontinued = new BooleanField(this, false)
-  val `package` = new StringField(this, 80) {
-    override def defaultValue = ""
-  }
+  val `package` = new StringField(this, 80)
   val total_package_units = new IntField(this)
-  val primary_category = new StringField(this, 40)  {
-    override def defaultValue = ""
-  }
+  val primary_category = new StringField(this, 40)
   val name = new StringField(this, 80)
-  val image_thumb_url = new StringField(this, 200) {
-    override def defaultValue = "#"
-  }
-  val origin = new StringField(this, 200)  {
-    override def defaultValue = ""
-  }
+  val image_thumb_url = new StringField(this, 200)
+  val origin = new StringField(this, 200)
   val price_in_cents = new IntField(this)
   val alcohol_content = new IntField(this)
   val volume_in_milliliters = new IntField(this)
@@ -84,8 +76,8 @@ object DBProduct extends DBProduct with MetaRecord[DBProduct]  {
       val fail: Box[(String, Long)] = Failure("unable to store transaction, Login first!")
       fail
     } { user => // normal case
-      val prod: Box[DBProduct] = from(products)(p =>
-        where(p.lcbo_id === p.id) select (p)).headOption  // Squeryl very friendly DSL syntax! db column lcbo_id matches memory id (same name as JSON field)
+      val prod: Box[DBProduct] = from(products)(q =>
+        where(q.lcbo_id === p.id) select (q)).headOption  // Squeryl very friendly DSL syntax! db column lcbo_id matches memory id (same name as JSON field)
 
       // update it with new details; we could verify that there is a difference between LCBO and our version first...
       // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
@@ -97,13 +89,13 @@ object DBProduct extends DBProduct with MetaRecord[DBProduct]  {
       // and it got stored at same time as UserProduct (monitoring Postgres).
           connection =>
             if (prod.isDefined) {
-              update(products)(p =>
-                where(p.lcbo_id === p.id)
-                set(p.price_in_cents := p.price_in_cents,
-                    p.image_thumb_url := p.image_thumb_url)
+              update(products)(q =>
+                where(q.lcbo_id === p.id)
+                set(q.price_in_cents := p.price_in_cents,
+                    q.image_thumb_url := p.image_thumb_url)
                 )
             }
-            val currProd: DBProduct = prod.map(p => p) openOr { val p = createProduct; p.save; p }
+            val currProd: DBProduct = prod.map(q => q) openOr { val q = createProduct; q.save; q }
          UserProduct.consume(user, currProd) // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
         }
       }
