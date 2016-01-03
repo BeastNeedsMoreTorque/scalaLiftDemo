@@ -66,7 +66,7 @@ object Store extends pagerRestClient with Loggable {
       case Full(x) =>
         theStore.set(x)
         Full(x)
-      case Failure(msg, exc, ch) =>
+      case Failure(msg, exc, _) =>
         logger.error(s"unable to find closest store with error $msg exception $exc")
         Empty
       case Empty =>
