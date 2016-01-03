@@ -84,7 +84,7 @@ object DBProduct extends DBProduct with MetaRecord[DBProduct]  {
          // and it got stored at same time as UserProduct (monitoring Postgres).
          // First query before update as update does not give us the PK for the product (a cost consequence for not using same PK as LCBO).
          // We do this in transaction so we have local consistency (i.e. the product will not be deleted by some other transaction while we're here)
-         val prod: Box[DBProduct] = products.where(_.lcbo_id === p.id).headOption  // Squeryl very friendly DSL syntax! db column lcbo_id matches memory id (same name as JSON field)
+         val prod: Box[DBProduct] = products.where(_.lcbo_id === p.id).forUpdate.headOption  // Squeryl very friendly DSL syntax! db column lcbo_id matches memory id (same name as JSON field)
          val prodId = prod.map { q =>
            update(products)(q =>
              where(q.lcbo_id === p.id)  // p.id is the id from LCBO's JSON's perspective whereas t.id is our PK from our own database.

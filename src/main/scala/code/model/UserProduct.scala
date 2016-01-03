@@ -33,7 +33,8 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
     */
   def consume(user: User, productId: Long): (String, Long) = {
     // get fist UserProduct item matching if available (don't care if there are multiple matches, we use effectively a pseudo-key to query!).
-    val userProd: Box[UserProduct] = userProducts.where( uProd => uProd.user_c === user.id.get and uProd.product === productId).headOption
+    val userProd: Box[UserProduct] = userProducts.where( uProd => uProd.user_c === user.id.get and uProd.product === productId).forUpdate.headOption
+    // above is lazy, so execution occurs when calling map.
     val count = userProd.map { s =>
       s.selectionscount.set(s.selectionscount.get + 1)
       s.update

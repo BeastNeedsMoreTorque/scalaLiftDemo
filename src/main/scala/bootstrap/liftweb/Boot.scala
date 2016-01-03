@@ -51,8 +51,7 @@ class Boot {
     SquerylRecord.initWithSquerylSession(  Session.create(connection, adapter) )
 
     if(Props.devMode) {
-      SquerylRecord.init(() => adapter)
-      DB.use(DefaultConnectionIdentifier) { connection => MainSchema.printDdl }
+      transaction {DB.use(DefaultConnectionIdentifier) { connection => MainSchema.printDdl } }
     }
 
     // where to search snippet
@@ -101,6 +100,7 @@ class Boot {
 
     // Make a transaction span the whole HTTP request (Squeryl way that is not the traditional method from Liftweb, commented out line)
     //   S.addAround(DB.buildLoanWrapper)
+    // As per Lift Cookbook, requests are inTransaction scope (Squeryl terminology).
     S.addAround(new LoanWrapper {
       override def apply[T](f: => T): T = {
         val resultOrExcept = inTransaction {
