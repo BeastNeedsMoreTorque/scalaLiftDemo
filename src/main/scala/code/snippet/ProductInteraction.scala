@@ -47,7 +47,7 @@ object ProductInteraction extends Loggable {
       SetHtml("prodAttributes", nodeSeq)
     }
     def prodDisplayJS(prod: Product) =
-      SetHtml("prodImg", <img src={prod.imageThumbUrl}/>) &
+      SetHtml("prodImg", <img src={prod.imageThumbUrl.get}/>) &
       prodAttributesJS(prod) &
       JsShowId("prodDisplay")
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser

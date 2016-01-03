@@ -16,5 +16,4 @@ object SessionCache {
   object theStore extends SessionVar[Store](Store(id=defaultStore))
   object theProduct extends SessionVar[Box[Product]](Empty)
   object transactionConfirmation extends SessionVar[String]("")
-
 }
