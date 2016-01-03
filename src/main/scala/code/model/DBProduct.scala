@@ -23,7 +23,7 @@ class DBProduct private() extends Record[DBProduct] with KeyedRecord[Long] with 
   def meta = DBProduct
 
   @Column(name="id")
-  override val idField = new LongField(this)  // our own auto-generated id, using a Sequence known/assumed to Squeryl .
+  override val idField = new LongField(this, 1)  // our own auto-generated id, using a Sequence known/assumed to Squeryl .
 
   val lcbo_id = new IntField(this) // indexed?
   val is_discontinued = new BooleanField(this, false)
@@ -54,8 +54,8 @@ object DBProduct extends DBProduct with MetaRecord[DBProduct]  {
     * @return the user who requested the product and the number of times the user has purchased this product as a pair/tuple.
     *         May throw but would be caught as a Failure within Box to be consumed higher up.
     */
-  def persist(p: Product): Box[(String, Long)] = {
-    def createProduct: DBProduct = {
+  def persist(p: Product) = {
+    def create = {
       // store in same format as received by provider so that un-serializing if required will be same logic.
       DBProduct.createRecord.
         lcbo_id(p.id).
@@ -83,15 +83,14 @@ object DBProduct extends DBProduct with MetaRecord[DBProduct]  {
          // avoids two/three round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct
          // and it got stored at same time as UserProduct (monitoring Postgres).
          // First query before update as update does not give us the PK for the product (a cost consequence for not using same PK as LCBO).
-         val prod: Box[DBProduct] = from(products)(q =>
-           where(q.lcbo_id === p.id) select (q)).headOption  // Squeryl very friendly DSL syntax! db column lcbo_id matches memory id (same name as JSON field)
+         val prod: Box[DBProduct] = products.where(_.lcbo_id === p.id).headOption  // Squeryl very friendly DSL syntax! db column lcbo_id matches memory id (same name as JSON field)
 
          update(products)(q =>
             where(q.lcbo_id === p.id)
             set(q.price_in_cents := p.price_in_cents,
               q.image_thumb_url := p.image_thumb_url))
-          val productId = prod.map(q => q.id) openOr { val q = createProduct; q.save; q.id } // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
-          UserProduct.consume(user, productId)
+         val productId = prod.map(q => q.id) openOr { val q = create; q.save; q.id } // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
+         UserProduct.consume(user, productId)
         }
       }
     }

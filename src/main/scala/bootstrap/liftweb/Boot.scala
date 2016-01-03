@@ -3,6 +3,7 @@ package bootstrap.liftweb
 import code.Rest.AppRest
 import code.model._
 import net.liftmodules.JQueryModule
+import net.liftweb._
 import net.liftweb.common._
 import net.liftweb.db.StandardDBVendor
 import net.liftweb.http.js.jquery.JQueryArtifacts
@@ -30,28 +31,29 @@ class Boot {
     //    DefaultConnectionIdentifier.jndiName = "jdbc/liftinaction"  // can tie to servlet container configuration and thus handle different environments.
     // For example, see https://wiki.eclipse.org/Jetty/Howto/Configure_JNDI_Datasource. That is not our deployment strategy here, we use props files instead
     // (for dev that is main/resources/default.props).
-
+    val driver = Props.get("db.driver", "org.selectvendor.Driver") // intentionally bad to force a decision in props files.
+    val jdbcURL = Props.get("db.url", "jdbc:vendordbname-perhaps://localhost:5432") // intentionally bad to force a decision in props files.
     if (!DB.jndiJdbcConnAvailable_?){  // for Lift's user
       val vendor = new StandardDBVendor(// user and password will be empty boxes if not specified in default.props as they are considered optional by StandardDBVendor
-        Props.get("db.driver", "org.selectvendor.Driver"), // intentionally bad to force a decision in props files.
-        Props.get("db.url", "jdbc:vendordbname-perhaps://localhost:5432"), // intentionally bad to force a decision in props files.
+        driver,
+        jdbcURL,
         Props.get("db.user"),
         Props.get("db.password"))
 
-      LiftRules.unloadHooks.append(() => vendor.closeAllConnections_!())
-      DB.defineConnectionManager(DefaultConnectionIdentifier, vendor)
+      LiftRules.unloadHooks.append(vendor.closeAllConnections_! _)
+      DB.defineConnectionManager(util.DefaultConnectionIdentifier, vendor)
     }
 
     // for db usage outside of Lift's User.
-    Class.forName(Props.get("db.driver", "org.selectvendor.Driver")) // intentionally bad to force a decision in props files.
-    def connection: Connection = DriverManager.getConnection(
-      Props.get("db.url", "jdbc:vendordbname-perhaps://localhost:5432"))//,
-    SquerylRecord.initWithSquerylSession(  Session.create(connection, new PostgreSqlAdapter) )
+    Class.forName(driver)
+    def connection: Connection = DriverManager.getConnection(jdbcURL)
+    def adapter = new PostgreSqlAdapter
+    SquerylRecord.initWithSquerylSession(  Session.create(connection, adapter) )
 
-  //  if(Props.devMode) {
-  //    SquerylRecord.init(() => new PostgreSqlAdapter)  this does not work too well with normal functionality...
-  //    DB.use(DefaultConnectionIdentifier) { connection => MainSchema.printDdl }
-  //  }
+    if(Props.devMode) {
+      SquerylRecord.init(() => adapter)
+      DB.use(DefaultConnectionIdentifier) { connection => MainSchema.printDdl }
+    }
 
     // where to search snippet
     LiftRules.addToPackages("code")
