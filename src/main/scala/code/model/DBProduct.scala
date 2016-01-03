@@ -83,14 +83,20 @@ object DBProduct extends DBProduct with MetaRecord[DBProduct]  {
          // avoids two/three round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct
          // and it got stored at same time as UserProduct (monitoring Postgres).
          // First query before update as update does not give us the PK for the product (a cost consequence for not using same PK as LCBO).
+         // We do this in transaction so we have local consistency (i.e. the product will not be deleted by some other transaction while we're here)
          val prod: Box[DBProduct] = products.where(_.lcbo_id === p.id).headOption  // Squeryl very friendly DSL syntax! db column lcbo_id matches memory id (same name as JSON field)
-
-         update(products)(q =>
-            where(q.lcbo_id === p.id)
-            set(q.price_in_cents := p.price_in_cents,
-              q.image_thumb_url := p.image_thumb_url))
-         val productId = prod.map(q => q.id) openOr { val q = create; q.save; q.id } // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
-         UserProduct.consume(user, productId)
+         val prodId = prod.map { q =>
+           update(products)(q =>
+             where(q.lcbo_id === p.id)  // p.id is the id from LCBO's JSON's perspective whereas t.id is our PK from our own database.
+               set(q.price_in_cents := p.price_in_cents,
+               q.image_thumb_url := p.image_thumb_url))
+           q.id
+         } openOr {
+           val q = create
+           q.save
+           q.id
+         }
+         UserProduct.consume(user, prodId)   // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
         }
       }
     }
