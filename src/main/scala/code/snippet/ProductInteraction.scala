@@ -64,8 +64,8 @@ object ProductInteraction extends Loggable {
           transactionConfirmation.set("")
           val prod = Product.recommend(maxSampleSize, theStore.is.id, theCategory.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
-            case Full(p) => Full(p) // returns prod normally but if empty, send a notice of error and return empty.
-            case Failure(m, ex, ch) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
+            case Full(p) => Full(p) // returns prod normally
+            case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
             case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
           }
           prod.dmap { Noop }
@@ -98,14 +98,12 @@ object ProductInteraction extends Loggable {
             transactionConfirmation.set(s"${p.name} has now been purchased $count time(s), $userName")
             theProduct.set(Empty)
             S.error("") // workaround clearCurrentNotices clears error message now that this is good, to get a clean screen.
-            Noop
-          case Failure(x, ex, ch) =>
+          case Failure(x, ex, _) =>
             S.error(s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
-            Noop
           case Empty =>
             S.error(s"Unable to sell you product ${p.name}")
-            Noop
         }
+        Noop
       }
 
       theProduct.is.dmap { S.notice("consume", "Get a product recommendation before attempting to consume")
