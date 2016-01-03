@@ -7,7 +7,7 @@ import org.squeryl.Schema
   * @see http://stackoverflow.com/questions/28859798/in-scala-how-can-i-get-plays-models-and-forms-to-play-nicely-with-squeryl-and?answertab=active#tab-top
   */
 object MainSchema extends Schema {
-  val products = table[DBProduct]("product")
+  val products = table[Product]("product")
   // in Postgres:  CREATE SEQUENCE s_product_id;  See output from printDdl in Boot.
   // alter table product alter column id set default nextval('s_product_id');
   // String columns are typically nullable.

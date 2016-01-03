@@ -37,7 +37,7 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
     // above is lazy, so execution occurs when calling map.
     val count = userProd.map { s =>
       s.selectionscount.set(s.selectionscount.get + 1)
-      s.update
+      s.update // Active Record pattern
       s.selectionscount.get
     } openOr { UserProduct.createRecord.user_c(user.id.get).product(productId).save       // create/insert new entry
       1.toLong
