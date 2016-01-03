@@ -58,37 +58,35 @@ object ProductInteraction extends Loggable {
 
     def recommend() = {
       def maySelect(): JsCmd =
-        theStore.is.id match {
+        if (theStore.is.id > 0 ) {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
-          case s if s > 0 =>
-            transactionConfirmation.set("")
-            val prod = Product.recommend(maxSampleSize, s, theCategory.is) match {
-              // we want to distinguish error messages to user to provide better diagnostics.
-              case Full(p) => Full(p) // returns prod normally but if empty, send a notice of error and return empty.
-              case Failure(m, ex, ch) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
-              case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
-            }
-            prod.dmap { Noop } { p: Product =>
-                theProduct.set(Full(p))
-                S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-                prodDisplayJS(p)
-            }
-          case _ => S.error(s"Enter a number > 0 for Store"); Noop
-          // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter
+          transactionConfirmation.set("")
+          val prod = Product.recommend(maxSampleSize, theStore.is.id, theCategory.is) match {
+            // we want to distinguish error messages to user to provide better diagnostics.
+            case Full(p) => Full(p) // returns prod normally but if empty, send a notice of error and return empty.
+            case Failure(m, ex, ch) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
+            case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
+          }
+          prod.dmap { Noop }
+          { p: Product => theProduct.set(Full(p))
+                          S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
+                          prodDisplayJS(p)
+          }
+        }
+        else {
+          S.error(s"Enter a number > 0 for Store")
+          Noop     // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter
         }
 
       if (User.currentUser.isEmpty) {
         S.error("recommend", "recommend feature unavailable, Login first!"); Noop
       }
       else {
-        theProduct.is match {
-          case Full(p) =>
-            S.notice("recommend", "Cancel or consume prior to a secondary recommendation")
-            prodDisplayJS(p)
-          // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
+        theProduct.is.dmap { maySelect() & transactionConfirmationJS } // normal processing
+        { p => S.notice("recommend", "Cancel or consume prior to a secondary recommendation")
+            prodDisplayJS(p) // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
           // for a series of clicks on button before we have time to disable it
-          case _ => maySelect() & transactionConfirmationJS // normal processing
         }
       }
     }
@@ -110,12 +108,10 @@ object ProductInteraction extends Loggable {
         }
       }
 
-      theProduct.is match {
-        case Full(p)  => mayConsume(p) & consumeCbJS
-          // we got notified that we have a product that can be consumed and user expressed interest in consuming.
+      theProduct.is.dmap { S.notice("consume", "Get a product recommendation before attempting to consume")
+        Noop   // ignore consecutive clicks, ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
+      }{ p => mayConsume(p) & consumeCbJS // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
           // So, try it as a simulation by doing a DB store.
-        case _ => S.notice("consume", "Get a product recommendation before attempting to consume"); Noop
-        // ignore consecutive clicks, ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
       }
     }
 
