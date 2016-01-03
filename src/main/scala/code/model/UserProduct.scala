@@ -35,13 +35,10 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
     // get fist UserProduct item matching if available (don't care if there are multiple matches, we use effectively a pseudo-key to query!).
     val userProd: Box[UserProduct] = userProducts.where( uProd => uProd.user_c === user.id.get and uProd.product === productId).headOption
     val count = userProd.map { s =>
-      update(userProducts)(up =>
-        where(up.id === s.id)
-        set(up.selectionscount  := up.selectionscount.~ + 1))
-      s.selectionscount.get + 1
-    } openOr {
-      // create/insert new entry
-      UserProduct.createRecord.user_c(user.id.get).product(productId).save
+      s.selectionscount.set(s.selectionscount.get + 1)
+      s.update
+      s.selectionscount.get
+    } openOr { UserProduct.createRecord.user_c(user.id.get).product(productId).save       // create/insert new entry
       1.toLong
     }
     (user.firstName.get, count)
