@@ -12,7 +12,7 @@ class UserProduct private() extends Record[UserProduct] with KeyedRecord[Long] w
   def meta = UserProduct
 
   @Column(name="id")
-  override val idField = new LongField(this)  // our own auto-generated id
+  override val idField = new LongField(this, 1)  // our own auto-generated id
 
   val user_c = new LongField(this)
   val product = new LongField(this)
@@ -33,9 +33,7 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
     */
   def consume(user: User, productId: Long): (String, Long) = {
     // get fist UserProduct item matching if available (don't care if there are multiple matches, we use effectively a pseudo-key to query!).
-    val userProd: Box[UserProduct] = from(userProducts)(uProd =>
-      where(uProd.user_c === user.id.get and uProd.product === productId) select (uProd)).headOption
-
+    val userProd: Box[UserProduct] = userProducts.where( uProd => uProd.user_c === user.id.get and uProd.product === productId).headOption
     val count = userProd.map { s =>
       update(userProducts)(up =>
         where(up.id === s.id)

@@ -8,7 +8,7 @@ import org.squeryl.Schema
   */
 object MainSchema extends Schema {
   val products = table[DBProduct]("product")
-  // in Postgres:  CREATE SEQUENCE s_product_id;
+  // in Postgres:  CREATE SEQUENCE s_product_id;  See output from printDdl in Boot.
   // alter table product alter column id set default nextval('s_product_id');
   // String columns are typically nullable.
 
