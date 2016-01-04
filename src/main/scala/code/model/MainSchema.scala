@@ -1,5 +1,7 @@
 package code.model
 import org.squeryl.Schema
+import net.liftweb.squerylrecord.RecordTypeMode._
+
 /**
   * Created by philippederome on 2016-01-01.
   *   // References:
@@ -15,4 +17,11 @@ object MainSchema extends Schema {
   val userProducts = table[UserProduct]("userproduct")
   // In Postgres: CREATE SEQUENCE s_userproduct_id;
   // alter table userproduct alter column id set default nextval('s_userproduct_id');
+
+  val productToUserProducts = oneToManyRelation(products, userProducts).
+    via((p,s) => p.id === s.productid)
+
+  on(userProducts) { s =>
+    declare(s.productid defineAs indexed("product_idx"))
+  }
 }

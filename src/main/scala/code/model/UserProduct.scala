@@ -14,6 +14,8 @@ class UserProduct private() extends Record[UserProduct] with KeyedRecord[Long] w
   @Column(name="id")
   override val idField = new LongField(this, 1)  // our own auto-generated id
 
+  lazy val product = MainSchema.productToUserProducts.right(this)
+
   val user_c = new LongField(this)
   val productid = new LongField(this)
   val selectionscount = new LongField(this) {
@@ -22,29 +24,7 @@ class UserProduct private() extends Record[UserProduct] with KeyedRecord[Long] w
   val review = new StringField(this, "")
 }
 // this code makes a case for value of unit testing since it took me a while to get it right... Let's set it up!
-object UserProduct extends UserProduct with MetaRecord[UserProduct] {
-  /**
-    * The join table UserProducts is increasing by one the row matching user in Users and prod in DBProduct or initialized to 1 on creation of relationship.
-    * @param user the database user row consuming the product
-    * @param prod the database DBProduct row that has its consumption increased by the user
-    * @return
-    *         Exception Handling is done at a higher level since this is an intermediate table for Many-Many relationship
-    *         between User and Product; higher level app code should not come here directly.
-    */
-  def consume(user: User, productId: Long): (String, Long) = {
-    // get fist UserProduct item matching if available (don't care if there are multiple matches, we use effectively a pseudo-key to query!).
-    val userProd: Box[UserProduct] = userProducts.where( uProd => uProd.user_c === user.id.get and uProd.productid === productId).forUpdate.headOption
-    // above is lazy, so execution occurs when calling map.
-    val count = userProd.map { s =>
-      s.selectionscount.set(s.selectionscount.get + 1)
-      s.update // Active Record pattern
-      s.selectionscount.get
-    } openOr { UserProduct.createRecord.user_c(user.id.get).productid(productId).save       // create/insert new entry
-      1.toLong
-    }
-    (user.firstName.get, count)
-  }
-}
+object UserProduct extends UserProduct with MetaRecord[UserProduct] {}
 
 
 

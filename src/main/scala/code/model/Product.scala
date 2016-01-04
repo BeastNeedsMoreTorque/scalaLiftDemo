@@ -1,6 +1,9 @@
 package code.model
 
 import java.io.IOException
+import net.liftweb.squerylrecord.KeyedRecord
+import org.squeryl.annotations._
+
 import scala.util.Random
 
 import net.liftweb.db.DB
@@ -21,10 +24,16 @@ import code.Rest.pagerRestClient
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends Record[Product] with CreatedUpdated[Product]  {
+class Product private() extends Record[Product] with KeyedRecord[Long] with CreatedUpdated[Product]  {
   def meta = Product
 
-  val id = new LongField(this) // for now share same PK as LCBO!
+
+  @Column(name="id")
+  override val idField = new LongField(this, 1)  // our own auto-generated id
+
+  lazy val userProducts = MainSchema.productToUserProducts.left(this)
+
+  val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80)
   val total_package_units = new IntField(this)
@@ -112,7 +121,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   def create(p: ProductAsLCBOJson): Product = {
     // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
     createRecord.
-      id(p.id).
+      lcbo_id(p.id).
       name(p.name).
       primary_category(p.primary_category).
       is_discontinued(p.is_discontinued).
@@ -149,18 +158,27 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
           // avoids two/three round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct
           // and it got stored at same time as UserProduct (monitoring Postgres).
           // We do this in transaction so we have local consistency (i.e. the product will not be deleted by some other transaction while we're here)
-          val prod: Box[Product] = products.where(_.id === p.id).forUpdate.headOption  // Squeryl very friendly DSL syntax!
-          val prodId = prod.map { q =>
-            update(products)(q =>
-              where(q.id === p.id)
-                set(q.price_in_cents := p.price_in_cents,
-                    q.image_thumb_url := p.image_thumb_url))
-            q.id.get
-          } openOr {
-            p.save
-            p.id.get
+          val prod: Box[Product] = products.where(_.lcbo_id === p.lcbo_id).forUpdate.headOption  // Squeryl very friendly DSL syntax!
+          var count = 0.toLong
+          prod.map { q =>
+            q.price_in_cents.set(p.price_in_cents.get)
+            q.image_thumb_url.set(p.image_thumb_url.get)
+            q.update // Active Record pattern
+            if (q.userProducts.isEmpty) { // product exists but userProducts has no entry (Product would be pre-loaded with no user interest)
+              UserProduct.createRecord.user_c(user.id.get).productid(p.id).selectionscount(1).save  // cascade save dependency.
+              count = 1
+            } else { // cascade save dependency (there should only be one entry to update).
+              q.userProducts.map { u =>
+                u.selectionscount.set(u.selectionscount.get + 1)
+                u.update // Active Record pattern )
+                count = u.selectionscount.get
+              } // from compiler perspective the map could have been a no-op, but that's not really possible in practice.
+            }
+          } openOr { p.save
+            UserProduct.createRecord.user_c(user.id.get).productid(p.id).selectionscount(1).save  // cascade save dependency.
+            count = 1
           }
-          UserProduct.consume(user, prodId)   // once the product has been saved, also save the UserProducts relationship for an additional count of the product for the user.
+          (user.firstName.get, count)
         }
       }
     }
