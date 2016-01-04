@@ -110,7 +110,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
                                volume_in_milliliters: Int) {}
 
   def create(p: ProductAsLCBOJson): Product = {
-    // store in same format as received by provider so that un-serializing if required will be same logic.
+    // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
     createRecord.
       id(p.id).
       name(p.name).

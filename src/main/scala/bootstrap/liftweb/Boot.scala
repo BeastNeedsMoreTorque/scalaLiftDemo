@@ -51,7 +51,9 @@ class Boot {
     SquerylRecord.initWithSquerylSession(  Session.create(connection, adapter) )
 
     if(Props.devMode) {
-      transaction {DB.use(DefaultConnectionIdentifier) { connection => MainSchema.printDdl } }
+      inTransaction {
+        code.model.MainSchema.printDdl
+      }
     }
 
     // where to search snippet
