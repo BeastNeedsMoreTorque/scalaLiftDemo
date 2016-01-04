@@ -15,7 +15,7 @@ class UserProduct private() extends Record[UserProduct] with KeyedRecord[Long] w
   override val idField = new LongField(this, 1)  // our own auto-generated id
 
   val user_c = new LongField(this)
-  val product = new LongField(this)
+  val productid = new LongField(this)
   val selectionscount = new LongField(this) {
     override def defaultValue = 1
   }
@@ -33,13 +33,13 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
     */
   def consume(user: User, productId: Long): (String, Long) = {
     // get fist UserProduct item matching if available (don't care if there are multiple matches, we use effectively a pseudo-key to query!).
-    val userProd: Box[UserProduct] = userProducts.where( uProd => uProd.user_c === user.id.get and uProd.product === productId).forUpdate.headOption
+    val userProd: Box[UserProduct] = userProducts.where( uProd => uProd.user_c === user.id.get and uProd.productid === productId).forUpdate.headOption
     // above is lazy, so execution occurs when calling map.
     val count = userProd.map { s =>
       s.selectionscount.set(s.selectionscount.get + 1)
       s.update // Active Record pattern
       s.selectionscount.get
-    } openOr { UserProduct.createRecord.user_c(user.id.get).product(productId).save       // create/insert new entry
+    } openOr { UserProduct.createRecord.user_c(user.id.get).productid(productId).save       // create/insert new entry
       1.toLong
     }
     (user.firstName.get, count)
