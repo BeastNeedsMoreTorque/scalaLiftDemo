@@ -1,6 +1,7 @@
 package code.model
 
 import java.io.IOException
+import code.snippet.SessionCache
 import net.liftweb.squerylrecord.KeyedRecord
 import org.squeryl.annotations._
 
@@ -13,12 +14,29 @@ import net.liftweb.record.field.{LongField,StringField,BooleanField,IntField}
 import net.liftweb.record.{Record, MetaRecord}
 import net.liftweb.common._
 import net.liftweb.common.Failure
-import net.liftweb.util.DefaultConnectionIdentifier
+import net.liftweb.util.{Props, DefaultConnectionIdentifier}
 import net.liftweb.util.Helpers.tryo
 import net.liftweb.squerylrecord.RecordTypeMode._
 
 import MainSchema._
 import code.Rest.pagerRestClient
+
+// helper case class to extract from JSON as REST client to LCBO.
+case class ProductAsLCBOJson(id: Int,
+                             is_discontinued: Boolean,
+                             `package`: String,
+                             total_package_units: Int,
+                             primary_category: String,
+                             name: String,
+                             image_thumb_url: String,
+                             origin: String,
+                             description: String,
+                             secondary_category: String,
+                             serving_suggestion: String,
+                             varietal: String,
+                             price_in_cents: Int,
+                             alcohol_content: Int,
+                             volume_in_milliliters: Int) {}
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -26,7 +44,6 @@ import code.Rest.pagerRestClient
   */
 class Product private() extends Record[Product] with KeyedRecord[Long] with CreatedUpdated[Product]  {
   def meta = Product
-
 
   @Column(name="id")
   override val idField = new LongField(this, 1)  // our own auto-generated id
@@ -46,7 +63,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   val volume_in_milliliters = new IntField(this)
   val secondary_category = new StringField(this, 80)
   val varietal = new StringField(this, 100)
-  val description = new StringField(this, 300)
+  val description = new StringField(this, 600)
   val serving_suggestion = new StringField(this, 300)
 
   // intentional aliasing allowing more standard naming convention.
@@ -92,6 +109,14 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
       ("Origin: ", s"$origin") ::
       Nil ).filter({p: (String, String) => p._2 != "null"})
 
+   def synchUp(p: ProductAsLCBOJson): Unit = {
+    if (price_in_cents.get != p.price_in_cents ||
+        image_thumb_url.get != p.image_thumb_url) {
+      price_in_cents.set(p.price_in_cents)
+      image_thumb_url.set(p.image_thumb_url)
+      this.update
+    }
+  }
 }
 
 /**
@@ -101,22 +126,22 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   * Errors are possible if data is too large to fit. tryo will catch those and report them.
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
-  // helper case class to extract from JSON as REST client to LCBO.
-  case class ProductAsLCBOJson(id: Int,
-                               is_discontinued: Boolean,
-                               `package`: String,
-                               total_package_units: Int,
-                               primary_category: String,
-                               name: String,
-                               image_thumb_url: String,
-                               origin: String,
-                               description: String,
-                               secondary_category: String,
-                               serving_suggestion: String,
-                               varietal: String,
-                               price_in_cents: Int,
-                               alcohol_content: Int,
-                               volume_in_milliliters: Int) {}
+  var productsCache = Seq[Product]()
+  val activateCache = Props.getBool("product.loadCache", true)
+
+  def fetchSynched(p: ProductAsLCBOJson) = {
+    DB.use(DefaultConnectionIdentifier) { connection =>
+      val o: Box[Product] = products.where(_.lcbo_id === p.id).forUpdate.headOption // Load from DB if available, else create it Squeryl very friendly DSL syntax!
+      o.map { q: Product =>
+        q.synchUp(p) // touch it up with most recent data if dirty
+        q
+      } openOr {
+        val q = create(p)
+        q.save
+        q
+      }
+    }
+  }
 
   def create(p: ProductAsLCBOJson): Product = {
     // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
@@ -198,9 +223,13 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     tryo {
       val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
       val prods = productListByStoreCategory(randomIndex+1, store, category)  // index is 0-based but requiredSize is 1-based so add 1,
-      create(prods.take(randomIndex + 1).takeRight(1).head)  // convert JSON case class object to a full-fledged Product with persistence capability.
+      fetchSynched(prods.take(randomIndex + 1).takeRight(1).head)  // convert JSON case class object to a full-fledged Product with persistence capability.
       // First take will return full collection if index is too large, and prods' size should be > 0 unless there really is nothing.
     }
+
+  def loadNewOnes(requestSize: Int, store: Int, category: String): Iterable[Product] =
+    productListByStoreCategory(requestSize, store, category).map { fetchSynched(_) }
+
 
   /**
     * Purchases a product by increasing user-product count (amount) in database as a way to monitor usage..
@@ -240,7 +269,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
                                         requiredSize: Int,
                                         pageNo: Int,
                                         myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): List[ProductAsLCBOJson] = {
-
+    if (requiredSize <= 0) accumItems
     // specify the URI for the LCBO api url for liquor selection
     val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)  // get as many as possible on a page because we could have few matches.
     logger.info(uri)
@@ -291,17 +320,24 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
   private def productListByStoreCategory(requiredSize: Int, store: Int, category: String = ""): Vector[ProductAsLCBOJson] = {
+    if (requiredSize <= 0) Vector()
     val url = s"$LcboDomainURL/products?store_id=$store" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
     val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
       !p.is_discontinued
-    }
-    // accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
-
+    }  // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
     collectItemsOnAPage(
-      List[ProductAsLCBOJson](),
+      List(),
       url,
       requiredSize,
       pageNo = 1,
       filter).take(requiredSize).toVector
   }
+
+  def loadCache(): Unit =
+    if (activateCache) {
+      productsCache = inTransaction {
+        for (cat <- LiquorCategory.sortedSeq;
+           prods <- Product.loadNewOnes(1000, SessionCache.defaultStore, cat)) yield prods
+      }
+    }
 }
