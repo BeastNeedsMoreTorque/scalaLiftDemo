@@ -14,9 +14,8 @@ import net.liftweb.util._
 import net.liftweb.squerylrecord.SquerylRecord
 import org.squeryl.adapters.PostgreSqlAdapter
 import java.sql.DriverManager
-import java.sql.Connection
 import org.squeryl.Session
-import net.liftweb.mapper.{DB, DefaultConnectionIdentifier}
+import net.liftweb.mapper.DB
 import net.liftweb.http.S
 import net.liftweb.util.LoanWrapper
 import net.liftweb.squerylrecord.RecordTypeMode._
@@ -46,9 +45,7 @@ class Boot {
 
     // for db usage outside of Lift's User.
     Class.forName(driver)
-    def connection: Connection = DriverManager.getConnection(jdbcURL)
-    def adapter = new PostgreSqlAdapter
-    SquerylRecord.initWithSquerylSession(  Session.create(connection, adapter) )
+    SquerylRecord.initWithSquerylSession(  Session.create(DriverManager.getConnection(jdbcURL), new PostgreSqlAdapter) )
 
     if(Props.devMode) {
       inTransaction {
@@ -100,8 +97,7 @@ class Boot {
     LiftRules.htmlProperties.default.set((r: Req) =>
       new Html5Properties(r.userAgent))
 
-    // Make a transaction span the whole HTTP request (Squeryl way that is not the traditional method from Liftweb, commented out line)
-    //   S.addAround(DB.buildLoanWrapper)
+    // Make a transaction span the whole HTTP request (Squeryl way that is not the traditional method from Liftweb)
     // As per Lift Cookbook, requests are inTransaction scope (Squeryl terminology).
     S.addAround(new LoanWrapper {
       override def apply[T](f: => T): T = {
@@ -119,5 +115,7 @@ class Boot {
         }
       }
     })
+
+    Product.loadCache()
   }
 }

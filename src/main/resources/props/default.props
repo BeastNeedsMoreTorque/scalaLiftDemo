@@ -27,6 +27,7 @@ product.interactionsImageMap={"recommend":"/images/recommend.jpg","consume":"/im
 #No order on a map, so we impose an order on the keys
 product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
 product.Category=wine
+product.loadCache=false
 
 # downtown Toronto
 store.Id=1
