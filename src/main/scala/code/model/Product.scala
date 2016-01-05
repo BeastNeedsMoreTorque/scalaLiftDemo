@@ -114,7 +114,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
         image_thumb_url.get != p.image_thumb_url) {
       price_in_cents.set(p.price_in_cents)
       image_thumb_url.set(p.image_thumb_url)
-      this.update
+      this.update  // Active Record pattern
     }
   }
 }
@@ -128,6 +128,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
   var productsCache = Seq[Product]()
   val activateCache = Props.getBool("product.loadCache", true)
+  val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
 
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
@@ -183,25 +184,23 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
           // avoids two/three round-trips to store to DB. Tested this with some long sleep before UserProduct.consume and saw old timestamp for Product compared with UserProduct
           // and it got stored at same time as UserProduct (monitoring Postgres).
           // We do this in transaction so we have local consistency (i.e. the product will not be deleted by some other transaction while we're here)
-          val prod: Box[Product] = products.where(_.lcbo_id === p.lcbo_id).forUpdate.headOption  // Squeryl very friendly DSL syntax!
+          val prod: Box[Product] = products.where(_.lcbo_id === p.lcbo_id).forUpdate.headOption
+          // Assumes it has been synched up elsewhere if needed, not our business here (or go directly to cache). Squeryl very friendly DSL syntax!
           var count = 0.toLong
           prod.map { q =>
-            q.price_in_cents.set(p.price_in_cents.get)
-            q.image_thumb_url.set(p.image_thumb_url.get)
-            q.update // Active Record pattern
-            if (q.userProducts.isEmpty) { // product exists but userProducts has no entry (Product would be pre-loaded with no user interest)
-              UserProduct.createRecord.user_c(user.id.get).productid(p.id).selectionscount(1).save  // cascade save dependency.
+            if (q.userProducts.isEmpty) { // (Product would be stored in DB with no user interest)
               count = 1
+              UserProduct.createRecord.user_c(user.id.get).productid(q.id).selectionscount(count).save  // cascade save dependency.
             } else { // cascade save dependency (there should only be one entry to update).
               q.userProducts.map { u =>
-                u.selectionscount.set(u.selectionscount.get + 1)
+                count = u.selectionscount.get + 1
+                u.selectionscount.set(count)
                 u.update // Active Record pattern )
-                count = u.selectionscount.get
               } // from compiler perspective the map could have been a no-op, but that's not really possible in practice.
             }
-          } openOr { p.save
-            UserProduct.createRecord.user_c(user.id.get).productid(p.id).selectionscount(1).save  // cascade save dependency.
-            count = 1
+          } openOr { count = 1  // we never saw that product before and user shows interest, store both.
+            p.save
+            UserProduct.createRecord.user_c(user.id.get).productid(p.id).selectionscount(count).save  // cascade save dependency.
           }
           (user.firstName.get, count)
         }
@@ -337,7 +336,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     if (activateCache) {
       productsCache = inTransaction {
         for (cat <- LiquorCategory.sortedSeq;
-           prods <- Product.loadNewOnes(1000, SessionCache.defaultStore, cat)) yield prods
+           prods <- Product.loadNewOnes(cacheSizePerCategory, SessionCache.defaultStore, cat)) yield prods
       }
     }
 }

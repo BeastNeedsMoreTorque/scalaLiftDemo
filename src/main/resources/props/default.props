@@ -20,16 +20,14 @@ product.lcboMaxPerPage=100
 product.lcboMinPerPage=10
 product.CategoriesMap={"wine":"Wine","spirits":"Spirits","beer":"Beer","ciders":"Ciders","coolers":"Ready-to-Drink/Coolers","non-Alc":"Non-Alc"}
 product.CategoriesImageMap={"wine":"/images/wineGlassPour.jpg","spirits":"/images/brandy.jpg","beer":"/images/beerGlass.jpg","ciders":"/images/ciderGlass.jpg","coolers":"/images/coolerGlass.jpg","non-Alc":"/images/giftBox.jpg"}
-product.CategoriesAltMap={"wine":"Pouring Wine Glass","spirits":"Brandy Glass","beer":"Suds Beer Mug","ciders":"AppleCiderGlass","coolers":"cocktailGlass","non-Alc":"gift box"}
-
 product.interactionsImageMap={"recommend":"/images/recommend.jpg","consume":"/images/winesmall.jpg","cancel":"/images/cancel.jpg"}
 
 #No order on a map, so we impose an order on the keys
 product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
 product.Category=wine
 product.loadCache=false
+product.cacheSizePerCategory=1000
 
-# downtown Toronto
 store.Id=1
 store.maxSampleSize=3
 store.lcboMaxPerPage=100
