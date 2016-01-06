@@ -225,7 +225,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   def recommend(maxSampleSize: Int, store: Int, category: String): Box[Product] =
     tryo {
       val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-      if (randomIndex < productsCache(category).size) {
+      if (productsCache.keys.exists(_ == category)  && (randomIndex < productsCache(category).size)) {
         productsCache(category)(randomIndex)
       } else {
         val prods = productListByStoreCategory(randomIndex + 1, store, category) // index is 0-based but requiredSize is 1-based so add 1,
