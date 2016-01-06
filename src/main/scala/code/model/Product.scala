@@ -126,9 +126,8 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   * Errors are possible if data is too large to fit. tryo will catch those and report them.
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
-  var productsCache = Seq[Product]()
-  val activateCache = Props.getBool("product.loadCache", true)
-  val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
+  var productsCache = Map[String, Vector[Product]]()
+
 
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
@@ -188,19 +187,22 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
           // Assumes it has been synched up elsewhere if needed, not our business here (or go directly to cache). Squeryl very friendly DSL syntax!
           var count = 0.toLong
           prod.map { q =>
-            if (q.userProducts.isEmpty) { // (Product would be stored in DB with no user interest)
+            if (q.userProducts.isEmpty) {
+              // (Product would be stored in DB with no user interest)
               count = 1
-              UserProduct.createRecord.user_c(user.id.get).productid(q.id).selectionscount(count).save  // cascade save dependency.
-            } else { // cascade save dependency (there should only be one entry to update).
+              UserProduct.createRecord.user_c(user.id.get).productid(q.id).selectionscount(count).save // cascade save dependency.
+            } else {
+              // cascade save dependency (there should only be one entry to update).
               q.userProducts.map { u =>
                 count = u.selectionscount.get + 1
                 u.selectionscount.set(count)
                 u.update // Active Record pattern )
               } // from compiler perspective the map could have been a no-op, but that's not really possible in practice.
             }
-          } openOr { count = 1  // we never saw that product before and user shows interest, store both.
+          } openOr {
+            count = 1 // we never saw that product before and user shows interest, store both.
             p.save
-            UserProduct.createRecord.user_c(user.id.get).productid(p.id).selectionscount(count).save  // cascade save dependency.
+            UserProduct.createRecord.user_c(user.id.get).productid(p.id).selectionscount(count).save // cascade save dependency.
           }
           (user.firstName.get, count)
         }
@@ -221,13 +223,19 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   def recommend(maxSampleSize: Int, store: Int, category: String): Box[Product] =
     tryo {
       val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-      val prods = productListByStoreCategory(randomIndex+1, store, category)  // index is 0-based but requiredSize is 1-based so add 1,
-      fetchSynched(prods.take(randomIndex + 1).takeRight(1).head)  // convert JSON case class object to a full-fledged Product with persistence capability.
-      // First take will return full collection if index is too large, and prods' size should be > 0 unless there really is nothing.
+      if (randomIndex < productsCache(category).size) {
+        productsCache(category)(randomIndex)
+      } else {
+        val prods = productListByStoreCategory(randomIndex + 1, store, category) // index is 0-based but requiredSize is 1-based so add 1,
+        fetchSynched(prods.take(randomIndex + 1).takeRight(1).head) // convert JSON case class object to a full-fledged Product with persistence capability.
+        // First take will return full collection if index is too large, and prods' size should be > 0 unless there really is nothing.
+      }
     }
 
-  def loadNewOnes(requestSize: Int, store: Int, category: String): Iterable[Product] =
-    productListByStoreCategory(requestSize, store, category).map { fetchSynched(_) }
+  def loadNewOnes(requestSize: Int, store: Int, category: String): Vector[Product] =
+    productListByStoreCategory(requestSize, store, category).map {
+      fetchSynched(_)
+    }
 
 
   /**
@@ -270,7 +278,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
                                         myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): List[ProductAsLCBOJson] = {
     if (requiredSize <= 0) accumItems
     // specify the URI for the LCBO api url for liquor selection
-    val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)  // get as many as possible on a page because we could have few matches.
+    val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
     logger.info(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
@@ -318,12 +326,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def productListByStoreCategory(requiredSize: Int, store: Int, category: String = ""): Vector[ProductAsLCBOJson] = {
+  private def productListByStoreCategory(requiredSize: Int, store: Int, category: String = "") = {
     if (requiredSize <= 0) Vector()
     val url = s"$LcboDomainURL/products?store_id=$store" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
     val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
       !p.is_discontinued
-    }  // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
+    } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
     collectItemsOnAPage(
       List(),
       url,
@@ -332,11 +340,21 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       filter).take(requiredSize).toVector
   }
 
-  def loadCache(): Unit =
+  // may have side effect to update database with more up to date from LCBO's content (if different)
+  def loadCache() = {
+    val activateCache = Props.getBool("product.loadCache", true)
+    val synchLcbo = Props.getBool("product.synchLcbo", true)
+    val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
+    def getProductsOfCategory(cat: String): Vector[Product] =
+      if (synchLcbo) loadNewOnes(cacheSizePerCategory, SessionCache.defaultStore, cat)
+      else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(cat)).toVector
+      // just load from DB without going to LCBO. A more natural method would be to user order by and a single query to DB.
+
     if (activateCache) {
-      productsCache = inTransaction {
-        for (cat <- LiquorCategory.sortedSeq;
-           prods <- Product.loadNewOnes(cacheSizePerCategory, SessionCache.defaultStore, cat)) yield prods
+      inTransaction {
+        for (cat <- LiquorCategory.sortedSeq)
+          productsCache = productsCache updated (cat , getProductsOfCategory(cat))
       }
     }
+  }
 }
