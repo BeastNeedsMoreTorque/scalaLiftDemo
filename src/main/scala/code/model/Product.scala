@@ -6,6 +6,8 @@ import net.liftweb.squerylrecord.KeyedRecord
 import org.squeryl.annotations._
 
 import scala.util.Random
+import concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
 
 import net.liftweb.db.DB
 import net.liftweb.json.{MappingException, DefaultFormats}
@@ -345,15 +347,28 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val activateCache = Props.getBool("product.loadCache", true)
     val synchLcbo = Props.getBool("product.synchLcbo", true)
     val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
-    def getProductsOfCategory(cat: String): Vector[Product] =
-      if (synchLcbo) loadNewOnes(cacheSizePerCategory, SessionCache.defaultStore, cat)
-      else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(cat)).toVector
-      // just load from DB without going to LCBO. A more natural method would be to user order by and a single query to DB.
+
+    def getProductsOfCategory(category: String): Vector[Product] =
+      inTransaction {
+        if (synchLcbo) loadNewOnes(cacheSizePerCategory, SessionCache.defaultStore, category) // going to LCBO and update DB afterwards with fresh data
+        else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(category)).toVector
+        // just load from DB without going to LCBO.
+      }
+
+    // evaluate the vectors of product in parallel, tracking them by product category as key
+    def productsInTheFuture(category: String): Future[Tuple2[String, Vector[Product]]] = Future { (category, getProductsOfCategory(category))}
+
+    // put x's String as key and x's vector as data into the map productsCache
+    def bringToMap(x: Seq[Tuple2[String, Vector[Product]]]): Unit =
+      x.foreach{ y => productsCache = productsCache updated (y._1 , y._2) }
 
     if (activateCache) {
-      inTransaction {
-        for (cat <- LiquorCategory.sortedSeq)
-          productsCache = productsCache updated (cat , getProductsOfCategory(cat))
+      val allTheProductsByCategory = Future.traverse(LiquorCategory.sortedSeq)(productsInTheFuture)
+      allTheProductsByCategory onSuccess {
+        case pairs => bringToMap(pairs)
+      }
+      allTheProductsByCategory onFailure {
+        case t => logger.error("loadCache, an error occured because: " + t.getMessage)
       }
     }
   }
