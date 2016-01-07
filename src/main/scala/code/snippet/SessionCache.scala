@@ -1,6 +1,6 @@
 package code.snippet
 
-import code.model.{Product, Store}
+import code.model.{StoreAsLCBOJson, Product}
 import net.liftweb.common.{Empty, Box}
 import net.liftweb.http.SessionVar
 import net.liftweb.util.Props
@@ -13,7 +13,7 @@ object SessionCache {
   val defaultStore = Props.getInt("store.Id", 1)                  // if 1 it's HWY 401 & Weston.
 
   object theCategory extends SessionVar[String](defaultCategory)
-  object theStore extends SessionVar[Store](Store(id=defaultStore))
+  object theStoreId extends SessionVar[Int](defaultStore)
   object theProduct extends SessionVar[Box[Product]](Empty)
   object transactionConfirmation extends SessionVar[String]("")
 }

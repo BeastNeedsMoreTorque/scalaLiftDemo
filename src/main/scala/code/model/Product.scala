@@ -73,7 +73,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   def isDiscontinued = is_discontinued
   def totalPackageUnits = total_package_units
   def imageThumbUrl = image_thumb_url
-  def Package = `package` // alias to avoid back ticks
+  def Package = `package`.get // alias to avoid back ticks
 
   // Change unit of currency from cents to dollars and Int to String
   def price: String = {
@@ -97,26 +97,33 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
   def createProductElemVals: List[(String, String)] =
-  // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
-    ( ("Name: ", s"$name") ::
-      ("Primary Category: ", s"$primary_category") ::
-      ("Secondary Category: ", s"$secondary_category") ::
-      ("Varietal: ", s"$varietal") ::
-      ("Package: ", s"$Package") ::
-      ("Volume: ", s"$volumeInLitre") ::
-      ("Price: ",  "$" +s"$price") ::
-      ("Description: ", s"$description") ::
-      ("Serving Suggestion: ", s"$serving_suggestion") ::
-      ("Alcohol content: ", s"$alcoholContent") ::
-      ("Origin: ", s"$origin") ::
-      Nil ).filter({p: (String, String) => p._2 != "null"})
+    // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
+    (("Name: ", name.get) ::
+      ("Primary Category: ", primary_category.get) ::
+      ("Secondary Category: ", secondary_category.get) ::
+      ("Varietal: ", varietal.get) ::
+      ("Package: ", Package) ::
+      ("Volume: ", volumeInLitre) ::
+      ("Price: ", "$" + price) ::
+      ("Description: ", description.get) ::
+      ("Serving Suggestion: ", serving_suggestion.get) ::
+      ("Alcohol content: ", alcoholContent) ::
+      ("Origin: ", origin.get) ::
+      Nil).filter({ p: (String, String) => p._2 != "null" && !p._2.isEmpty })
+
 
    def synchUp(p: ProductAsLCBOJson): Unit = {
-    if (price_in_cents.get != p.price_in_cents ||
-        image_thumb_url.get != p.image_thumb_url) {
-      price_in_cents.set(p.price_in_cents)
-      image_thumb_url.set(p.image_thumb_url)
-      this.update  // Active Record pattern
+     def isDirty(p: ProductAsLCBOJson): Boolean = {
+       price_in_cents.get != p.price_in_cents ||
+       image_thumb_url.get != p.image_thumb_url
+     }
+     def copyAttributes(p: ProductAsLCBOJson): Unit = {
+       price_in_cents.set(p.price_in_cents)
+       image_thumb_url.set(p.image_thumb_url)
+     }
+     if (isDirty(p)) {
+       copyAttributes(p)
+       this.update  // Active Record pattern
     }
   }
 }
@@ -225,7 +232,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   def recommend(maxSampleSize: Int, store: Int, category: String): Box[Product] =
     tryo {
       val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-      if (productsCache.keys.exists(_ == category)  && (randomIndex < productsCache(category).size)) {
+      if (productsCache.get(category).isDefined  && (randomIndex < productsCache(category).size)) {
         productsCache(category)(randomIndex)
       } else {
         val prods = productListByStoreCategory(randomIndex + 1, store, category) // index is 0-based but requiredSize is 1-based so add 1,

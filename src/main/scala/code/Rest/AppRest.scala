@@ -5,7 +5,6 @@ import net.liftweb.http.rest.RestHelper
 import net.liftweb.json.Extraction
 import scala.xml.Node
 
-
 /**
   * Created by philippederome on 2015-12-19.
   * @see http://simply.liftweb.net/index-5.3.html#prev
