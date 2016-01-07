@@ -58,11 +58,11 @@ object ProductInteraction extends Loggable {
 
     def recommend() = {
       def maySelect(): JsCmd =
-        if (theStore.is.id > 0 ) {
+        if (theStoreId.is > 0 ) {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
           transactionConfirmation.set("")
-          val prod = Product.recommend(maxSampleSize, theStore.is.id, theCategory.is) match {
+          val prod = Product.recommend(maxSampleSize, theStoreId.is, theCategory.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
             case Full(p) => Full(p) // returns prod normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
