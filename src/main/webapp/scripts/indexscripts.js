@@ -49,12 +49,19 @@ var lcboViewer = (function() {
                 var title = 'Downtown Toronto Liquor Store';
                 if (userLocationAvailable) {
                     // #storeNearby: You are XYZ.NN kms from branch <name> located at <address> in <city>
-                    var storeDesc = 'You are ' + (data.distance_in_meters/1000.0).toFixed(2) + ' kms from branch '+ data.name +
-                        ' located at ' + data.address_line_1 + ' in ' + data.city;
-                    $("#storeNearby").html(storeDesc);
+                    var distOutput = (data.distance_in_meters/1000.0).toFixed(2) + ' kms';
+                    $("#storeNearby").html('Closest LCBO store:');
                     title = "Closest Liquor Store!";
+                    $("#storeName").html(data.name);
+                    $("#storeAddressLine1").html(data.address_line_1);
+                    $("#storeCity").html(data.city);
+                    $("#storeDistance").html(distOutput);
+                    $("#storeLat").html(data.latitude);
+                    $("#storeLon").html(data.longitude);
+                    $("#storeAttributesTbl").show();
                 } else {
                     $("#storeNearby").html("Downtown Toronto LCBO (user location unavailable)");
+                    $("#storeAttributesTbl").hide();
                 }
                 var marker = new google.maps.Marker({position:latlon,map:map,title:title});
             },
