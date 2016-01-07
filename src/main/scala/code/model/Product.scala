@@ -363,16 +363,14 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       }
 
     // evaluate the vectors of product in parallel, tracking them by product category as key
-    def productsInTheFuture(category: String): Future[Tuple2[String, Vector[Product]]] = Future { (category, getProductsOfCategory(category))}
-
-    // put x's String as key and x's vector as data into the map productsCache
-    def bringToMap(x: Seq[Tuple2[String, Vector[Product]]]): Unit =
-      x.foreach{ y => productsCache = productsCache updated (y._1 , y._2) }
+    def productsInTheFuture(category: String): Future[Tuple2[String, Vector[Product]]] =
+      Future { (category, getProductsOfCategory(category))}
 
     if (activateCache) {
       val allTheProductsByCategory = Future.traverse(LiquorCategory.sortedSeq)(productsInTheFuture)
       allTheProductsByCategory onSuccess {
-        case pairs => bringToMap(pairs)
+        case pairs =>
+          pairs.foreach{ p => productsCache = productsCache + (p._1 -> p._2) }
       }
       allTheProductsByCategory onFailure {
         case t => logger.error("loadCache, an error occured because: " + t.getMessage)
