@@ -20,8 +20,13 @@ object MainSchema extends Schema {
   // In Postgres: CREATE SEQUENCE s_userproduct_id;
   // alter table userproduct alter column id set default nextval('s_userproduct_id');
 
+  val userStores = table[UserStore]("userstore")
+
   val productToUserProducts = oneToManyRelation(products, userProducts).
     via((p,s) => p.id === s.productid)
+
+  val storeToUserStores = oneToManyRelation(stores, userStores).
+    via((s,u) => s.id === u.storeid)
 
   on(userProducts) { s =>
     declare(s.productid defineAs indexed("product_idx"))

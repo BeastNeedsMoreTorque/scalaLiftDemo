@@ -1,10 +1,7 @@
 package code.model
 
-import MainSchema._
-import net.liftweb.common._
 import net.liftweb.record.field.{LongField,StringField}
 import net.liftweb.record.{Record, MetaRecord}
-import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.squerylrecord.KeyedRecord
 import org.squeryl.annotations.Column
 
@@ -23,7 +20,6 @@ class UserProduct private() extends Record[UserProduct] with KeyedRecord[Long] w
   }
   val review = new StringField(this, "")
 }
-// this code makes a case for value of unit testing since it took me a while to get it right... Let's set it up!
 object UserProduct extends UserProduct with MetaRecord[UserProduct] {}
 
 
