@@ -2,6 +2,7 @@ package code.model
 
 import java.io.IOException
 import code.snippet.SessionCache
+import net.liftweb.http.SessionVar
 import net.liftweb.squerylrecord.KeyedRecord
 import org.squeryl.annotations._
 
@@ -49,8 +50,6 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
 
   @Column(name="id")
   override val idField = new LongField(this, 1)  // our own auto-generated id
-
-  lazy val userProducts = MainSchema.productToUserProducts.left(this)
 
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   val is_discontinued = new BooleanField(this, false)
@@ -111,7 +110,6 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
       ("Origin: ", origin.get) ::
       Nil).filter({ p: (String, String) => p._2 != "null" && !p._2.isEmpty })
 
-
    def synchUp(p: ProductAsLCBOJson): Unit = {
      def isDirty(p: ProductAsLCBOJson): Boolean = {
        price_in_cents.get != p.price_in_cents ||
@@ -123,6 +121,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
      }
      if (isDirty(p)) {
        copyAttributes(p)
+       updated.set(updated.defaultValue)
        this.update  // Active Record pattern
     }
   }
@@ -135,8 +134,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   * Errors are possible if data is too large to fit. tryo will catch those and report them.
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
-  var productsCache = Map[String, Vector[Product]]()
-
+  object productsCache extends SessionVar[Map[String, Vector[Product]]](Map.empty[String, Vector[Product]])
 
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
@@ -196,15 +194,17 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
           // Assumes it has been synched up elsewhere if needed, not our business here (or go directly to cache). Squeryl very friendly DSL syntax!
           var count = 0.toLong
           prod.map { q =>
-            if (q.userProducts.isEmpty) {
+            val userProd: Box[UserProduct] = userProducts.where(u => u.user_c === user.id.get and u.productid === q.id).forUpdate.headOption
+            if (userProd.isEmpty) {
               // (Product would be stored in DB with no user interest)
               count = 1
               UserProduct.createRecord.user_c(user.id.get).productid(q.id).selectionscount(count).save // cascade save dependency.
             } else {
               // cascade save dependency (there should only be one entry to update).
-              q.userProducts.map { u =>
+              userProd.map { u =>
                 count = u.selectionscount.get + 1
                 u.selectionscount.set(count)
+                u.updated.set(u.updated.defaultValue)
                 u.update // Active Record pattern )
               } // from compiler perspective the map could have been a no-op, but that's not really possible in practice.
             }
@@ -232,8 +232,8 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   def recommend(maxSampleSize: Int, store: Int, category: String): Box[Product] =
     tryo {
       val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-      if (productsCache.get(category).isDefined  && (randomIndex < productsCache(category).size)) {
-        productsCache(category)(randomIndex)
+      if (productsCache.contains(category) && (randomIndex < productsCache.get(category).size)) {
+        productsCache.get(category)(randomIndex)
       } else {
         val prods = productListByStoreCategory(randomIndex + 1, store, category) // index is 0-based but requiredSize is 1-based so add 1,
         fetchSynched(prods.take(randomIndex + 1).takeRight(1).head) // convert JSON case class object to a full-fledged Product with persistence capability.
@@ -370,7 +370,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       val allTheProductsByCategory = Future.traverse(LiquorCategory.sortedSeq)(productsInTheFuture)
       allTheProductsByCategory onSuccess {
         case pairs =>
-          pairs.foreach{ p => productsCache = productsCache + (p._1 -> p._2) }
+          pairs.foreach{ p => productsCache.set(productsCache.get + (p._1 -> p._2)) }
       }
       allTheProductsByCategory onFailure {
         case t => logger.error("loadCache, an error occured because: " + t.getMessage)

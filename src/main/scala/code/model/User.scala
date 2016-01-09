@@ -2,7 +2,9 @@ package code
 package model
 
 import net.liftweb.common._
+import net.liftweb.http.SessionVar
 import net.liftweb.mapper._
+import net.liftweb.common.Box
 
 // This is provided by Liftweb framework as a helper to get started or experiment.
 /**
@@ -10,7 +12,7 @@ import net.liftweb.mapper._
   */
 object User extends User with MetaMegaProtoUser[User] {
   override def dbTableName = "users"
-
+  object storesCache extends SessionVar[Map[Int, Store]](Map.empty[Int, Store])
 
   // define the DB table name
   override def screenWrap = Full(<lift:surround with="default" at="content">
@@ -24,6 +26,14 @@ object User extends User with MetaMegaProtoUser[User] {
 
   // comment this line out to require email validations
   override def skipEmailValidation = true
+
+  def register(storeId: Int): Box[Store] = {
+    if (storesCache.contains(storeId)) {
+      Full(storesCache.get(storeId))
+    } else {
+      Store.find(storeId).map { s: Store => storesCache.set(storesCache.get + (storeId -> s)); s }
+    }
+  }
 }
 
 /**
