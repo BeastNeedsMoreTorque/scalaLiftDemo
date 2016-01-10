@@ -1,6 +1,5 @@
 package code.model
 
-
 import scala.language.implicitConversions
 import scala.xml.Node
 
@@ -155,15 +154,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     }
   }
 
-  // this uses a recent DB cache of loaded stores most of which should be good and up to date, so yes, of course, we get them with one select only
-  // and avoid going to DB for each call to this function...
-  def fetchSynched(s: PlainStoreAsLCBOJson, dbStores: Map[Int, Store]): Store = {
+  def fetchSynched(s: PlainStoreAsLCBOJson, ourCachedStore: Box[Store]): Store = {
     DB.use(DefaultConnectionIdentifier) { connection =>
-      val ourCachedStore: Box[Store] = dbStores.get(s.id)
       ourCachedStore.map { t =>
-        t.synchUp(s) // touch it up
+        t.synchUp(s) // touch it up if dirty
         t
-      } openOr {
+      } openOr { // we don't have it in our DB, so insert it.
         val t = create(s)
         t.save
         t
@@ -238,7 +234,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val url = s"$LcboDomainURL/stores?where_not=is_dead" +
       additionalParam("lat", lat) +
       additionalParam("lon", lon)
-      tryo { collectStoresOnAPage(List[StoreAsLCBOJson](), url, MaxSampleSize, pageNo = 1).head }
+      tryo {
+        val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url).headOption
+        b.openOrThrowException(s"No store found near ($lat, $lon)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo.
+      }
   }
 
   @throws(classOf[net.liftweb.json.MappingException])
@@ -246,31 +245,21 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[java.io.IOException])
   @throws(classOf[java.net.SocketTimeoutException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-  @scala.annotation.tailrec
-  private final def collectStoresOnAPage(accumItems: List[StoreAsLCBOJson],
-                                 urlRoot: String,
-                                 requiredSize: Int,
-                                 pageNo: Int): List[StoreAsLCBOJson] = {
-    val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)
+  private final def collectFirstMatchingStore( urlRoot: String): List[StoreAsLCBOJson] = {
+    val uri = urlRoot + additionalParam("page", 1)
     logger.info(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
-    val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
-    val items = for (p <- itemNodes) yield p.extract[StoreAsLCBOJson]
-    val outstandingSize = requiredSize - items.size
-    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
-
-    if (items.isEmpty || outstandingSize <= 0 || isFinalPage) return accumItems ++ items
-
-    collectStoresOnAPage(
-      accumItems ++ items,
-      urlRoot,
-      outstandingSize,
-      pageNo + 1) // union of this page with next page when we are asked for a full sample
+    val itemNodes = (jsonRoot \ "result").children.drop(1) // Uses XPath-like querying to extract data from parsed object jsObj.
+    itemNodes.map(_.extract[StoreAsLCBOJson])
   }
 
-  private final def collectPlainStoresOnAPage( dbStores: Map[Int, Store],
-                                          accumItems: Map[Int, Store],
+  // collects stores individually from LCBO REST as PlainStoreAsLCBOJson on as many pages as required and convert
+  // temporarily lists into Maps we can use indexing by LCBO ID. Along the way, we compare each such LCBO record
+  // with its equivalent content in database (call to fetchSynched) to update our database content if it's out of date.  
+  @scala.annotation.tailrec
+  private final def collectStoresOnAPage( dbStores: Map[Int, Store],
+                                         accumItems: Map[Int, Store],
                                          urlRoot: String,
                                          requiredSize: Int,
                                          pageNo: Int): Map[Int, Store] = {
@@ -279,46 +268,49 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
-    val items = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}//.toVector
-    val outstandingSize = requiredSize - items.size
+    // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
+    val pageStoreMap = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}.map(st => st.id -> fetchSynched(st, dbStores.get(st.id)))
+    val outstandingSize = requiredSize - pageStoreMap.size
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
-    if (items.isEmpty || outstandingSize <= 0 || isFinalPage) return accumItems ++ items.map(st => st.id -> fetchSynched(st, dbStores))
+    if (pageStoreMap.isEmpty || outstandingSize <= 0 || isFinalPage) return accumItems ++ pageStoreMap  // no need to look at more pages
 
-    collectPlainStoresOnAPage(
+    collectStoresOnAPage(
       dbStores,
-      accumItems ++ items.map(st => st.id -> fetchSynched(st, dbStores)),
+      accumItems ++ pageStoreMap,
       urlRoot,
       outstandingSize,
       pageNo + 1) // union of this page with next page when we are asked for a full sample
   }
 
   private final def getSingleStore( uri: String): PlainStoreAsLCBOJson = {
-    logger.info(uri)
+    logger.debug(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
-    val jsonRoot = parse(pageContent) // fyi: throws ParseException
-    (jsonRoot \ "result").extract[PlainStoreAsLCBOJson]
+    (parse(pageContent) \ "result").extract[PlainStoreAsLCBOJson] // more throws
   }
 
   def loadCache() = {
-    val synchLcbo = Props.getBool("store.synchLcbo", true)
-
     def loadAll(dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
       val branchCountUpperBound = Props.getInt("store.BranchCountUpperBound", 0)
       // we'd like the is_dead ones as well to update state (but apparently you have to query for it explicitly!?!?)
       val url = s"$LcboDomainURL/stores?"
-      tryo { collectPlainStoresOnAPage(dbStores, Map[Int, Store](), url, branchCountUpperBound, pageNo = 1) }
+      tryo { collectStoresOnAPage(dbStores, Map[Int, Store](), url, branchCountUpperBound, pageNo = 1) }
     }
 
-    def getStores(): Map[Int, Store] =
+    def getStores(): Map[Int, Store] = {
+      val synchLcbo = Props.getBool("store.synchLcbo", true)
       inTransaction {
-        val dbStores = stores.where(s => 1 === 1).map(s => s.lcbo_id.get -> s)(collection.breakOut): Map[Int, Store]
-        if (synchLcbo) loadAll(dbStores).dmap{
-          logger.error("Problem loading LCBO stores into cache")
-          Map[Int, Store]()
-        }{ identity } // going to LCBO and update DB afterwards with fresh data
+        val dbStores = stores.map(s => s.lcbo_id.get -> s)(collection.breakOut): Map[Int, Store] // queries full store table and throw it into map
+        if (synchLcbo) loadAll(dbStores) match {
+          case Full(m) => m // returns map normally // going to LCBO and update DB afterwards with fresh data when we see breaks with LCBO data
+          case Failure(m, ex, _) => logger.error(s"Problem loading LCBO stores into cache with message $m and exception error $ex")
+            Map[Int, Store]()
+          case Empty => logger.error("Problem loading LCBO stores into cache, none found")
+            Map[Int, Store]()
+        }
         else dbStores // configuration tells us to trust our db contents
       }
-    storesCache = storesCache ++ getStores()
+    }
+    storesCache = getStores()
     cacheWarm = true
   }
 }
