@@ -29,9 +29,8 @@ product.interactionsImageMap={"recommend":"/images/recommend.jpg","consume":"/im
 product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
 product.Category=wine
 
-# Cornwall-Trafalgar Oakville, ON
-store.Id=486
 store.maxSampleSize=3
 store.lcboMaxPerPage=100
 store.lcboMinPerPage=10
-
+# mandatory
+store.BranchCountUpperBound=2000

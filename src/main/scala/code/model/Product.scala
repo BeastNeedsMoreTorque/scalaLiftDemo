@@ -1,10 +1,6 @@
 package code.model
 
 import java.io.IOException
-import code.snippet.SessionCache
-import net.liftweb.http.SessionVar
-import net.liftweb.squerylrecord.KeyedRecord
-import org.squeryl.annotations._
 
 import scala.util.Random
 import concurrent.Future
@@ -20,6 +16,9 @@ import net.liftweb.common.Failure
 import net.liftweb.util.{Props, DefaultConnectionIdentifier}
 import net.liftweb.util.Helpers.tryo
 import net.liftweb.squerylrecord.RecordTypeMode._
+import net.liftweb.squerylrecord.KeyedRecord
+
+import org.squeryl.annotations._
 
 import MainSchema._
 import code.Rest.pagerRestClient
@@ -134,8 +133,12 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   * Errors are possible if data is too large to fit. tryo will catch those and report them.
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
-  object productsCache extends SessionVar[Map[String, Vector[Product]]](Map.empty[String, Vector[Product]])
+  val activateCache = Props.getBool("product.loadCache", true)
+  val synchLcbo = Props.getBool("product.synchLcbo", true)
+  val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
 
+  var productsCache = Map[Int, Product]()
+  var storeCategoriesProducts = Map[(Int, String), Set[Int]]()  // give set of available productIds by store+category
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
       val o: Box[Product] = products.where(_.lcbo_id === p.id).forUpdate.headOption // Load from DB if available, else create it Squeryl very friendly DSL syntax!
@@ -229,23 +232,27 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category.
     * @return
     */
-  def recommend(maxSampleSize: Int, store: Int, category: String): Box[Product] =
+  def recommend(maxSampleSize: Int, storeId: Int, category: String): Box[Product] =
     tryo {
-      val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-      if (productsCache.contains(category) && (randomIndex < productsCache.get(category).size)) {
-        productsCache.get(category)(randomIndex)
+      if (storeCategoriesProducts.contains((storeId, category)) ) {
+        val prodIds = storeCategoriesProducts((storeId, category))
+        val randomIndex = Random.nextInt(math.max(1, math.min(maxSampleSize, prodIds.size ))) // max constraint is defensive for poor client usage (negative numbers).
+        productsCache(prodIds.takeRight(randomIndex).head) // takeRight returns whole list if randomIndex is too large
       } else {
-        val prods = productListByStoreCategory(randomIndex + 1, store, category) // index is 0-based but requiredSize is 1-based so add 1,
+        val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
+        loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
+        val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
         fetchSynched(prods.take(randomIndex + 1).takeRight(1).head) // convert JSON case class object to a full-fledged Product with persistence capability.
         // First take will return full collection if index is too large, and prods' size should be > 0 unless there really is nothing.
       }
     }
 
-  def loadNewOnes(requestSize: Int, store: Int, category: String): Vector[Product] =
-    productListByStoreCategory(requestSize, store, category).map {
-      fetchSynched(_)
+  def loadAll(requestSize: Int, store: Int, category: String): Box[Vector[Product]] =
+    tryo {
+      productListByStoreCategory(requestSize, store, category).map {
+        fetchSynched(_)
+      }
     }
-
 
   /**
     * Purchases a product by increasing user-product count (amount) in database as a way to monitor usage..
@@ -293,12 +300,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
     val items = (for (p <- itemNodes) yield p.extract[ProductAsLCBOJson]).filter(myFilter)
-    lazy val outstandingSize = requiredSize - items.size
+    val outstandingSize = requiredSize - items.size
 
     // Collects into our vector of products products the attributes we care about (extract[Product]). Then filter out unwanted data.
     // fyi: throws Mapping exception.
     //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
-    lazy val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
+    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
 
     if (items.isEmpty || outstandingSize <= 0 || isFinalPage) return accumItems ++ items
     // Deem as last page if there are no products found on current page or LCBO tells us it's final page.
@@ -350,14 +357,14 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   }
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
-  def loadCache() = {
-    val activateCache = Props.getBool("product.loadCache", true)
-    val synchLcbo = Props.getBool("product.synchLcbo", true)
-    val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
+  def loadCache(storeId: Int ) = {
 
     def getProductsOfCategory(category: String): Vector[Product] =
       inTransaction {
-        if (synchLcbo) loadNewOnes(cacheSizePerCategory, SessionCache.defaultStore, category) // going to LCBO and update DB afterwards with fresh data
+        if (synchLcbo) loadAll(cacheSizePerCategory, storeId, category).dmap{
+          logger.error("Problem loading products into cache")
+          Vector[Product]()
+        }(identity) // going to LCBO and update DB afterwards with fresh data
         else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(category)).toVector
         // just load from DB without going to LCBO.
       }
@@ -370,7 +377,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       val allTheProductsByCategory = Future.traverse(LiquorCategory.sortedSeq)(productsInTheFuture)
       allTheProductsByCategory onSuccess {
         case pairs =>
-          pairs.foreach{ p => productsCache.set(productsCache.get + (p._1 -> p._2)) }
+          pairs.foreach { p =>
+            productsCache = productsCache ++ p._2.map(a => a.lcbo_id.get.toInt -> a)(collection.breakOut)
+            if (!storeCategoriesProducts.contains((storeId, p._1))) {
+              storeCategoriesProducts = storeCategoriesProducts + ((storeId, p._1) -> p._2.map(_.lcbo_id.get.toInt).toSet)
+            } // else trust current cache (assumes web server restarts or schedules to synch up old caches).
+          }
       }
       allTheProductsByCategory onFailure {
         case t => logger.error("loadCache, an error occured because: " + t.getMessage)
