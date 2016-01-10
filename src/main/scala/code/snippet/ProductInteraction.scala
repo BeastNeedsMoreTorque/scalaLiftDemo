@@ -62,7 +62,6 @@ object ProductInteraction extends Loggable {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
           transactionConfirmation.set("")
-          val s = User.register(theStoreId.is)
           val prod = Product.recommend(maxSampleSize, theStoreId.is, theCategory.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
             case Full(p) => Full(p) // returns prod normally
@@ -76,7 +75,7 @@ object ProductInteraction extends Loggable {
           }
         }
         else {
-          S.error(s"Enter a number > 0 for Store")
+          S.error(s"We need to establish your local store first, please wait for local geo to be available or enter a postal code")
           Noop     // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter
         }
 

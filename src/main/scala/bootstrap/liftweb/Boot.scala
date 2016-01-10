@@ -115,7 +115,6 @@ class Boot {
         }
       }
     })
-
-    Product.loadCache()
+    Store.loadCache()
   }
 }
