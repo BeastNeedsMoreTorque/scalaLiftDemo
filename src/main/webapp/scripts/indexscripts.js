@@ -66,8 +66,8 @@ var lcboViewer = (function() {
                 var marker = new google.maps.Marker({position:latlon,map:map,title:title});
             },
             error: function(data, status){
-                console.log("Error Data: " + data + "\nStatus: " + status );
-                alert("Unable to locate nearest store from specified location" );
+                console.log("Error Data: " + data.responseText + "\nStatus: " + status );
+                alert(data.responseText );
             }
         });
      };

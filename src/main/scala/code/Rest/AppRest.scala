@@ -24,14 +24,14 @@ object AppRest extends RestHelper {
       for {
       // find the store, and if it's not found,
       // return a nice message for the 404
-        store <- Store.find(lat, lon) ?~ "Store Not Found"
+        store <- Store.find(lat, lon) ?~ s"Store Not Found near location ($lat, $lon)"
       } yield     Extraction.decompose(store)
 
     case "store" :: "lat" :: DotDecimalString(lat)  :: "lon" :: DotDecimalString(lon)  :: Nil XmlGet _ =>
       for {
       // find the store, and if it's not found,
       // return a nice message for the 404
-        store <- Store.find(lat, lon) ?~ "Store Not Found"
+        store <- Store.find(lat, lon) ?~ s"Store Not Found near location ($lat, $lon)"
       } yield store: Node  // Node is what generates XML (see converters in Store)
   }
 
