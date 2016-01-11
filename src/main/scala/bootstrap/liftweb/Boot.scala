@@ -115,6 +115,7 @@ class Boot {
         }
       }
     })
-    Product.initSyncVars() // critical for thread safety and proper caching mechanism
+    Product.init() // critical for thread safety and proper caching mechanism
+    Store.init() // would be useful to cache in stores if browsing around maps and selecting alternative stores by id rather than user location.
   }
 }
