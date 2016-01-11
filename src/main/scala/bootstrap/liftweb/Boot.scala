@@ -115,6 +115,6 @@ class Boot {
         }
       }
     })
-    Store.loadCache()
+    Product.initSyncVars() // critical for thread safety and proper caching mechanism
   }
 }

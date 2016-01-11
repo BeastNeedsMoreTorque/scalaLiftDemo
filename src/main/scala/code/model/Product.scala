@@ -3,7 +3,7 @@ package code.model
 import java.io.IOException
 
 import scala.util.Random
-import concurrent.Future
+import scala.concurrent.{Future,SyncVar}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 import net.liftweb.db.DB
@@ -137,8 +137,9 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   val synchLcbo = Props.getBool("product.synchLcbo", true)
   val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
 
-  var productsCache = Map[Int, Product]()
-  var storeCategoriesProducts = Map[(Int, String), Set[Int]]()  // give set of available productIds by store+category
+  private val productsCache = new SyncVar[Map[Int, Product]]()
+  private val storeCategoriesProductsCache = new SyncVar[Map[(Int, String), Set[Int]]]()  // give set of available productIds by store+category
+
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
       val o: Box[Product] = products.where(_.lcbo_id === p.id).forUpdate.headOption // Load from DB if available, else create it Squeryl very friendly DSL syntax!
@@ -234,10 +235,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     */
   def recommend(maxSampleSize: Int, storeId: Int, category: String): Box[Product] =
     tryo {
-      if (storeCategoriesProducts.contains((storeId, category)) ) {
-        val prodIds = storeCategoriesProducts((storeId, category))
+      // the second condition in test is a bit defensive but necessary actually (prevent repeated loadCache activities for same store)
+      if ( storeCategoriesProductsCache.get.contains((storeId, category)) && !storeCategoriesProductsCache.get((storeId, category)).isEmpty ) {
+        val prodIds = storeCategoriesProductsCache.get((storeId, category))
         val randomIndex = Random.nextInt(math.max(1, math.min(maxSampleSize, prodIds.size ))) // max constraint is defensive for poor client usage (negative numbers).
-        productsCache(prodIds.takeRight(randomIndex).head) // takeRight returns whole list if randomIndex is too large
+        val prodId = prodIds.takeRight(randomIndex).head // takeRight returns whole list if randomIndex is too large
+        productsCache.get(prodId)
       } else {
         val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
@@ -356,6 +359,10 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       filter).take(requiredSize).toVector
   }
 
+  def initSyncVars() = {
+    productsCache.put(Map[Int, Product]())
+    storeCategoriesProductsCache.put( Map[(Int, String), Set[Int]]())
+  }
   // may have side effect to update database with more up to date from LCBO's content (if different)
   def loadCache(storeId: Int ) = {
 
@@ -365,25 +372,38 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
           logger.error("Problem loading products into cache")
           Vector[Product]()
         }(identity) // going to LCBO and update DB afterwards with fresh data
-        else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(category)).toVector
-        // just load from DB without going to LCBO.
+        else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(category)).toVector // just load from DB without going to LCBO.
       }
 
     // evaluate the vectors of product in parallel, tracking them by product category as key
     def productsInTheFuture(category: String): Future[Tuple2[String, Vector[Product]]] =
       Future { (category, getProductsOfCategory(category))}
 
-    if (activateCache) {
+    def extendProducts(p: Tuple2[String, Vector[Product]]) = {
+      val candidateInsertions = p._2.map(a => a.lcbo_id.get.toInt -> a)(collection.breakOut) // keep any safe functional computation out of critical path
+      // this may cause some exceptional cache misses I suppose if take succeeds and before put is called and another client has interest
+      productsCache.put(productsCache.take() ++ candidateInsertions)
+    }
+
+    def extendStoreProducts(p: Tuple2[String, Vector[Product]]) = {
+      if (!storeCategoriesProductsCache.get.contains((storeId, p._1)) || storeCategoriesProductsCache.get((storeId, p._1)).isEmpty) {
+        val candidateInsertion = ((storeId, p._1) -> p._2.map(_.lcbo_id.get.toInt).toSet) // keep any safe functional computation out of critical path
+        storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() + candidateInsertion)
+      } // else trust current cache (assumes web server restarts or schedules to synch up old caches).
+    }
+
+    if (activateCache && !storeCategoriesProductsCache.get.contains((storeId, LiquorCategory.sortedSeq(0)))) {
+      storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() + ((storeId, LiquorCategory.sortedSeq(0)) -> Set[Int]()) ) // to prevent maniac repeat requests on same store.
+      // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
+
       val allTheProductsByCategory = Future.traverse(LiquorCategory.sortedSeq)(productsInTheFuture)
       allTheProductsByCategory onSuccess {
         case pairs =>
-          pairs.foreach { p =>
-            productsCache = productsCache ++ p._2.map(a => a.lcbo_id.get.toInt -> a)(collection.breakOut)
-            if (!storeCategoriesProducts.contains((storeId, p._1))) {
-              storeCategoriesProducts = storeCategoriesProducts + ((storeId, p._1) -> p._2.map(_.lcbo_id.get.toInt).toSet)
-            } // else trust current cache (assumes web server restarts or schedules to synch up old caches).
+          pairs.foreach { p => extendProducts(p)
+            extendStoreProducts(p)
           }
       }
+
       allTheProductsByCategory onFailure {
         case t => logger.error("loadCache, an error occured because: " + t.getMessage)
       }
