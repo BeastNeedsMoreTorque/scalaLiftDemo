@@ -13,7 +13,7 @@ class UserStore private() extends Record[UserStore] with KeyedRecord[Long] with 
 
   lazy val store = MainSchema.storeToUserStores.right(this)
 
-  val user = new LongField(this)
+  val userid = new LongField(this)
   val storeid = new LongField(this)
 }
 
