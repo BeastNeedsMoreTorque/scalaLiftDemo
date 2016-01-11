@@ -140,6 +140,11 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   private val productsCache = new SyncVar[Map[Int, Product]]()
   private val storeCategoriesProductsCache = new SyncVar[Map[(Int, String), Set[Int]]]()  // give set of available productIds by store+category
 
+  def init() = {
+    productsCache.put(Map[Int, Product]())
+    storeCategoriesProductsCache.put( Map[(Int, String), Set[Int]]())
+  }
+
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
       val o: Box[Product] = products.where(_.lcbo_id === p.id).forUpdate.headOption // Load from DB if available, else create it Squeryl very friendly DSL syntax!
@@ -359,10 +364,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       filter).take(requiredSize).toVector
   }
 
-  def initSyncVars() = {
-    productsCache.put(Map[Int, Product]())
-    storeCategoriesProductsCache.put( Map[(Int, String), Set[Int]]())
-  }
+
   // may have side effect to update database with more up to date from LCBO's content (if different)
   def loadCache(storeId: Int ) = {
 

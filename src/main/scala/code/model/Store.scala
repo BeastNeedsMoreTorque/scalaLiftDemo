@@ -2,19 +2,23 @@ package code.model
 
 import scala.language.implicitConversions
 import scala.xml.Node
+import scala.concurrent.SyncVar
 
-import net.liftweb.common.{Full, Empty, Box,Failure, Loggable}
+import net.liftweb.db.DB
+import net.liftweb.common.{Full, Empty, Box, Failure, Loggable}
 import net.liftweb.json._
 import net.liftweb.json.JsonParser.parse
 import net.liftweb.util.Helpers.tryo
 import net.liftweb.record.{MetaRecord, Record}
 import net.liftweb.record.field._
 import net.liftweb.squerylrecord.KeyedRecord
-import net.liftweb.util.Props
+import net.liftweb.squerylrecord.RecordTypeMode._
+import net.liftweb.util.{DefaultConnectionIdentifier, Props}
 
 import org.squeryl.annotations._
 
 import code.Rest.pagerRestClient
+import MainSchema._
 import code.snippet.SessionCache.theStoreId
 
 /**
@@ -76,6 +80,14 @@ object StoreAsLCBOJson {
 
 }
 
+case class PlainStoreAsLCBOJson (id: Int = 0,
+                                 is_dead: Boolean = true,
+                                 latitude: Double = 0.0,
+                                 longitude: Double = 0.0,
+                                 name: String = "",
+                                 address_line_1: String = "",
+                                 city: String = "") {}
+
 class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedUpdated[Store]  {
   def meta = Store
 
@@ -94,6 +106,21 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   val address_line_1 = new StringField(this, 400)
   val city = new StringField(this, 80)
 
+  def synchUp(s: PlainStoreAsLCBOJson): Unit = {
+    def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
+      is_dead.get != s.is_dead ||
+        address_line_1.get != s.address_line_1
+    }
+    def copyAttributes(p: PlainStoreAsLCBOJson): Unit = {
+      is_dead.set(p.is_dead)
+      address_line_1.set(p.address_line_1)
+    }
+    if (isDirty(s)) {
+      copyAttributes(s)
+      updated.set(updated.defaultValue)
+      this.update  // Active Record pattern
+    }
+  }
 }
 
 object Store extends Store with MetaRecord[Store] with pagerRestClient with Loggable {
@@ -101,6 +128,32 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
   def MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
+  val storesCache = new SyncVar[Map[Int, Store]]()
+
+  def init() = { // could help queries find(lcbo_id)
+    def loadAll(dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
+      val branchCountUpperBound = Props.getInt("store.BranchCountUpperBound", 0)
+      // we'd like the is_dead ones as well to update state (but apparently you have to query for it explicitly!?!?)
+      val url = s"$LcboDomainURL/stores?"
+      tryo { collectStoresOnAPage(dbStores, Map[Int, Store](), url, branchCountUpperBound, pageNo = 1) }
+    }
+
+    def getStores(): Map[Int, Store] = {
+      val synchLcbo = Props.getBool("store.synchLcbo", true)
+      inTransaction {
+        val dbStores = stores.map(s => s.lcbo_id.get -> s)(collection.breakOut): Map[Int, Store] // queries full store table and throw it into map
+        if (synchLcbo) loadAll(dbStores) match {
+          case Full(m) => m // returns map normally // going to LCBO and update DB afterwards with fresh data when we see breaks with LCBO data
+          case Failure(m, ex, _) => logger.error(s"Problem loading LCBO stores into cache with message $m and exception error $ex")
+            Map[Int, Store]()
+          case Empty => logger.error("Problem loading LCBO stores into cache, none found")
+            Map[Int, Store]()
+        }
+        else dbStores // configuration tells us to trust our db contents
+      }
+    }
+    storesCache.put(getStores())
+  }
 
   def create(s: StoreAsLCBOJson): Store = {
     // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
@@ -157,14 +210,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   }
 
 
-/*
-case class PlainStoreAsLCBOJson (id: Int = 0,
-                                 is_dead: Boolean = true,
-                                 latitude: Double = 0.0,
-                                 longitude: Double = 0.0,
-                                 name: String = "",
-                                 address_line_1: String = "",
-                                 city: String = "") {}
+
 
   private final def getSingleStore( uri: String): PlainStoreAsLCBOJson = {
     logger.debug(uri)
@@ -201,6 +247,18 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
   }
 
   def fetchSynched(s: PlainStoreAsLCBOJson, ourCachedStore: Box[Store]): Store = {
+    def create(s: PlainStoreAsLCBOJson): Store = {
+      // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
+      createRecord.
+        lcbo_id(s.id).
+        name(s.name).
+        is_dead(s.is_dead).
+        address_line_1(s.address_line_1).
+        city(s.city).
+        latitude(s.latitude).
+        longitude(s.longitude)
+    }
+
     DB.use(DefaultConnectionIdentifier) { connection =>
       ourCachedStore.map { t =>
         t.synchUp(s) // touch it up if dirty
@@ -212,8 +270,10 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
       }
     }
   }
+
   def find( lcbo_id: Int): Box[Store] =  {
-    findStore(lcbo_id) match {
+    if (storesCache.get.contains(lcbo_id)) Full(storesCache.get(lcbo_id))
+    else findStore(lcbo_id) match {
       case Full(x) =>
         theStoreId.set(x.lcbo_id.get)
         Full(x)
@@ -228,7 +288,8 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
 
   private def findStore(lcbo_id: Int): Box[Store] = {
     val url = s"$LcboDomainURL/stores/$lcbo_id"
-    tryo { fetchSynched(getSingleStore(url)) }
+    logger.debug(s"findStore by id using $url")
+    tryo { fetchSynched(getSingleStore(url))}
   }
 
   def fetchSynched(s: PlainStoreAsLCBOJson): Store = {
@@ -259,50 +320,4 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
     }
   }
 
-
-
-
-
-  def loadCache() = { // could help queries find(lcbo_id)
-    def loadAll(dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
-      val branchCountUpperBound = Props.getInt("store.BranchCountUpperBound", 0)
-      // we'd like the is_dead ones as well to update state (but apparently you have to query for it explicitly!?!?)
-      val url = s"$LcboDomainURL/stores?"
-      tryo { collectStoresOnAPage(dbStores, Map[Int, Store](), url, branchCountUpperBound, pageNo = 1) }
-    }
-
-    def getStores(): Map[Int, Store] = {
-      val synchLcbo = Props.getBool("store.synchLcbo", true)
-      inTransaction {
-        val dbStores = stores.map(s => s.lcbo_id.get -> s)(collection.breakOut): Map[Int, Store] // queries full store table and throw it into map
-        if (synchLcbo) loadAll(dbStores) match {
-          case Full(m) => m // returns map normally // going to LCBO and update DB afterwards with fresh data when we see breaks with LCBO data
-          case Failure(m, ex, _) => logger.error(s"Problem loading LCBO stores into cache with message $m and exception error $ex")
-            Map[Int, Store]()
-          case Empty => logger.error("Problem loading LCBO stores into cache, none found")
-            Map[Int, Store]()
-        }
-        else dbStores // configuration tells us to trust our db contents
-      }
-    }
-    storesCache = getStores()
-  }
-  class Store would have
-    def synchUp(s: PlainStoreAsLCBOJson): Unit = {
-    def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
-      is_dead.get != s.is_dead ||
-      address_line_1.get != s.address_line_1
-    }
-    def copyAttributes(p: PlainStoreAsLCBOJson): Unit = {
-      is_dead.set(p.is_dead)
-      address_line_1.set(p.address_line_1)
-    }
-    if (isDirty(s)) {
-      copyAttributes(s)
-      updated.set(updated.defaultValue)
-      this.update  // Active Record pattern
-    }
-  }
-
-  */
 }
