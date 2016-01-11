@@ -55,7 +55,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   val `package` = new StringField(this, 80)
   val total_package_units = new IntField(this)
   val primary_category = new StringField(this, 40)
-  val name = new StringField(this, 80)
+  val name = new StringField(this, 120)
   val image_thumb_url = new StringField(this, 200)
   val origin = new StringField(this, 200)
   val price_in_cents = new IntField(this)
@@ -370,10 +370,15 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
     def getProductsOfCategory(category: String): Vector[Product] =
       inTransaction {
-        if (synchLcbo) loadAll(cacheSizePerCategory, storeId, category).dmap{
-          logger.error("Problem loading products into cache")
-          Vector[Product]()
-        }(identity) // going to LCBO and update DB afterwards with fresh data
+        if (synchLcbo) loadAll(cacheSizePerCategory, storeId, category) match {
+          case Full(v) => v // going to LCBO and update DB afterwards with fresh data
+          case Failure(m, ex, _) =>
+            logger.error(s"Problem loading products into cache with message $m and exception error $ex")
+            Vector[Product]()
+          case Empty =>
+            logger.error("Problem loading products into cache")
+            Vector[Product]()
+        }
         else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(category)).toVector // just load from DB without going to LCBO.
       }
 
@@ -383,7 +388,6 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
     def extendProducts(p: Tuple2[String, Vector[Product]]) = {
       val candidateInsertions = p._2.map(a => a.lcbo_id.get.toInt -> a)(collection.breakOut) // keep any safe functional computation out of critical path
-      // this may cause some exceptional cache misses I suppose if take succeeds and before put is called and another client has interest
       productsCache.put(productsCache.take() ++ candidateInsertions)
     }
 
