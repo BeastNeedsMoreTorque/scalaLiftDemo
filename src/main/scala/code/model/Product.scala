@@ -76,7 +76,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   val total_package_units = new IntField(this)
   val primary_category = new StringField(this, 40)
   val name = new StringField(this, 120) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def setFilter = { s: String => s.takeRight(maxLen)}  :: super.setFilter
+    override def setFilter = { s: String => s.takeRight(maxLen)} :: super.setFilter
   }
   val image_thumb_url = new StringField(this, 200)
   val origin = new StringField(this, 200)
@@ -86,10 +86,10 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   val secondary_category = new StringField(this, 80)
   val varietal = new StringField(this, 100)
   val description = new StringField(this, 2000) {// allow dropping some data in order to store/copy without SQL error
-    override def setFilter = { s: String => s.takeRight(maxLen)}  :: super.setFilter
+    override def setFilter = { s: String => s.takeRight(maxLen)} :: super.setFilter
   }
   val serving_suggestion = new StringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
-    override def setFilter = { s: String => s.takeRight(maxLen)}  :: super.setFilter
+    override def setFilter = { s: String => s.takeRight(maxLen)} :: super.setFilter
   }
 
   // intentional aliasing allowing more standard naming convention.
@@ -276,17 +276,13 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
         val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
         val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
-        fetchSynched(prods.take(randomIndex + 1).takeRight(1).head) // convert JSON case class object to a full-fledged Product with persistence capability.
+        prods.take(randomIndex + 1).takeRight(1).head // convert JSON case class object to a full-fledged Product with persistence capability.
         // First take will return full collection if index is too large, and prods' size should be > 0 unless there really is nothing.
       }
     }
 
   def loadAll(requestSize: Int, store: Int, category: String): Box[Vector[Product]] =
-    tryo {
-      productListByStoreCategory(requestSize, store, category).map {
-        fetchSynched(_)
-      }
-    }
+    tryo { productListByStoreCategory(requestSize, store, category) }
 
   /**
     * Purchases a product by increasing user-product count (amount) in database as a way to monitor usage..
@@ -387,7 +383,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       url,
       requiredSize,
       pageNo = 1,
-      filter).take(requiredSize).toVector
+      filter).take(requiredSize).toVector.map { fetchSynched(_)}
   }
 
 
