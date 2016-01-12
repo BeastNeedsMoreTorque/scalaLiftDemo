@@ -11,6 +11,7 @@ Done in mid December.
 rationalize Get template for Store and Product
 Forum info has example that works for single object extract at a time, not for a collection on children nodes. Could not make it work, but separated
 logic between Product and Store. They relied on Manifest API.
+TRY again given individual queries.
 
 get JS to feed in (via JSON) data server for geolocation
 Done mid/late December with a REST service.
@@ -23,7 +24,7 @@ Implemented as of Dec 12. Need backups.
 
 Use more packages, possibly finer grain
 
-Question API usage more frequently (e.g. Props queerness)
+Question API usage more frequently (e.g. Props queerness, Squeryl)
 
 sbt: simply use jetty:start (not container:start). Upgrade to latest.
 
@@ -41,3 +42,9 @@ when using snippets instead of comet and mixing up login/logout with 2 sessions 
 *** MULTIPLE logins from same browser is not supported by Scotia Bank.
 
 Consume does not always work after a product selection.
+
+Jan 11 2016
+Error on loading cache for category should not fail for full category but only for the product that fails!!!
+
+Jan 11 2016
+Should handle well oversized data items when storing to database (just truncate)

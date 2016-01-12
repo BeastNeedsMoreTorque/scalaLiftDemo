@@ -27,7 +27,7 @@ product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
 product.Category=wine
 product.loadCache=true
 product.synchLcbo=true
-product.cacheSizePerCategory=1000
+product.cacheSizePerCategory=6500
 
 store.maxSampleSize=3
 store.synchLcbo=true

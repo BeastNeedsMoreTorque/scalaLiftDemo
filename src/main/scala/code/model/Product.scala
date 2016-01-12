@@ -38,7 +38,27 @@ case class ProductAsLCBOJson(id: Int,
                              varietal: String,
                              price_in_cents: Int,
                              alcohol_content: Int,
-                             volume_in_milliliters: Int) {}
+                             volume_in_milliliters: Int) {
+  def removeNulls: ProductAsLCBOJson = { // remove LCBO's poisoned null strings
+    def clean(s: String) = if (s == null) "" else s
+    ProductAsLCBOJson(id,
+      is_discontinued,
+      clean(`package`),
+      total_package_units,
+      clean(primary_category),
+      name: String,
+      clean(image_thumb_url),
+      clean(origin),
+      clean(description),
+      clean(secondary_category),
+      clean(serving_suggestion),
+      clean(varietal),
+      price_in_cents,
+      alcohol_content,
+      volume_in_milliliters)
+  }
+}
+
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -55,7 +75,9 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   val `package` = new StringField(this, 80)
   val total_package_units = new IntField(this)
   val primary_category = new StringField(this, 40)
-  val name = new StringField(this, 120)
+  val name = new StringField(this, 120) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+    override def setFilter = { s: String => s.takeRight(maxLen)}  :: super.setFilter
+  }
   val image_thumb_url = new StringField(this, 200)
   val origin = new StringField(this, 200)
   val price_in_cents = new IntField(this)
@@ -63,8 +85,12 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   val volume_in_milliliters = new IntField(this)
   val secondary_category = new StringField(this, 80)
   val varietal = new StringField(this, 100)
-  val description = new StringField(this, 600)
-  val serving_suggestion = new StringField(this, 300)
+  val description = new StringField(this, 2000) {// allow dropping some data in order to store/copy without SQL error
+    override def setFilter = { s: String => s.takeRight(maxLen)}  :: super.setFilter
+  }
+  val serving_suggestion = new StringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
+    override def setFilter = { s: String => s.takeRight(maxLen)}  :: super.setFilter
+  }
 
   // intentional aliasing allowing more standard naming convention.
   def primaryCategory = primary_category
@@ -307,7 +333,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
-    val items = (for (p <- itemNodes) yield p.extract[ProductAsLCBOJson]).filter(myFilter)
+    val items = (for (p <- itemNodes) yield p.extract[ProductAsLCBOJson].removeNulls).filter(myFilter)  // LCBO sends us poisonned useless nulls that we need to filter for DB (filter them right away).
     val outstandingSize = requiredSize - items.size
 
     // Collects into our vector of products products the attributes we care about (extract[Product]). Then filter out unwanted data.
