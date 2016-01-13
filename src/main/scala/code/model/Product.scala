@@ -40,19 +40,20 @@ case class ProductAsLCBOJson(id: Int,
                              alcohol_content: Int,
                              volume_in_milliliters: Int) {
   def removeNulls: ProductAsLCBOJson = { // remove LCBO's poisoned null strings
-    def clean(s: String) = if (s == null) "" else s
+    def notNull(s: String) = if (s ne null) s else ""
+
     ProductAsLCBOJson(id,
       is_discontinued,
-      clean(`package`),
+      notNull(`package`),
       total_package_units,
-      clean(primary_category),
+      notNull(primary_category),
       name: String,
-      clean(image_thumb_url),
-      clean(origin),
-      clean(description),
-      clean(secondary_category),
-      clean(serving_suggestion),
-      clean(varietal),
+      notNull(image_thumb_url),
+      notNull(origin),
+      notNull(description),
+      notNull(secondary_category),
+      notNull(serving_suggestion),
+      notNull(varietal),
       price_in_cents,
       alcohol_content,
       volume_in_milliliters)
@@ -69,27 +70,36 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
 
   @Column(name="id")
   override val idField = new LongField(this, 1)  // our own auto-generated id
-
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   val is_discontinued = new BooleanField(this, false)
-  val `package` = new StringField(this, 80)
-  val total_package_units = new IntField(this)
-  val primary_category = new StringField(this, 40)
-  val name = new StringField(this, 120) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def setFilter = { s: String => s.takeRight(maxLen)} :: super.setFilter
+  val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+  override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
-  val image_thumb_url = new StringField(this, 200)
-  val origin = new StringField(this, 200)
+  val total_package_units = new IntField(this)
+  val primary_category = new StringField(this, 40) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+  override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
+  val name = new StringField(this, 120) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+    override def setFilter = notNull _ :: crop _  :: super.setFilter
+  }
+  val image_thumb_url = new StringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+  override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
+  val origin = new StringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+  override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
   val price_in_cents = new IntField(this)
   val alcohol_content = new IntField(this)
   val volume_in_milliliters = new IntField(this)
   val secondary_category = new StringField(this, 80)
-  val varietal = new StringField(this, 100)
+  val varietal = new StringField(this, 100) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+  override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
   val description = new StringField(this, 2000) {// allow dropping some data in order to store/copy without SQL error
-    override def setFilter = { s: String => s.takeRight(maxLen)} :: super.setFilter
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val serving_suggestion = new StringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
-    override def setFilter = { s: String => s.takeRight(maxLen)} :: super.setFilter
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 
   // intentional aliasing allowing more standard naming convention.
@@ -101,19 +111,19 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
 
   // Change unit of currency from cents to dollars and Int to String
   def price: String = {
-    val p = price_in_cents.get.toInt / 100.0
+    val p = price_in_cents.get / 100.0
     f"$p%1.2f"
   } // since we perverted meaning somewhat by changing unit from cents to dollars
 
   // Change scale by 100 to normal conventions, foregoing LCBO's use of Int (for ex. 1200 becomes "12.0%" including the percent sign)
   def alcoholContent: String = {
-    val a = alcohol_content.get.toInt / 100.0
+    val a = alcohol_content.get / 100.0
     f"$a%1.1f%%"
   }
 
   // intentional change of scale from ml to L, using String representation instead of integer and keeping 3 decimals (0.335 ml for beer)
   def volumeInLitre: String = {
-    val v = volume_in_milliliters.get.toInt / 1000.0
+    val v = volume_in_milliliters.get / 1000.0
     f"$v%1.3f L"
   }
   /**
@@ -163,12 +173,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   val synchLcbo = Props.getBool("product.synchLcbo", true)
   val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
 
-  private val productsCache = new SyncVar[Map[Int, Product]]()
-  private val storeCategoriesProductsCache = new SyncVar[Map[(Int, String), Set[Int]]]()  // give set of available productIds by store+category
+  private val productsCache = new SyncVar[Map[Long, Product]]()
+  private val storeCategoriesProductsCache = new SyncVar[Map[(Long, String), Set[Long]]]()  // give set of available productIds by store+category
 
   def init() = {
-    productsCache.put(Map[Int, Product]())
-    storeCategoriesProductsCache.put( Map[(Int, String), Set[Int]]())
+    productsCache.put(Map[Long, Product]())
+    storeCategoriesProductsCache.put( Map[(Long, String), Set[Long]]())
   }
 
   def fetchSynched(p: ProductAsLCBOJson) = {
@@ -254,7 +264,6 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     }
   }
 
-  implicit val formats = DefaultFormats // for JSON extraction
 
   /**
     * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
@@ -264,25 +273,25 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category.
     * @return
     */
-  def recommend(maxSampleSize: Int, storeId: Int, category: String): Box[Product] =
+  def recommend(maxSampleSize: Int, storeId: Long, category: String): Box[Product] =
     tryo {
       // the second condition in test is a bit defensive but necessary actually (prevent repeated loadCache activities for same store)
       if ( storeCategoriesProductsCache.get.contains((storeId, category)) && !storeCategoriesProductsCache.get((storeId, category)).isEmpty ) {
         val prodIds = storeCategoriesProductsCache.get((storeId, category))
-        val randomIndex = Random.nextInt(math.max(1, math.min(maxSampleSize, prodIds.size ))) // max constraint is defensive for poor client usage (negative numbers).
-        val prodId = prodIds.takeRight(randomIndex).head // takeRight returns whole list if randomIndex is too large
+        val randomIndex = Random.nextInt(math.max(1, prodIds.size ))
+        val prodId = prodIds.takeRight(randomIndex).head // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
         productsCache.get(prodId)
       } else {
-        val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
+        val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
         val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
-        prods.take(randomIndex + 1).takeRight(1).head // convert JSON case class object to a full-fledged Product with persistence capability.
-        // First take will return full collection if index is too large, and prods' size should be > 0 unless there really is nothing.
+        val randKey = prods.keySet.takeRight(1).head
+        prods(randKey)
       }
     }
 
-  def loadAll(requestSize: Int, store: Int, category: String): Box[Vector[Product]] =
-    tryo { productListByStoreCategory(requestSize, store, category) }
+  def loadAll(requestSize: Int, store: Long, category: String): Box[Map[Long, Product]] =
+    tryo {  productListByStoreCategory(requestSize, store, category) }
 
   /**
     * Purchases a product by increasing user-product count (amount) in database as a way to monitor usage..
@@ -290,6 +299,8 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     * @return a Box capturing any exception to be reported further up, capturing how many times user has consumed product.
     */
   def consume(product: Product): Box[(String, Long)] = persist(product) // yeah, could do other things such as real payment transaction and exchange of asset.
+
+  implicit val formats = DefaultFormats // for JSON extraction
 
   /**
     * LCBO client JSON query handler. So naturally, the code is specifically written with the structure of LCBO documents in mind, with tokens as is.
@@ -329,7 +340,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
-    val items = (for (p <- itemNodes) yield p.extract[ProductAsLCBOJson].removeNulls).filter(myFilter)  // LCBO sends us poisonned useless nulls that we need to filter for DB (filter them right away).
+    val items = (for (p <- itemNodes) yield p.extract[ProductAsLCBOJson].removeNulls).filter(myFilter)  // LCBO sends us poisoned useless nulls that we need to filter for DB (filter them right away).
     val outstandingSize = requiredSize - items.size
 
     // Collects into our vector of products products the attributes we care about (extract[Product]). Then filter out unwanted data.
@@ -372,7 +383,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def productListByStoreCategory(requiredSize: Int, store: Int, category: String = "") = {
+  private def productListByStoreCategory(requiredSize: Int, store: Long, category: String = ""): Map[Long, Product] = {
     if (requiredSize <= 0) Vector()
     val url = s"$LcboDomainURL/products?store_id=$store" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
     val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
@@ -383,51 +394,47 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       url,
       requiredSize,
       pageNo = 1,
-      filter).take(requiredSize).toVector.map { fetchSynched(_)}
+      filter).take(requiredSize).map{ fetchSynched(_)}.map(p => p.lcbo_id.get -> p).toMap
   }
 
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
-  def loadCache(storeId: Int ) = {
+  def loadCache(storeId: Long ) = {
 
-    def getProductsOfCategory(category: String): Vector[Product] =
+    def getProductsOfCategory(category: String): Map[Long, Product] =
       inTransaction {
         if (synchLcbo) loadAll(cacheSizePerCategory, storeId, category) match {
-          case Full(v) => v // going to LCBO and update DB afterwards with fresh data
+          case Full(m) => m // going to LCBO and update DB afterwards with fresh data
           case Failure(m, ex, _) =>
             logger.error(s"Problem loading products into cache with message $m and exception error $ex")
-            Vector[Product]()
+            Map[Long, Product]()
           case Empty =>
             logger.error("Problem loading products into cache")
-            Vector[Product]()
+            Map[Long, Product]()
         }
-        else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(category)).toVector // just load from DB without going to LCBO.
+        else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(category)).map(a => a.lcbo_id.get -> a).toMap // just load from DB without going to LCBO.
       }
 
     // evaluate the vectors of product in parallel, tracking them by product category as key
-    def productsInTheFuture(category: String): Future[Tuple2[String, Vector[Product]]] =
+    def productsInTheFuture(category: String): Future[Tuple2[String, Map[Long, Product]]] =
       Future { (category, getProductsOfCategory(category))}
 
-    def extendProducts(p: Tuple2[String, Vector[Product]]) = {
-      val candidateInsertions = p._2.map(a => a.lcbo_id.get.toInt -> a)(collection.breakOut) // keep any safe functional computation out of critical path
-      productsCache.put(productsCache.take() ++ candidateInsertions)
-    }
-
-    def extendStoreProducts(p: Tuple2[String, Vector[Product]]) = {
+    def extendStoreProducts(p: Tuple2[String, Map[Long, Product]]) = {
       if (!storeCategoriesProductsCache.get.contains((storeId, p._1)) || storeCategoriesProductsCache.get((storeId, p._1)).isEmpty) {
-        val candidateInsertion = ((storeId, p._1) -> p._2.map(_.lcbo_id.get.toInt).toSet) // keep any safe functional computation out of critical path
-        storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() + candidateInsertion)
+        val candidateInsertion: Map[(Long, String), Set[Long]] = Map(((storeId, p._1), p._2.keys.toSet)) // keep any safe functional computation out of critical path
+        storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() ++ candidateInsertion)
       } // else trust current cache (assumes web server restarts or schedules to synch up old caches).
     }
 
     if (activateCache && !storeCategoriesProductsCache.get.contains((storeId, LiquorCategory.sortedSeq(0)))) {
-      storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() + ((storeId, LiquorCategory.sortedSeq(0)) -> Set[Int]()) ) // to prevent maniac repeat requests on same store.
+      storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() ++ Map(((storeId, LiquorCategory.sortedSeq(0)) -> Set[Long]())) ) // to prevent maniac repeat requests on same store.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
 
       val allTheProductsByCategory = Future.traverse(LiquorCategory.sortedSeq)(productsInTheFuture)
       allTheProductsByCategory onSuccess {
         case pairs =>
-          pairs.foreach { p => extendProducts(p)
+          pairs.foreach { p =>
+            productsCache.put(productsCache.take() ++ p._2)
             extendStoreProducts(p)
           }
       }
