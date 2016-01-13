@@ -3,7 +3,7 @@ package code.model
 import java.io.IOException
 
 import scala.util.Random
-import scala.concurrent.{Future,SyncVar}
+import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 
 import net.liftweb.db.DB
@@ -169,22 +169,12 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   * Errors are possible if data is too large to fit. tryo will catch those and report them.
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
-  val activateCache = Props.getBool("product.loadCache", true)
   val synchLcbo = Props.getBool("product.synchLcbo", true)
   val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
 
-  private val productsCache = new SyncVar[Map[Long, Product]]()
-  private val storeCategoriesProductsCache = new SyncVar[Map[(Long, String), Set[Long]]]()  // give set of available productIds by store+category
-  private var stateLock = new AnyRef() // to protect our object containers so that changes to them are made consistently
-  // meaning if one event leads to 2-3 changes/tests, we lock for full event.
-  // each such event uses both variables, so conceptually the two caches are same data.
-
-  def init() = {
-    stateLock.synchronized {
-      productsCache.put(Map[Long, Product]())
-      storeCategoriesProductsCache.put(Map[(Long, String), Set[Long]]())
-    }
-  }
+  // locks are acquired in same sequence as declaration of vars below, a bad bug to do otherwise.
+  private var storeCategoriesProductsCache = collection.mutable.Map[(Long, String), Set[Long]]()  // give set of available productIds by store+category
+  private var productsCache: collection.mutable.Map[Long, Product] = collection.mutable.Map[Long, Product]()
 
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
@@ -279,12 +269,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     */
   def recommend(maxSampleSize: Int, storeId: Long, category: String): Box[Product] = {
     // note: cacheSuccess grabs a lock
-    def cacheSuccess(maxSampleSize: Int, storeId: Long, category: String): Option[Product] = stateLock.synchronized {
-      if (storeCategoriesProductsCache.get.contains((storeId, category)) && !storeCategoriesProductsCache.get((storeId, category)).isEmpty) {
-        val prodIds = storeCategoriesProductsCache.get((storeId, category))
+    def cacheSuccess(maxSampleSize: Int, storeId: Long, category: String): Option[Product] = storeCategoriesProductsCache.synchronized {
+      if (storeCategoriesProductsCache.contains((storeId, category)) && !storeCategoriesProductsCache((storeId, category)).isEmpty) {
+        val prodIds = storeCategoriesProductsCache((storeId, category))
         val randomIndex = Random.nextInt(math.max(1, prodIds.size))
         val prodId = prodIds.takeRight(randomIndex).head // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
-        Some(productsCache.get(prodId))
+        productsCache.synchronized { Some(productsCache(prodId)) }
       }
       else None
     }
@@ -411,9 +401,9 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
-  def loadCache(storeId: Long ) =  stateLock.synchronized {
+  def loadCache(storeId: Long ) =  storeCategoriesProductsCache.synchronized {
 
-    def getProductsOfCategory(category: String): Map[Long, Product] =
+    def getProductsOfCategory(category: String) =
       inTransaction {
         if (synchLcbo) loadAll(cacheSizePerCategory, storeId, category) match {
           case Full(m) => m // going to LCBO and update DB afterwards with fresh data
@@ -428,18 +418,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       }
 
     // evaluate the vectors of product in parallel, tracking them by product category as key
-    def productsInTheFuture(category: String): Future[Tuple2[String, Map[Long, Product]]] =
+    def productsInTheFuture(category: String): Future[(String, Map[Long, Product])] =
       Future { (category, getProductsOfCategory(category))}
 
-    def extendStoreProducts(t: Tuple2[String, Map[Long, Product]]) = {
-      if (!storeCategoriesProductsCache.get.contains((storeId, t._1)) || storeCategoriesProductsCache.get((storeId, t._1)).isEmpty) {
-        val storeCatProducts = Map(((storeId, t._1), t._2.keys.toSet))
-        storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() ++ storeCatProducts)
-      } // else trust current cache for good.
-    }
-
-    if (activateCache && !storeCategoriesProductsCache.get.contains((storeId, LiquorCategory.sortedSeq(0)))) {
-      storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() ++ Map(((storeId, LiquorCategory.sortedSeq(0)) -> Set[Long]())) )
+    val initStoreAssociation = (storeId, LiquorCategory.sortedSeq(0))
+    if (!storeCategoriesProductsCache.contains(initStoreAssociation)) {
+      storeCategoriesProductsCache += initStoreAssociation -> Set[Long]()
       // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
 
@@ -447,10 +431,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       allTheProductsByCategory onSuccess {
         case pairs =>
           pairs.foreach { p =>
-            stateLock.synchronized {
-              productsCache.put(productsCache.take() ++ p._2)
-              extendStoreProducts(p)
+            storeCategoriesProductsCache.synchronized { // order of these two statements is to follow locking order as this is outside of main thread now.
+              val storeCatKey = (storeId, p._1)
+              if (!storeCategoriesProductsCache.contains(storeCatKey) || storeCategoriesProductsCache(storeCatKey).isEmpty)
+                storeCategoriesProductsCache += (storeCatKey -> p._2.keys.toSet)
             }
+            productsCache.synchronized { productsCache ++= p._2 }
           }
       }
 
