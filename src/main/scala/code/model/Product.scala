@@ -175,10 +175,15 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   private val productsCache = new SyncVar[Map[Long, Product]]()
   private val storeCategoriesProductsCache = new SyncVar[Map[(Long, String), Set[Long]]]()  // give set of available productIds by store+category
+  private var stateLock = new AnyRef() // to protect our object containers so that changes to them are made consistently
+  // meaning if one event leads to 2-3 changes/tests, we lock for full event.
+  // each such event uses both variables, so conceptually the two caches are same data.
 
   def init() = {
-    productsCache.put(Map[Long, Product]())
-    storeCategoriesProductsCache.put( Map[(Long, String), Set[Long]]())
+    stateLock.synchronized {
+      productsCache.put(Map[Long, Product]())
+      storeCategoriesProductsCache.put(Map[(Long, String), Set[Long]]())
+    }
   }
 
   def fetchSynched(p: ProductAsLCBOJson) = {
@@ -264,7 +269,6 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     }
   }
 
-
   /**
     * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
     * Select a random product that matches the parameters subject to a max sample size.
@@ -273,22 +277,30 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category.
     * @return
     */
-  def recommend(maxSampleSize: Int, storeId: Long, category: String): Box[Product] =
-    tryo {
-      // the second condition in test is a bit defensive but necessary actually (prevent repeated loadCache activities for same store)
-      if ( storeCategoriesProductsCache.get.contains((storeId, category)) && !storeCategoriesProductsCache.get((storeId, category)).isEmpty ) {
+  def recommend(maxSampleSize: Int, storeId: Long, category: String): Box[Product] = {
+    // note: cacheSuccess grabs a lock
+    def cacheSuccess(maxSampleSize: Int, storeId: Long, category: String): Option[Product] = stateLock.synchronized {
+      if (storeCategoriesProductsCache.get.contains((storeId, category)) && !storeCategoriesProductsCache.get((storeId, category)).isEmpty) {
         val prodIds = storeCategoriesProductsCache.get((storeId, category))
-        val randomIndex = Random.nextInt(math.max(1, prodIds.size ))
+        val randomIndex = Random.nextInt(math.max(1, prodIds.size))
         val prodId = prodIds.takeRight(randomIndex).head // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
-        productsCache.get(prodId)
-      } else {
-        loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
-        val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-        val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
-        val randKey = prods.keySet.takeRight(1).head
-        prods(randKey)
+        Some(productsCache.get(prodId))
+      }
+      else None
+    }
+
+    tryo {
+      cacheSuccess(maxSampleSize, storeId, category) match {
+        case Some(p) => p
+        case _ => // cache failed, now go to LCBO synchronously... In principle, should be rare but is slow for sure.
+          loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
+          val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
+          val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
+          val randKey = prods.keySet.takeRight(1).head
+          prods(randKey)
       }
     }
+  }
 
   def loadAll(requestSize: Int, store: Long, category: String): Box[Map[Long, Product]] =
     tryo {  productListByStoreCategory(requestSize, store, category) }
@@ -399,7 +411,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
-  def loadCache(storeId: Long ) = {
+  def loadCache(storeId: Long ) =  stateLock.synchronized {
 
     def getProductsOfCategory(category: String): Map[Long, Product] =
       inTransaction {
@@ -419,28 +431,31 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     def productsInTheFuture(category: String): Future[Tuple2[String, Map[Long, Product]]] =
       Future { (category, getProductsOfCategory(category))}
 
-    def extendStoreProducts(p: Tuple2[String, Map[Long, Product]]) = {
-      if (!storeCategoriesProductsCache.get.contains((storeId, p._1)) || storeCategoriesProductsCache.get((storeId, p._1)).isEmpty) {
-        val candidateInsertion: Map[(Long, String), Set[Long]] = Map(((storeId, p._1), p._2.keys.toSet)) // keep any safe functional computation out of critical path
-        storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() ++ candidateInsertion)
-      } // else trust current cache (assumes web server restarts or schedules to synch up old caches).
+    def extendStoreProducts(t: Tuple2[String, Map[Long, Product]]) = {
+      if (!storeCategoriesProductsCache.get.contains((storeId, t._1)) || storeCategoriesProductsCache.get((storeId, t._1)).isEmpty) {
+        val storeCatProducts = Map(((storeId, t._1), t._2.keys.toSet))
+        storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() ++ storeCatProducts)
+      } // else trust current cache for good.
     }
 
     if (activateCache && !storeCategoriesProductsCache.get.contains((storeId, LiquorCategory.sortedSeq(0)))) {
-      storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() ++ Map(((storeId, LiquorCategory.sortedSeq(0)) -> Set[Long]())) ) // to prevent maniac repeat requests on same store.
+      storeCategoriesProductsCache.put(storeCategoriesProductsCache.take() ++ Map(((storeId, LiquorCategory.sortedSeq(0)) -> Set[Long]())) )
+      // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
 
       val allTheProductsByCategory = Future.traverse(LiquorCategory.sortedSeq)(productsInTheFuture)
       allTheProductsByCategory onSuccess {
         case pairs =>
           pairs.foreach { p =>
-            productsCache.put(productsCache.take() ++ p._2)
-            extendStoreProducts(p)
+            stateLock.synchronized {
+              productsCache.put(productsCache.take() ++ p._2)
+              extendStoreProducts(p)
+            }
           }
       }
 
       allTheProductsByCategory onFailure {
-        case t => logger.error("loadCache, an error occured because: " + t.getMessage)
+        case t => logger.error("loadCache, an error occurred because: " + t.getMessage)
       }
     }
   }
