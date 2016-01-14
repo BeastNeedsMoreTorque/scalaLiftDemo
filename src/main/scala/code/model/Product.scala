@@ -280,15 +280,13 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     }
 
     tryo {
-      cacheSuccess(maxSampleSize, storeId, category) match {
-        case Some(p) => p
-        case _ => // cache failed, now go to LCBO synchronously... In principle, should be rare but is slow for sure.
-          loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
-          val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-          val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
-          val randKey = prods.keySet.takeRight(1).head
-          prods(randKey)
-      }
+      cacheSuccess(maxSampleSize, storeId, category).fold {
+        loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
+        val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
+        val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
+        val randKey = prods.keySet.takeRight(1).head
+        prods(randKey)
+      } { identity }
     }
   }
 
