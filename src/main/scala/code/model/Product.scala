@@ -170,10 +170,11 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
   val synchLcbo = Props.getBool("product.synchLcbo", true)
-  val cacheSizePerCategory = Props.getInt("product.cacheSizePerCategory", 0)
+  val productCacheSize = Props.getInt("product.cacheSize", 0)
 
   // locks are acquired in same sequence as declaration of vars below, a bad bug to do otherwise.
-  private var storeCategoriesProductsCache = collection.mutable.Map[(Long, String), Set[Long]]()  // give set of available productIds by store+category
+  private var storeCategoriesProductsCache = collection.mutable.Map[(Long, String), Set[Long]]()
+  // give set of available productIds by store+category
   private var productsCache: collection.mutable.Map[Long, Product] = collection.mutable.Map[Long, Product]()
 
   def fetchSynched(p: ProductAsLCBOJson) = {
@@ -280,7 +281,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     }
 
     tryo {
-      cacheSuccess(maxSampleSize, storeId, category).fold {
+      cacheSuccess(maxSampleSize, storeId, LiquorCategory.toPrimaryCategory(category)).fold {
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
         val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
         val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
@@ -290,8 +291,8 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     }
   }
 
-  def loadAll(requestSize: Int, store: Long, category: String): Box[Map[Long, Product]] =
-    tryo {  productListByStoreCategory(requestSize, store, category) }
+  def loadAll(requestSize: Int, pageDelta: Int, store: Long, idx: Int): Box[Map[Long, Product]] =
+    tryo { productListByStore(requestSize, pageDelta, store, idx) }
 
   /**
     * Purchases a product by increasing user-product count (amount) in database as a way to monitor usage..
@@ -329,10 +330,13 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @scala.annotation.tailrec
   private final def collectItemsOnAPage(accumItems: List[ProductAsLCBOJson],
-                                        urlRoot: String,
-                                        requiredSize: Int,
-                                        pageNo: Int,
-                                        myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): List[ProductAsLCBOJson] = {
+                                             urlRoot: String,
+                                             requiredSize: Int,
+                                             pageNo: Int,
+                                             pageDelta: Int = 1,
+                                             myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): List[ProductAsLCBOJson] = {
+    def nextPage() = pageNo + pageDelta
+
     if (requiredSize <= 0) accumItems
     // specify the URI for the LCBO api url for liquor selection
     val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
@@ -343,21 +347,23 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val items = (for (p <- itemNodes) yield p.extract[ProductAsLCBOJson].removeNulls).filter(myFilter)  // LCBO sends us poisoned useless nulls that we need to filter for DB (filter them right away).
     val outstandingSize = requiredSize - items.size
 
-    // Collects into our vector of products products the attributes we care about (extract[Product]). Then filter out unwanted data.
+    // Collects into our list of products the attributes we care about (extract[Product]). Then filter out unwanted data.
     // fyi: throws Mapping exception.
     //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
+    val totalPages = (jsonRoot \ "pager" \ "total_pages").extract[Int]
 
-    if (items.isEmpty || outstandingSize <= 0 || isFinalPage) return accumItems ++ items
-    // Deem as last page if there are no products found on current page or LCBO tells us it's final page.
-    // Similarly, even if we're not on last page and there are more products, having reached our required size.
+    if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) return accumItems ++ items
+    // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (when we gap due to parallelism).
+    // Similarly having reached our required size,we can stop.
 
     // tail recursion enforced.
     collectItemsOnAPage(
       accumItems ++ items,
       urlRoot,
       outstandingSize,
-      pageNo + 1,
+      pageNo + pageDelta,
+      pageDelta,
       myFilter) // union of this page with next page when we are asked for a full sample
   }
 
@@ -383,59 +389,100 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def productListByStoreCategory(requiredSize: Int, store: Long, category: String = ""): Map[Long, Product] = {
-    if (requiredSize <= 0) Vector()
-    val url = s"$LcboDomainURL/products?store_id=$store" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
-    val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
-      !p.is_discontinued
-    } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
-    collectItemsOnAPage(
-      List(),
-      url,
-      requiredSize,
-      pageNo = 1,
-      filter).take(requiredSize).map{ fetchSynched(_)}.map(p => p.lcbo_id.get -> p).toMap
+  private def productListByStoreCategory(requiredSize: Int, store: Long, category: String): Map[Long, Product] = {
+    if (requiredSize <= 0) Map[Long, Product]()
+    else {
+      val url = s"$LcboDomainURL/products?store_id=$store" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
+      val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
+        !p.is_discontinued
+      } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
+      collectItemsOnAPage(
+        List(),
+        url,
+        requiredSize,
+        pageNo = 1,
+        pageDelta = 1,
+        filter).take(requiredSize).map {
+        fetchSynched(_)
+      }.map(p => p.lcbo_id.get -> p).toMap
+    }
   }
 
+  @throws(classOf[SocketTimeoutException])
+  @throws(classOf[IOException])
+  @throws(classOf[ParseException])
+  @throws(classOf[MappingException])
+  private def productListByStore(requiredSize: Int, pageDelta: Int, store: Long, idx: Int): Map[Long, Product] = {
+    if (requiredSize <= 0) Map[Long, Product]()
+    else {
+      val url = s"$LcboDomainURL/products?store_id=$store"
+      val filter = { p: ProductAsLCBOJson => !p.is_discontinued } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
+      collectItemsOnAPage(
+        List(),
+        url,
+        requiredSize,
+        idx + 1, // programmer client is assumed to be more familiar with 0-based index
+        pageDelta,
+        filter).take(requiredSize).map {
+        fetchSynched(_)
+      }.map(p => p.lcbo_id.get -> p).toMap
+    }
+  }
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
-  def loadCache(storeId: Long ) =  storeCategoriesProductsCache.synchronized {
+  // lock is not held long as the loading is asynchronous in other threads.
+  def loadCache(storeId: Long) = storeCategoriesProductsCache.synchronized {
+    val prodLoadThreads = Props.getInt("product.load.nthreads", 1)
 
-    def getProductsOfCategory(category: String) =
+    val rangeForParallelism = (0 until prodLoadThreads).toList
+    def getProductsOfIndex(idx: Int): Map[Long, Product] =
       inTransaction {
-        if (synchLcbo) loadAll(cacheSizePerCategory, storeId, category) match {
-          case Full(m) => m // going to LCBO and update DB afterwards with fresh data
-          case Failure(m, ex, _) =>
-            logger.error(s"Problem loading products into cache with message $m and exception error $ex")
-            Map[Long, Product]()
-          case Empty =>
-            logger.error("Problem loading products into cache")
-            Map[Long, Product]()
+        if (synchLcbo) {
+          loadAll(productCacheSize, prodLoadThreads, storeId, idx) match {
+            case Full(m) => m
+            case Failure(m, ex, _) =>
+              logger.error(s"Problem loading products into cache with message $m and exception error $ex")
+              Map[Long, Product]()
+            case Empty =>
+              logger.error("Problem loading products into cache")
+              Map[Long, Product]()
+          }
         }
-        else products.where(_.primary_category === LiquorCategory.toPrimaryCategory(category)).map(a => a.lcbo_id.get -> a).toMap // just load from DB without going to LCBO.
+        else if (idx == 0) products.map(a => a.lcbo_id.get -> a).toMap // just load from DB without going to LCBO. And if config is weird to use multiple threads, do it only on first one.
+        else Map[Long, Product]()
       }
 
     // evaluate the vectors of product in parallel, tracking them by product category as key
-    def productsInTheFuture(category: String): Future[(String, Map[Long, Product])] =
-      Future { (category, getProductsOfCategory(category))}
+    def productsInTheFuture(idx: Int): Future[(Int, Map[Long, Product])] =
+      Future { (idx, getProductsOfIndex(idx)) }
 
-    val initStoreAssociation = (storeId, LiquorCategory.sortedSeq(0))
+    val initStoreAssociation = (storeId, LiquorCategory.toPrimaryCategory(LiquorCategory.sortedSeq(0)))
     if (!storeCategoriesProductsCache.contains(initStoreAssociation)) {
       storeCategoriesProductsCache += initStoreAssociation -> Set[Long]()
       // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
 
-      val allTheProductsByCategory = Future.traverse(LiquorCategory.sortedSeq)(productsInTheFuture)
+      val allTheProductsByCategory = Future.traverse(rangeForParallelism)(productsInTheFuture)
+
       allTheProductsByCategory onSuccess {
-        case pairs =>
-          pairs.foreach { p =>
-            storeCategoriesProductsCache.synchronized { // order of these two statements is to follow locking order as this is outside of main thread now.
-              val storeCatKey = (storeId, p._1)
-              if (!storeCategoriesProductsCache.contains(storeCatKey) || storeCategoriesProductsCache(storeCatKey).isEmpty)
-                storeCategoriesProductsCache += (storeCatKey -> p._2.keys.toSet)
+        case imaps: Iterable[(Int, Map[Long, Product])] =>
+          imaps.foreach { x =>
+            // process categories cache first, then productsCache because lock sequence matters a great deal (as per earlier comments).
+            // We are not in main thread here.
+            for ((id: Long, p: Product) <- x._2) {
+              storeCategoriesProductsCache.synchronized {
+                val storeCatKey = (storeId, p.primary_category.get)
+                if (!storeCategoriesProductsCache.contains(storeCatKey) || storeCategoriesProductsCache(storeCatKey).isEmpty) {
+                  storeCategoriesProductsCache += (storeCatKey -> Set(id)) // empty test is because of guard above. storeCategoriesProductsCache + (storeCatKey -> Set(id))
+                } else {
+                  storeCategoriesProductsCache(storeCatKey) += id //storeCategoriesProductsCache(storeCatKey) + id
+                }
+              }
             }
-            productsCache.synchronized { productsCache ++= p._2 }
+            productsCache.synchronized { productsCache ++= x._2 }
           }
+          logger.debug(s"product size ${productsCache.size}")
+          logger.debug(s"product (store,categories) keys ${storeCategoriesProductsCache.keys}")
       }
 
       allTheProductsByCategory onFailure {
