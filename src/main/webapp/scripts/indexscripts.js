@@ -70,14 +70,19 @@ var lcboViewer = (function() {
                 alert(data.responseText );
             }
         });
-     };
+    };
+
     var fetchStoreNearUser = function(position) {
         fetchStore(position.coords.latitude, position.coords.longitude, true);
-     };
+    };
 
-     var showGeoError = function(error) {
+    var showGeoError = function(error) {
          fetchStore(defaultOntarioLocationLat, defaultOntarioLocationLon, false);
-     };
+    };
+
+    var toggleSelect = function(elt, newClass, oldClass) {
+        elt.removeClass(oldClass).addClass(newClass);
+    };
 
     return {
         fetchStoreFromPosition: function() {
@@ -93,10 +98,10 @@ var lcboViewer = (function() {
             var imgElts = $("#"+container).find("img").get();
             imgElts.forEach(function(element){
                 if ($(element).attr('name') != selected) {
-                   $(element).attr('class', imgUnSelectStyle);
+                    toggleSelect($(element), imgUnSelectStyle, imgSelectStyle);
                 }
             });
-            $("[name="+selected+"]").attr('class', imgSelectStyle);
+            toggleSelect($("[name="+selected+"]"), imgSelectStyle, imgUnSelectStyle);
         }
     }
 }());
