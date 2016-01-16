@@ -1,38 +1,21 @@
 "use strict";
-// shim for ECMA-262, http://www.tutorialspoint.com/javascript/array_foreach.htm
-if (!Array.prototype.forEach)
-{
-   Array.prototype.forEach = function(fun, thisp)
-   {
-      var len = this.length;
-      if (typeof fun != "function")
-      throw new TypeError();
-
-      var thisp = arguments[1];
-      for (var i = 0; i < len; i++)
-      {
-         if (i in this)
-         fun.call(thisp, this[i], i, this); // here, we don't really use thisp, but we might eventually need it.
-      }
-   };
-}
 
 var toggleImage = (function() {
     var imgSelectStyle = 'selectframe';
     var imgUnSelectStyle = 'unselectframe';
 
     var toggleSelect = function(eltSelector, newClass, oldClass) {
-        eltSelector.removeClass(oldClass).addClass(newClass);
+        $(eltSelector).removeClass(oldClass).addClass(newClass);  // changes the border style between two alternatives
     };
 
     return {
-        frame: function(container, selected) {
+        // adds a selected frame around selected img element and sets unselected frame around the deselected one.
+        frameRadioImage: function(container, selected) {
             var imgElts = $("#"+container).find("img").get();
-            imgElts.forEach(function(selector){
-                if ($(selector).attr('name') != selected) {
-                    toggleSelect($(selector), imgUnSelectStyle, imgSelectStyle);
-                }
+            var unSelected = imgElts.find(function(selector){
+                return $(selector).hasClass(imgSelectStyle);
             });
+            if (typeof unSelected != 'undefined') toggleSelect(unSelected, imgUnSelectStyle, imgSelectStyle);
             toggleSelect($("[name="+selected+"]"), imgSelectStyle, imgUnSelectStyle);
         }
     }
@@ -110,7 +93,7 @@ var lcboViewer = (function() {
         },
 
         frameRadioImage: function(container, selected) {
-            toggleImage.frame(container, selected);
+            toggleImage.frameRadioImage(container, selected);
         }
     }
 }());

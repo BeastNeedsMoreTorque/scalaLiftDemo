@@ -11,7 +11,8 @@ http.ClientConnTimeOut=5000
 http.ClientReadTimeOut=8000
 lcboDomainURL=http://lcboapi.com
 
-radioButtonsSelectStyle=border:2px solid grey
+radio.selectClass=selectframe
+radio.unselectClass=unselectframe
 
 product.maxSampleSize=150
 # implied with LCBO tests
