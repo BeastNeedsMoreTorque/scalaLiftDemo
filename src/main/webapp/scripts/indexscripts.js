@@ -101,7 +101,7 @@ var lcboViewer = (function() {
     }
 }());
 
-$(window).load(function(){
+$(document).ready(function(){
     lcboViewer.fetchStoreFromPosition();
 });
 
