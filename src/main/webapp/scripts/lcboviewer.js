@@ -1,27 +1,5 @@
 "use strict";
 
-var toggleImage = (function() {
-    var thickBorder = 'thickBorder';
-    var thinBorder = 'thinBorder';
-
-    var toggleSelect = function(eltSelector, newClass, oldClass) {
-        $(eltSelector).removeClass(oldClass).addClass(newClass);  // changes the border style between two alternatives
-    };
-
-    return {
-        // adds a selected frame around selected img element and sets unselected frame around the deselected one.
-        frameRadioImage: function(container, selected) {
-            var imgElts = $("#"+container).find("img").get(); // they are img descendants of the container
-            var unSelected = imgElts.find(function(selector){
-                return $(selector).hasClass(thickBorder);
-            });
-            if (typeof unSelected != 'undefined') toggleSelect(unSelected, thinBorder, thickBorder);
-            toggleSelect($("[name="+selected+"]"), thickBorder, thinBorder);
-        }
-    }
-}());
-
-
 // Global variable, singleton lcboViewer
 // API:
 // <localhost:port>/store/lat/<lat>/lon/<lon> gives closest store from coordinate(lat,lon).
@@ -90,6 +68,20 @@ var lcboViewer = (function() {
             }
         },
 
+        require: function(script) {
+            $.ajax({
+                url: script,
+                dataType: "script",
+                async: false,           // <-- This is the key
+                success: function () {
+                    // all good...
+                },
+                error: function () {
+                    throw new Error("Could not load script " + script);
+                }
+            });
+        },
+
         frameRadioImage: function(container, selected) {
             toggleImage.frameRadioImage(container, selected);
         }
@@ -97,6 +89,7 @@ var lcboViewer = (function() {
 }());
 
 $(document).ready(function(){
+   // lcboViewer.require("/scripts/toggleimg.js");
     lcboViewer.fetchStoreFromPosition();
 });
 
