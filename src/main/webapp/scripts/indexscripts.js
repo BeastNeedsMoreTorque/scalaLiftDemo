@@ -1,8 +1,8 @@
 "use strict";
 
 var toggleImage = (function() {
-    var imgSelectStyle = 'selectframe';
-    var imgUnSelectStyle = 'unselectframe';
+    var thickBorder = 'thickBorder';
+    var thinBorder = 'thinBorder';
 
     var toggleSelect = function(eltSelector, newClass, oldClass) {
         $(eltSelector).removeClass(oldClass).addClass(newClass);  // changes the border style between two alternatives
@@ -13,10 +13,10 @@ var toggleImage = (function() {
         frameRadioImage: function(container, selected) {
             var imgElts = $("#"+container).find("img").get(); // they are img descendants of the container
             var unSelected = imgElts.find(function(selector){
-                return $(selector).hasClass(imgSelectStyle);
+                return $(selector).hasClass(thickBorder);
             });
-            if (typeof unSelected != 'undefined') toggleSelect(unSelected, imgUnSelectStyle, imgSelectStyle);
-            toggleSelect($("[name="+selected+"]"), imgSelectStyle, imgUnSelectStyle);
+            if (typeof unSelected != 'undefined') toggleSelect(unSelected, thinBorder, thickBorder);
+            toggleSelect($("[name="+selected+"]"), thickBorder, thinBorder);
         }
     }
 }());

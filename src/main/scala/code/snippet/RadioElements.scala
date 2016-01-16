@@ -14,14 +14,14 @@ import scala.xml.NodeSeq
 case class RadioElements(name: String, img: NodeSeq) {}
 
 object RadioElements {
-  val styleForSelectedRadio = Props.get("radio.selectClass", "selectframe")
-  val styleForUnSelectedRadio = Props.get("radio.unselectClass", "unselectframe")
+  val thickBorder = Props.get("radio.selectClass", "thickBorder")
+  val thinBorder = Props.get("radio.unselectClass", "thinBorder")
 
   def selectOption(s: String, img: String) =
-    RadioElements(s, <img name={s} title={s} class={styleForSelectedRadio} src={img}/>)  // maybe adding button could work?
+    RadioElements(s, <img name={s} title={s} class={thickBorder} src={img}/>)  // maybe adding button could work?
 
   def radioOptions(it: Seq[String], defaultName: String, toImg: (String) => String): Seq[RadioElements] = it.map { (s: String) =>
-    RadioElements(s, <img name={s} title={s} src={toImg(s)} class={if (s == defaultName) styleForSelectedRadio else styleForUnSelectedRadio} />) // selected with style that frames it
+    RadioElements(s, <img name={s} title={s} src={toImg(s)} class={if (s == defaultName) thickBorder else thinBorder} />) // selected with style that frames it
   }
 }
 
