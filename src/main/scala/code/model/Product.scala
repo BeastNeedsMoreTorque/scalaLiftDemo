@@ -1,10 +1,13 @@
 package code.model
 
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 
 import scala.util.Random
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.collection.convert.decorateAsScala._
+import scala.collection._
 
 import net.liftweb.db.DB
 import net.liftweb.json.{MappingException, DefaultFormats}
@@ -80,7 +83,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val name = new StringField(this, 120) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def setFilter = notNull _ :: crop _  :: super.setFilter
+  override def setFilter = notNull _ :: crop _  :: super.setFilter
   }
   val image_thumb_url = new StringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
   override def setFilter = notNull _ :: crop _ :: super.setFilter
@@ -96,10 +99,10 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val description = new StringField(this, 2000) {// allow dropping some data in order to store/copy without SQL error
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
+  override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val serving_suggestion = new StringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
+  override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 
   // intentional aliasing allowing more standard naming convention.
@@ -131,7 +134,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
   def createProductElemVals: List[(String, String)] =
-    // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
+  // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
     (("Name: ", name.get) ::
       ("Primary Category: ", primary_category.get) ::
       ("Secondary Category: ", secondary_category.get) ::
@@ -145,19 +148,19 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
       ("Origin: ", origin.get) ::
       Nil).filter({ p: (String, String) => p._2 != "null" && !p._2.isEmpty })
 
-   def synchUp(p: ProductAsLCBOJson): Unit = {
-     def isDirty(p: ProductAsLCBOJson): Boolean = {
-       price_in_cents.get != p.price_in_cents ||
-       image_thumb_url.get != p.image_thumb_url
-     }
-     def copyAttributes(p: ProductAsLCBOJson): Unit = {
-       price_in_cents.set(p.price_in_cents)
-       image_thumb_url.set(p.image_thumb_url)
-     }
-     if (isDirty(p)) {
-       copyAttributes(p)
-       updated.set(updated.defaultValue)
-       this.update  // Active Record pattern
+  def synchUp(p: ProductAsLCBOJson): Unit = {
+    def isDirty(p: ProductAsLCBOJson): Boolean = {
+      price_in_cents.get != p.price_in_cents ||
+        image_thumb_url.get != p.image_thumb_url
+    }
+    def copyAttributes(p: ProductAsLCBOJson): Unit = {
+      price_in_cents.set(p.price_in_cents)
+      image_thumb_url.set(p.image_thumb_url)
+    }
+    if (isDirty(p)) {
+      copyAttributes(p)
+      updated.set(updated.defaultValue)
+      this.update  // Active Record pattern
     }
   }
 }
@@ -173,9 +176,9 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   val productCacheSize = Props.getInt("product.cacheSize", 0)
 
   // locks are acquired in same sequence as declaration of vars below, a bad bug to do otherwise.
-  private var storeCategoriesProductsCache = collection.mutable.Map[(Long, String), Set[Long]]()
+  private val storeCategoriesProductsCache: concurrent.Map[(Long, String), Set[Long]] = new ConcurrentHashMap[(Long, String), Set[Long]]().asScala //collection.mutable.Map[(Long, String), Set[Long]]()
   // give set of available productIds by store+category
-  private var productsCache: collection.mutable.Map[Long, Product] = collection.mutable.Map[Long, Product]()
+  private val productsCache: concurrent.Map[Long, Product] = new ConcurrentHashMap[Long, Product]().asScala //collection.mutable.Map[Long, Product] = collection.mutable.Map[Long, Product]()
 
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
@@ -270,12 +273,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     */
   def recommend(maxSampleSize: Int, storeId: Long, category: String): Box[Product] = {
     // note: cacheSuccess grabs a lock
-    def cacheSuccess(maxSampleSize: Int, storeId: Long, category: String): Option[Product] = storeCategoriesProductsCache.synchronized {
+    def cacheSuccess(maxSampleSize: Int, storeId: Long, category: String): Option[Product] = {
       if (storeCategoriesProductsCache.contains((storeId, category)) && !storeCategoriesProductsCache((storeId, category)).isEmpty) {
         val prodIds = storeCategoriesProductsCache((storeId, category))
         val randomIndex = Random.nextInt(math.max(1, prodIds.size))
         val prodId = prodIds.takeRight(randomIndex).head // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
-        productsCache.synchronized { Some(productsCache(prodId)) }
+        Some(productsCache(prodId))
       }
       else None
     }
@@ -330,11 +333,11 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @scala.annotation.tailrec
   private final def collectItemsOnAPage(accumItems: List[ProductAsLCBOJson],
-                                             urlRoot: String,
-                                             requiredSize: Int,
-                                             pageNo: Int,
-                                             pageDelta: Int = 1,
-                                             myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): List[ProductAsLCBOJson] = {
+                                        urlRoot: String,
+                                        requiredSize: Int,
+                                        pageNo: Int,
+                                        pageDelta: Int = 1,
+                                        myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): List[ProductAsLCBOJson] = {
     def nextPage() = pageNo + pageDelta
 
     if (requiredSize <= 0) accumItems
@@ -431,10 +434,14 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
   // lock is not held long as the loading is asynchronous in other threads.
-  def loadCache(storeId: Long) = storeCategoriesProductsCache.synchronized {
+  def loadCache(storeId: Long) = {
     val prodLoadThreads = Props.getInt("product.load.nthreads", 1)
 
     val rangeForParallelism = (0 until prodLoadThreads).toList
+
+    def GetKeyedProductsFromDB: Map[Long, Product] =
+      inTransaction { products.map(a => a.lcbo_id.get -> a).toMap } // should use storeId
+
     def getProductsOfIndex(idx: Int): Map[Long, Product] =
       inTransaction {
         if (synchLcbo) {
@@ -448,7 +455,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
               Map[Long, Product]()
           }
         }
-        else if (idx == 0) products.map(a => a.lcbo_id.get -> a).toMap // just load from DB without going to LCBO. And if config is weird to use multiple threads, do it only on first one.
+        else if (idx == 0) GetKeyedProductsFromDB // just load from DB without going to LCBO. And if config is weird to use multiple threads, do it only on first one.
         else Map[Long, Product]()
       }
 
@@ -458,7 +465,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
     val initStoreAssociation = (storeId, LiquorCategory.toPrimaryCategory(LiquorCategory.sortedSeq(0)))
     if (!storeCategoriesProductsCache.contains(initStoreAssociation)) {
-      storeCategoriesProductsCache += initStoreAssociation -> Set[Long]()
+      storeCategoriesProductsCache.putIfAbsent(initStoreAssociation, Set())
       // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
 
@@ -470,16 +477,14 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
             // process categories cache first, then productsCache because lock sequence matters a great deal (as per earlier comments).
             // We are not in main thread here.
             for ((id: Long, p: Product) <- x._2) {
-              storeCategoriesProductsCache.synchronized {
-                val storeCatKey = (storeId, p.primary_category.get)
-                if (!storeCategoriesProductsCache.contains(storeCatKey) || storeCategoriesProductsCache(storeCatKey).isEmpty) {
-                  storeCategoriesProductsCache += (storeCatKey -> Set(id)) // empty test is because of guard above. storeCategoriesProductsCache + (storeCatKey -> Set(id))
-                } else {
-                  storeCategoriesProductsCache(storeCatKey) += id //storeCategoriesProductsCache(storeCatKey) + id
-                }
+              val storeCatKey = (storeId, p.primary_category.get)
+              if (!storeCategoriesProductsCache.contains(storeCatKey) || storeCategoriesProductsCache(storeCatKey).isEmpty) {
+                storeCategoriesProductsCache.put(storeCatKey, Set(id)) // empty test is because of guard above.
+              } else {
+                storeCategoriesProductsCache.replace(storeCatKey, storeCategoriesProductsCache(storeCatKey) + id)
               }
             }
-            productsCache.synchronized { productsCache ++= x._2 }
+            productsCache ++= x._2
           }
           logger.debug(s"product size ${productsCache.size}")
           logger.debug(s"product (store,categories) keys ${storeCategoriesProductsCache.keys}")
