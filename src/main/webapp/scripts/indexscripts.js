@@ -11,7 +11,7 @@ var toggleImage = (function() {
     return {
         // adds a selected frame around selected img element and sets unselected frame around the deselected one.
         frameRadioImage: function(container, selected) {
-            var imgElts = $("#"+container).find("img").get();
+            var imgElts = $("#"+container).find("img").get(); // they are img descendants of the container
             var unSelected = imgElts.find(function(selector){
                 return $(selector).hasClass(imgSelectStyle);
             });
@@ -39,8 +39,6 @@ var lcboViewer = (function() {
             success: function(data, status){
                 var latlon = new google.maps.LatLng(data.latitude, data.longitude)
                 var mapholder = document.getElementById('mapholder')
-                mapholder.style.height = '250px';
-                mapholder.style.width = '250px';
 
                 var myOptions = {
                     center:latlon,zoom:14,
