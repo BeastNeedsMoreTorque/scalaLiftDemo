@@ -15,6 +15,11 @@
         border:2px solid grey;
         }
 
+        div.lcbomap {
+        height:250px;
+        width:250px;
+        }
+
         .radio input {  /* our custom radio buttons are hidden but the images associated with them are visible */
         display:none;
         }
