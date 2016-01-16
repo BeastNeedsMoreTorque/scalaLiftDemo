@@ -13,10 +13,10 @@ import net.liftweb.util.Helpers._
   * Created by philippederome on 2015-12-05.
   */
 object CategorySelect {
-  private val defaultOption = RadioElements.defaultOption(SessionCache.defaultCategory, LiquorCategory.toImg )  // selected with style that frames it
+  private val defaultOption = RadioElements.selectOption(SessionCache.defaultCategory, LiquorCategory.toImg(SessionCache.defaultCategory) )  // selected with style that frames it
   private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.sortedSeq, SessionCache.defaultCategory, LiquorCategory.toImg)
 
-  def setCategoryBorderJS(elt: String): JsCmd = Call("lcboViewer.frameRadioImage", "prodCategoryContainer", {elt})
+  def setBorderJS(elt: String): JsCmd = Call("lcboViewer.frameRadioImage", "prodCategoryContainer", {elt})
 
   /**
     * save radio button selection as next default to avoid annoying resetting to original default and make it session persistent
@@ -32,7 +32,7 @@ object CategorySelect {
       radioOptions, Full(defaultOption),
       (choice: RadioElements) => {
         theCategory.set(choice.name)
-        setCategoryBorderJS(choice.name)
+        setBorderJS(choice.name)
       }))
   }
 }
