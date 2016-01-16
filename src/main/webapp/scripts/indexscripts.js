@@ -17,14 +17,33 @@ if (!Array.prototype.forEach)
    };
 }
 
+var toggleImage = (function() {
+    var imgSelectStyle = 'selectframe';
+    var imgUnSelectStyle = 'unselectframe';
+
+    var toggleSelect = function(eltSelector, newClass, oldClass) {
+        eltSelector.removeClass(oldClass).addClass(newClass);
+    };
+
+    return {
+        frame: function(container, selected) {
+            var imgElts = $("#"+container).find("img").get();
+            imgElts.forEach(function(selector){
+                if ($(selector).attr('name') != selected) {
+                    toggleSelect($(selector), imgUnSelectStyle, imgSelectStyle);
+                }
+            });
+            toggleSelect($("[name="+selected+"]"), imgSelectStyle, imgUnSelectStyle);
+        }
+    }
+}());
+
+
 // Global variable, singleton lcboViewer
 // API:
 // <localhost:port>/store/lat/<lat>/lon/<lon> gives closest store from coordinate(lat,lon).
 // Currently supported Store  (see lcboapi.com): id, name, is_dead, latitude, longitude, distance_in_meters (from specified location), address_line_1, city
 var lcboViewer = (function() {
-    var imgSelectStyle = 'selectframe';
-    var imgUnSelectStyle = 'unselectframe';
-
     var defaultOntarioLocationLat= 43.647219;  // Bay & Front LCBO address.
     var defaultOntarioLocationLon= -79.3789987;
 
@@ -80,10 +99,6 @@ var lcboViewer = (function() {
          fetchStore(defaultOntarioLocationLat, defaultOntarioLocationLon, false);
     };
 
-    var toggleSelect = function(elt, newClass, oldClass) {
-        elt.removeClass(oldClass).addClass(newClass);
-    };
-
     return {
         fetchStoreFromPosition: function() {
             if (navigator.geolocation) {
@@ -95,13 +110,7 @@ var lcboViewer = (function() {
         },
 
         frameRadioImage: function(container, selected) {
-            var imgElts = $("#"+container).find("img").get();
-            imgElts.forEach(function(element){
-                if ($(element).attr('name') != selected) {
-                    toggleSelect($(element), imgUnSelectStyle, imgSelectStyle);
-                }
-            });
-            toggleSelect($("[name="+selected+"]"), imgSelectStyle, imgUnSelectStyle);
+            toggleImage.frame(container, selected);
         }
     }
 }());
