@@ -68,20 +68,6 @@ var lcboViewer = (function() {
             }
         },
 
-        require: function(script) {
-            $.ajax({
-                url: script,
-                dataType: "script",
-                async: false,           // <-- This is the key
-                success: function () {
-                    // all good...
-                },
-                error: function () {
-                    throw new Error("Could not load script " + script);
-                }
-            });
-        },
-
         frameRadioImage: function(container, selected) {
             toggleImage.frameRadioImage(container, selected);
         }
@@ -89,7 +75,6 @@ var lcboViewer = (function() {
 }());
 
 $(document).ready(function(){
-   // lcboViewer.require("/scripts/toggleimg.js");
     lcboViewer.fetchStoreFromPosition();
 });
 

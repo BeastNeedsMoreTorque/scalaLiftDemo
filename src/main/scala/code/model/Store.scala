@@ -1,8 +1,10 @@
 package code.model
 
+import scala.collection.concurrent
 import scala.language.implicitConversions
 import scala.xml.Node
-import scala.concurrent.SyncVar
+import scala.collection.concurrent.TrieMap
+
 
 import net.liftweb.db.DB
 import net.liftweb.common.{Full, Empty, Box, Failure, Loggable}
@@ -128,7 +130,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
   def MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
-  val storesCache = new SyncVar[Map[Int, Store]]()
+  private val storesCache: concurrent.Map[Int, Store] = TrieMap[Int, Store]()
+
 
   def init() = { // could help queries find(lcbo_id)
     def loadAll(dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
@@ -152,7 +155,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         else dbStores // configuration tells us to trust our db contents
       }
     }
-    storesCache.put(getStores())
+    storesCache ++= getStores()
   }
 
   def create(s: StoreAsLCBOJson): Store = {
@@ -272,7 +275,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   }
 
   def find( lcbo_id: Int): Box[Store] =  {
-    if (storesCache.get.contains(lcbo_id)) Full(storesCache.get(lcbo_id))
+    if (storesCache.contains(lcbo_id)) Full(storesCache(lcbo_id))
     else findStore(lcbo_id) match {
       case Full(x) =>
         theStoreId.set(x.lcbo_id.get)
