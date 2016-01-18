@@ -27,7 +27,7 @@ product.interactionsImageMap={"recommend":"/images/recommend.jpg","consume":"/im
 product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
 product.Category=wine
 product.synchLcbo=true
-product.load.nthreads=2
+product.load.workers=2
 
 product.cacheSize=20000
 

@@ -21,7 +21,6 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.squerylrecord.KeyedRecord
 
 import org.squeryl.annotations._
-import org.squeryl.Query
 
 import MainSchema._
 import code.Rest.pagerRestClient
@@ -178,9 +177,9 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   val productCacheSize = Props.getInt("product.cacheSize", 0)
 
   // thread-safe lock free objects
-  private val storeCategoriesProductsCache: concurrent.Map[(Long, String), Set[Long]] = TrieMap[(Long, String), Set[Long]]() // give set of available productIds by store+category
-  private val productsCache: concurrent.Map[Long, Product] = TrieMap[Long, Product]()
-  private val storeProductsLoaded: concurrent.Map[Long, Boolean] = TrieMap[Long, Boolean]() // effectively a thread-safe lock-free set, which helps control access to storeCategoriesProductsCache.
+  private val storeCategoriesProductsCache: concurrent.Map[(Long, String), Set[Long]] = TrieMap() // give set of available productIds by store+category
+  private val productsCache: concurrent.Map[Long, Product] = TrieMap()
+  private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap() // effectively a thread-safe lock-free set, which helps control access to storeCategoriesProductsCache.
 
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
@@ -446,19 +445,17 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   }
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
-  // lock is not held long as the loading is asynchronous in other threads.
+  // lock free. For correctness, we use putIfAbsent to get some atomicity when we do complex read-write at once (complex linearizable operations).
+  // For now, we call this lazily for first user having an interaction with a particular store and not before.
   def loadCache(storeId: Long) = {
-    val prodLoadThreads = Props.getInt("product.load.nthreads", 1)
-
-    val rangeForParallelism = (0 until prodLoadThreads).toList
+    val prodLoadWorkers = Props.getInt("product.load.workers", 1)
 
     // Uses convenient Squeryl native Scala ORM for a simple 2-table join.
     def GetKeyedProductsFromDB: Map[Long, Product] =
       inTransaction {
-        val prods: Query[Product] = {
-          from(storeProducts, products)((sp, p) =>
+        val prods = from(storeProducts, products)((sp, p) =>
           where(sp.storeid === storeId and sp.productid === p.lcbo_id  )
-          select(p)) }
+          select(p))
         prods.map(p => p.lcbo_id.get -> p).toMap
       }
 
@@ -466,10 +463,10 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     def getProductsOfIndex(idx: Int): Map[Long, Product] =
       inTransaction {
         if (synchLcbo) {
-          loadAll(productCacheSize, prodLoadThreads, storeId, idx) match {
+          loadAll(productCacheSize, prodLoadWorkers, storeId, idx) match {
             case Full(m) =>
-              for ((k, v) <- m) {
-                StoreProduct.insertIfNone(storeId, v._1.id.toLong, v._1.inventory_count)
+              for ((k, v) <- m) { // v._1 is original JSON format of a product whereas v._2 is the Record form of product (type Product)
+                StoreProduct.insertIfAbsent(storeId, v._1.id.toLong, v._1.inventory_count)
               }
               for ((k, v) <- m) yield (k -> v._2) // strip out the ProductAsLCBOJson first component
             case Failure(m, ex, _) =>
@@ -485,27 +482,27 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       }
 
     // evaluate the vectors of product in parallel, tracking them by product category as key
-    def productsInTheFuture(idx: Int): Future[(Int, Map[Long, Product])] =
-      Future { (idx, getProductsOfIndex(idx)) }
+    def productsByWorker(idx: Int): Future[ Map[Long, Product]] =
+      Future { getProductsOfIndex(idx) }
 
-    if ( storeProductsLoaded.putIfAbsent(storeId, true).isEmpty) {
+    if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {
       // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
-
-      val allTheProductsByCategory = Future.traverse(rangeForParallelism)(productsInTheFuture)
+      val rangeForParallelism = (0 until prodLoadWorkers).toList  // e.g. (0,1,2,3) when using 4 threads, used to aggregate the results of each thread.
+      val allTheProductsByCategory = Future.traverse(rangeForParallelism)(productsByWorker)
 
       // we assume all along and depend strongly on that, that we never remove from cache. Updates that are strictly monotonic are easier to get right.
       allTheProductsByCategory onSuccess {
-        case imaps: Iterable[(Int, Map[Long, Product])] =>
-          imaps.foreach { x =>
-            for ((id: Long, p: Product) <- x._2) {
+        case maps: Iterable[Map[Long, Product]] =>
+          maps.foreach { x =>
+            for ((id: Long, p: Product) <- x) {
               val storeCatKey = (storeId, p.primary_category.get)
               if (!storeCategoriesProductsCache.putIfAbsent(storeCatKey, Set(id)).isEmpty  ) {
                 // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
                 storeCategoriesProductsCache(storeCatKey) +=  id
               }
             }
-            productsCache ++= x._2
+            productsCache ++= x
           }
           logger.debug(s"product size ${productsCache.size}")
           logger.debug(s"product (store,categories) keys ${storeCategoriesProductsCache.keys}")
