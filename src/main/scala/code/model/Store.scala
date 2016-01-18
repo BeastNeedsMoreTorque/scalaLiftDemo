@@ -4,6 +4,8 @@ import scala.collection.concurrent
 import scala.language.implicitConversions
 import scala.xml.Node
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
 
 
 import net.liftweb.db.DB
@@ -155,7 +157,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         else dbStores // configuration tells us to trust our db contents
       }
     }
-    storesCache ++= getStores()
+    Future { storesCache ++= getStores() } // do this asynchronously to be responsive asap.
   }
 
   def create(s: StoreAsLCBOJson): Store = {

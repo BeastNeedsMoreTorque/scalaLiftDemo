@@ -24,7 +24,8 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
 
 object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] {
 
-  def insertIfNone(storeId: Long, prodId: Long, inventory: Long) = {
+  // absent means not there as usual in English but has no special concurrency connotation whatsoever.
+  def insertIfAbsent(storeId: Long, prodId: Long, inventory: Long): StoreProduct = {
     DB.use(DefaultConnectionIdentifier) { connection =>
       val rec = storeProducts.
         where( (sp: StoreProduct) => sp.storeid === storeId and sp.productid === prodId ).
@@ -33,8 +34,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] {
         val q = createRecord.storeid(storeId).productid(prodId).inventory(inventory)
         q.save
         q
-      } { identity // don't try to update for now
-      }
+      } { identity } // don't try to update for now
     }
   }
 
