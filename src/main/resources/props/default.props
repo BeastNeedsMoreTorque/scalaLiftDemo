@@ -37,6 +37,7 @@ store.lcboMaxPerPage=100
 store.lcboMinPerPage=10
 # mandatory
 store.BranchCountUpperBound=2000
+store.DBBatchSize=100
 
 
 

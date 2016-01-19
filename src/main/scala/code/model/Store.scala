@@ -1,6 +1,7 @@
 package code.model
 
-import scala.collection.concurrent
+import scala.annotation.tailrec
+import scala.collection.{Map,concurrent}
 import scala.language.implicitConversions
 import scala.xml.Node
 import scala.collection.concurrent.TrieMap
@@ -102,7 +103,6 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
 
   val lcbo_id = new IntField(this) // we don't share same PK as LCBO!
   val is_dead = new BooleanField(this, false)
-  val distance_in_meters = new IntField(this)
   val latitude = new DoubleField(this)
   val longitude = new DoubleField(this)
 
@@ -110,15 +110,17 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   val address_line_1 = new StringField(this, 400)
   val city = new StringField(this, 80)
 
+  private def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
+    is_dead.get != s.is_dead ||
+      address_line_1.get != s.address_line_1
+  }
+
+  private def copyAttributes(s: PlainStoreAsLCBOJson): Unit = {
+    is_dead.set(s.is_dead)
+    address_line_1.set(s.address_line_1)
+  }
+
   def synchUp(s: PlainStoreAsLCBOJson): Unit = {
-    def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
-      is_dead.get != s.is_dead ||
-        address_line_1.get != s.address_line_1
-    }
-    def copyAttributes(p: PlainStoreAsLCBOJson): Unit = {
-      is_dead.set(p.is_dead)
-      address_line_1.set(p.address_line_1)
-    }
     if (isDirty(s)) {
       copyAttributes(s)
       updated.set(updated.defaultValue)
@@ -131,12 +133,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private implicit val formats = net.liftweb.json.DefaultFormats
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
-  def MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
+  val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
+  val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
+
   private val storesCache: concurrent.Map[Int, Store] = TrieMap[Int, Store]()
 
 
   def init() = { // could help queries find(lcbo_id)
-    def loadAll(dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
+    def synchronizeData(dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
       val branchCountUpperBound = Props.getInt("store.BranchCountUpperBound", 0)
       // we'd like the is_dead ones as well to update state (but apparently you have to query for it explicitly!?!?)
       val url = s"$LcboDomainURL/stores?"
@@ -147,8 +151,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val synchLcbo = Props.getBool("store.synchLcbo", true)
       inTransaction {
         val dbStores = stores.map(s => s.lcbo_id.get -> s)(collection.breakOut): Map[Int, Store] // queries full store table and throw it into map
-        if (synchLcbo) loadAll(dbStores) match {
-          case Full(m) => m // returns map normally // going to LCBO and update DB afterwards with fresh data when we see breaks with LCBO data
+        if (synchLcbo) synchronizeData(dbStores) match {
+          case Full(m) => m
           case Failure(m, ex, _) => logger.error(s"Problem loading LCBO stores into cache with message $m and exception error $ex")
             Map[Int, Store]()
           case Empty => logger.error("Problem loading LCBO stores into cache, none found")
@@ -157,7 +161,29 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         else dbStores // configuration tells us to trust our db contents
       }
     }
-    Future { storesCache ++= getStores() } // do this asynchronously to be responsive asap.
+    logger.info(s"Store.init")
+    val fut = Future { getStores() } // do this asynchronously to be responsive asap.
+    fut onSuccess {
+      case m: Map[Int, Store]  =>
+        storesCache ++= m
+        logger.info(s"Store.init completed with success")
+    }
+
+    fut onFailure {
+      case t => logger.error("Store.init loadCache, an error occurred because: " + t.getMessage)
+    }
+  }
+
+  def create(s: PlainStoreAsLCBOJson): Store = {
+    // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
+    createRecord.
+      lcbo_id(s.id).
+      name(s.name).
+      is_dead(s.is_dead).
+      address_line_1(s.address_line_1).
+      city(s.city).
+      latitude(s.latitude).
+      longitude(s.longitude)
   }
 
   def create(s: StoreAsLCBOJson): Store = {
@@ -166,7 +192,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       lcbo_id(s.id).
       name(s.name).
       is_dead(s.is_dead).
-      distance_in_meters(s.distance_in_meters).
       address_line_1(s.address_line_1).
       city(s.city).
       latitude(s.latitude).
@@ -215,7 +240,41 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   }
 
 
+  def isDirty(s: PlainStoreAsLCBOJson, ourCachedStore: Option[Store]): Boolean =
+    ourCachedStore.fold {false }{ _.isDirty(s)}
 
+  @tailrec
+  def updateStores(accMap: Map[Int, Store], lcboStores: List[PlainStoreAsLCBOJson], dbStores: Map[Int, Store]): Map[Int, Store] = {
+    val slice = lcboStores.take(DBBatchSize)
+    var newMap: Map[Int, Store] = Map()
+    DB.use(DefaultConnectionIdentifier) { connection =>
+      for (s <- slice;
+           rec <- dbStores.get(s.id)) {
+        rec.copyAttributes(s)
+        rec.update
+        newMap += (s.id -> rec)
+      }
+    }
+    val rest = lcboStores.takeRight(lcboStores.size - slice.size)
+    if (rest.isEmpty) return accMap ++ newMap
+    updateStores(accMap ++ newMap, rest, dbStores)
+  }
+
+  @tailrec
+  def insertNewStores(accMap: Map[Int, Store], lcboStores: List[PlainStoreAsLCBOJson]): Map[Int, Store] = {
+    val slice = lcboStores.take(DBBatchSize)
+    var newMap: Map[Int, Store] = Map()
+    DB.use(DefaultConnectionIdentifier) { connection =>
+      for (s <- slice) {
+        val rec = create(s)
+        rec.save
+        newMap += (s.id -> rec)
+      }
+    }
+    val rest = lcboStores.takeRight(lcboStores.size - slice.size)
+    if (rest.isEmpty) return accMap ++ newMap
+    insertNewStores(accMap ++ newMap, rest)
+  }
 
   private final def getSingleStore( uri: String): PlainStoreAsLCBOJson = {
     logger.debug(uri)
@@ -227,7 +286,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // temporarily lists into Maps we can use indexing by LCBO ID. Along the way, we compare each such LCBO record
   // with its equivalent content in database (call to fetchSynched) to update our database content if it's out of date.
   @scala.annotation.tailrec
-  private final def collectStoresOnAPage( dbStores: Map[Int, Store],
+  private final def collectStoresOnAPage(dbStores: Map[Int, Store],
                                          accumItems: Map[Int, Store],
                                          urlRoot: String,
                                          requiredSize: Int,
@@ -238,14 +297,29 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
     // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
-    val pageStoreMap = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}.map(st => st.id -> fetchSynched(st, dbStores.get(st.id)))
+    val pageStoreMap = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}
+    //val pageStoreMap = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}.map(st => st.id -> fetchSynched(st, dbStores.get(st.id)))
+
+   // no db updates: 2.6, 2.7 secs (LCBO Rest time and parsing), simple db updates as original 4.2 secs
+   // First optimization attempt: 3.9-4.7 secs ( a visible improvement of 10%, but could be much better if not for slower REST). Fresh compile seems to make times worse within IDEA.
+   // Some outliers as large as 12 secs (LCBO/ISP??).
+    val commonStores:Map[Int, Store] = pageStoreMap.map((s:PlainStoreAsLCBOJson) => if (!isDirty(s, dbStores.get(s.id))) dbStores.get(s.id) else None).flatMap(o => o).
+     map(s => (s.lcbo_id.get, s)).toMap
+    val storesWithNewData = pageStoreMap.filter( st => isDirty(st, dbStores.get(st.id) ))
+    val updatedStores: Map[Int, Store] = updateStores(Map[Int,Store](), storesWithNewData, dbStores)
+    val newStores = pageStoreMap.filter( st => !dbStores.contains(st.id) )
+    val insertedStores = insertNewStores(Map[Int, Store](), newStores)
+    val storesFromPage: Map[Int, Store] = commonStores ++ updatedStores ++ insertedStores
+
     val outstandingSize = requiredSize - pageStoreMap.size
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
-    if (pageStoreMap.isEmpty || outstandingSize <= 0 || isFinalPage) return accumItems ++ pageStoreMap  // no need to look at more pages
+    if (pageStoreMap.isEmpty || outstandingSize <= 0 || isFinalPage) return accumItems ++ storesFromPage  // no need to look at more pages
+    //if (pageStoreMap.isEmpty || outstandingSize <= 0 || isFinalPage) return accumItems ++ pageStoreMap  // no need to look at more pages
 
     collectStoresOnAPage(
       dbStores,
-      accumItems ++ pageStoreMap,
+      accumItems ++ storesFromPage,
+ //     accumItems ++ pageStoreMap,
       urlRoot,
       outstandingSize,
       pageNo + 1) // union of this page with next page when we are asked for a full sample
