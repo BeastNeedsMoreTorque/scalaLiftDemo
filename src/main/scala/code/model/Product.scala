@@ -175,6 +175,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
   val synchLcbo = Props.getBool("product.synchLcbo", true)
   val productCacheSize = Props.getInt("product.cacheSize", 0)
+  val prodLoadWorkers = Props.getInt("product.load.workers", 1)
 
   // thread-safe lock free objects
   private val storeCategoriesProductsCache: concurrent.Map[(Long, String), Set[Long]] = TrieMap() // give set of available productIds by store+category
@@ -295,8 +296,8 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     }
   }
 
-  def loadAll(requestSize: Int, pageDelta: Int, store: Long, idx: Int): Box[Map[Long, (ProductAsLCBOJson, Product)]] =
-    tryo { productListByStore(requestSize, pageDelta, store, idx) }
+  def loadAll(requestSize: Int, store: Long, idx: Int): Box[Map[Long, (ProductAsLCBOJson, Product)]] =
+    tryo { productListByStore(requestSize, store, idx) }
 
   /**
     * Purchases a product by increasing user-product count (amount) in database as a way to monitor usage..
@@ -339,7 +340,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
                                         pageNo: Int,
                                         pageDelta: Int = 1,
                                         myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): List[ProductAsLCBOJson] = {
-    def nextPage() = pageNo + pageDelta
+    def nextPage() = pageNo + prodLoadWorkers
 
     if (requiredSize <= 0) accumItems
     // specify the URI for the LCBO api url for liquor selection
@@ -366,7 +367,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       accumItems ++ items,
       urlRoot,
       outstandingSize,
-      pageNo + pageDelta,
+      nextPage,
       pageDelta,
       myFilter) // union of this page with next page when we are asked for a full sample
   }
@@ -428,7 +429,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def productListByStore(requiredSize: Int, pageDelta: Int, store: Long, idx: Int): Map[Long, (ProductAsLCBOJson, Product)] = {
+  private def productListByStore(requiredSize: Int, store: Long, idx: Int): Map[Long, (ProductAsLCBOJson, Product)] = {
     if (requiredSize <= 0) Map[Long, (ProductAsLCBOJson, Product)]()
     else {
       val url = s"$LcboDomainURL/products?store_id=$store"
@@ -438,7 +439,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
         url,
         requiredSize,
         idx + 1, // programmer client is assumed to be more familiar with 0-based index
-        pageDelta,
+        prodLoadWorkers,
         filter).take(requiredSize).map{ origProd: ProductAsLCBOJson => (origProd, fetchSynched(origProd))}.
         map(pair => pair._1.id.toLong -> pair).toMap
     }
@@ -448,7 +449,6 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   // lock free. For correctness, we use putIfAbsent to get some atomicity when we do complex read-write at once (complex linearizable operations).
   // For now, we call this lazily for first user having an interaction with a particular store and not before.
   def loadCache(storeId: Long) = {
-    val prodLoadWorkers = Props.getInt("product.load.workers", 1)
 
     // Uses convenient Squeryl native Scala ORM for a simple 2-table join.
     def GetKeyedProductsFromDB: Map[Long, Product] =
@@ -463,7 +463,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     def getProductsOfIndex(idx: Int): Map[Long, Product] =
       inTransaction {
         if (synchLcbo) {
-          loadAll(productCacheSize, prodLoadWorkers, storeId, idx) match {
+          loadAll(productCacheSize, storeId, idx) match {
             case Full(m) =>
               for ((k, v) <- m) { // v._1 is original JSON format of a product whereas v._2 is the Record form of product (type Product)
                 StoreProduct.insertIfAbsent(storeId, v._1.id.toLong, v._1.inventory_count)
