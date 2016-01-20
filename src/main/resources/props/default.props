@@ -35,8 +35,6 @@ store.maxSampleSize=3
 store.synchLcbo=true
 store.lcboMaxPerPage=100
 store.lcboMinPerPage=10
-# mandatory
-store.BranchCountUpperBound=2000
 store.DBBatchSize=250
 store.load.workers=2
 
