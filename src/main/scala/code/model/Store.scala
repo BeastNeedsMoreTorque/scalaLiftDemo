@@ -7,7 +7,6 @@ import scala.xml.Node
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.collection.mutable.ListBuffer
 
 import net.liftweb.db.DB
 import net.liftweb.common.{Full, Empty, Box, Failure, Loggable}
@@ -30,6 +29,15 @@ import code.snippet.SessionCache.theStoreId
   * Created by philippederome on 15-11-01.
   * This is captured from JSON parsing.
   */
+
+// to denote whether a Store requires to be inserted (New), updated (Dirty), or is good as is (Clean)
+// We associate such state by comparing our Store with LCBO fresh data and place collections of stores
+// in same bucket to do batch updates (insert on New or update on Dirty and no-op on Clean)
+// to Squeryl.
+sealed trait StoreState
+object New extends StoreState
+object Dirty extends StoreState
+object Clean extends StoreState
 
 case class StoreAsLCBOJson (id: Int = 0,
                  is_dead: Boolean = true,
@@ -112,15 +120,21 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
 
   private def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
     is_dead.get != s.is_dead ||
-      address_line_1.get != s.address_line_1
+    address_line_1.get != s.address_line_1
   }
 
-  private def copyAttributes(s: PlainStoreAsLCBOJson): Unit = {
-    is_dead.set(s.is_dead)
-    address_line_1.set(s.address_line_1)
+  def copyAttributes(my: Store, s: PlainStoreAsLCBOJson): Store = {
+    my.is_dead.set(s.is_dead)
+    my.address_line_1.set(s.address_line_1)
+    my
   }
 
   def synchUp(s: PlainStoreAsLCBOJson): Unit = {
+    def copyAttributes(s: PlainStoreAsLCBOJson): Unit = {
+      is_dead.set(s.is_dead)
+      address_line_1.set(s.address_line_1)
+    }
+
     if (isDirty(s)) {
       copyAttributes(s)
       updated.set(updated.defaultValue)
@@ -146,43 +160,39 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       // we'd like the is_dead ones as well to update state (but apparently you have to query for it explicitly!?!?)
       val url = s"$LcboDomainURL/stores?"
       tryo {
-        val lcboStoresPerWorker = collectStoresOnAPage(dbStores, Seq[PlainStoreAsLCBOJson](), url, idx)
+        // gather stores on this page (url, idx) with classification as to whether they are new, dirty or clean
+        val initMap = Map[StoreState, List[Store]]((New -> List[Store]()), (Dirty -> List[Store]()), (Clean -> List[Store]()))
+        val lcboStoresPerWorker = collectStoresOnAPage(dbStores, initMap, url, idx)
         logger.trace(s"done loading to LCBO")
 
         // 0.9 sec to do this work with 1 thread (going to DB one by one). With 2 threads and batch access to DB went down to 0.250 sec
         // on about 400 records to update and 650 records total. When no change is required to DB, this would take 0.200 sec. (MacBook Air 2010)
         // Access to LCBO seems much faster in morning with a fully charged computer.
-        val commonStores: ListBuffer[Store] = ListBuffer()
-        val updatedStores: ListBuffer[ Store] = ListBuffer()
-        val insertedStores: ListBuffer[Store] = ListBuffer()
+        // With more complex solution, whole thing takes 2.875 secs and about 240 ms on db side end processing.
 
-        lcboStoresPerWorker.foreach( {s =>
-          val ourStore = dbStores.get(s.id)
-          s match {
-            case s if (ourStore.isEmpty) => val st = create(s); insertedStores += st // for insert
-            case s if (isDirty(s, ourStore)) => ourStore.foreach({ st => // for update
-              st.copyAttributes(s)
-              updatedStores += st
-            })
-            case s => ourStore.foreach( st =>  commonStores += st)  // for no-op
-          }})
-        // batch update the database now.
-        updateStores(updatedStores)
-        insertNewStores(insertedStores)
-        (commonStores ++ updatedStores ++ insertedStores).map(s => (s.lcbo_id.get -> s)).toMap
+        // identify the dirty and new stores for batch update and then retain all of them as the set identified by the worker
+        val cleanStores: List[Store] = lcboStoresPerWorker(Clean)
+        val dirtyStores: List[Store] = lcboStoresPerWorker(Dirty)
+        val newStores: List[Store] = lcboStoresPerWorker(New)
+        inTransaction {
+          // for the activity on separate thread for synchronizeData
+          // batch update the database now.
+          updateStores(dirtyStores)
+          insertNewStores(newStores)
+        }
+        (cleanStores ++ dirtyStores ++ newStores).map(s => (s.lcbo_id.get -> s)).toMap
       }
     }
 
-    def getStores(idx: Int, dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
-      inTransaction {  // for the activity on separate thread for synchronizeData
-        if (synchLcbo) synchronizeData(idx, dbStores) match {
-          case Full(m) => Full(m)
+    def getStores(idx: Int, dbStores: Map[Int, Store]): Map[Int, Store] = {
+      if (synchLcbo) synchronizeData(idx, dbStores) match {
+          case Full(m) => m
           case Failure(m, ex, _) => throw new Exception(s"Problem loading LCBO stores into cache (worker $idx) with message '$m' and exception error '$ex'")
           case Empty =>  throw new Exception(s"Problem loading LCBO stores into cache (worker $idx), none found")
-        }
-        else Full(dbStores) // configuration tells us to trust our db contents
       }
+      else dbStores // configuration tells us to trust our db contents
     }
+
     logger.trace(s"Store.init")
 
     inTransaction {  // for the initial select
@@ -191,8 +201,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       for (i <- 1 to storeLoadWorkers) {
         val fut = Future { getStores(i, dbStores) } // do this asynchronously to be responsive asap (default 1 worker).
         fut onComplete {
-          case Success(m) => m.foreach(storesCache ++= _)
-            logger.debug(s"Store.init worker completed with success")
+          case Success(m) => storesCache ++= m
+            logger.trace(s"Store.init worker completed with success")
           case Failure(t) => logger.error(s"Store.init ${t.getMessage} " )
           // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
           // We could define a finer policy as to when we want to use a default set from database even when we attempt to go to LCBO.
@@ -247,15 +257,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[java.net.SocketTimeoutException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   private final def collectFirstMatchingStore( uri: String): List[StoreAsLCBOJson] = {
-    logger.debug(uri)
+    logger.trace(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children.drop(1) // Uses XPath-like querying to extract data from parsed object jsObj.
     itemNodes.map(_.extract[StoreAsLCBOJson])
   }
 
-  def isDirty(s: PlainStoreAsLCBOJson, ourCachedStore: Option[Store]): Boolean =
-    ourCachedStore.fold {false }{ _.isDirty(s)}
+  def isClean(s: PlainStoreAsLCBOJson, ourCachedStore: Option[Store]): Boolean =
+    ourCachedStore.fold {false }{ ! _.isDirty(s)} // fold defaults to false because the meaning here is that is New therefore not clean (existing and valid)
 
   @tailrec
   def updateStores(myStores: Iterable[Store]): Unit = {
@@ -279,12 +289,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     (parse(pageContent) \ "result").extract[PlainStoreAsLCBOJson] // more throws
   }
 
- // collects stores individually from LCBO REST as PlainStoreAsLCBOJson on as many pages as required.
+
+  // collects stores individually from LCBO REST as PlainStoreAsLCBOJson on as many pages as required.
+  // we declare types fairly often in the following because it's not trivial to follow otherwise
   @scala.annotation.tailrec
   private final def collectStoresOnAPage(dbStores: Map[Int, Store],
-                                         accumItems: Seq[PlainStoreAsLCBOJson],
+                                         accumItems: Map[StoreState, List[Store]],
                                          urlRoot: String,
-                                         pageNo: Int): Seq[PlainStoreAsLCBOJson] = {
+                                         pageNo: Int): Map[StoreState, List[Store]] = {
     val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)
     logger.info(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
@@ -292,13 +304,36 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
     // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
     val pageStoreSeq = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}
+    // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update).
+    val cleanOthers: (List[PlainStoreAsLCBOJson], List[PlainStoreAsLCBOJson]) = pageStoreSeq.partition{s: PlainStoreAsLCBOJson =>
+      val ourStore = dbStores.get(s.id)
+      isClean(s, ourStore)
+    }
+
+   val newsDirtys = cleanOthers._2.partition{ s: PlainStoreAsLCBOJson => !dbStores.contains(s.id)}
+
+   val cleanStores: List[Store] = cleanOthers._1.map{s: PlainStoreAsLCBOJson => dbStores.get(s.id)}.flatten
+   val newStores: List[Store] = newsDirtys._1.map{s: PlainStoreAsLCBOJson => create(s)}
+   val dirtyStores: List[Store] = newsDirtys._2.map{s: PlainStoreAsLCBOJson =>
+      val opt = dbStores.get(s.id)
+      val l: Option[Store] = opt.map({p => val t: Store = copyAttributes(p, s); t})
+      l
+    }.flatten // Option is an Iterable, we exploit this.
+
+    // after a bit of gymnastics, get the map of stores indexed properly by state that we need
+    // having accumulated over the pages so far.
+   val newAccumItems = Map[StoreState, List[Store]]((New -> (accumItems(New) ++ newStores) ),
+     (Dirty -> (accumItems(Dirty) ++ dirtyStores) ), (Clean -> (accumItems(Clean) ++ cleanStores) ))
+
 
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
-    if (pageStoreSeq.isEmpty || isFinalPage) return accumItems ++ pageStoreSeq  // no need to look at more pages
+
+    if (pageStoreSeq.isEmpty || isFinalPage) return newAccumItems  // no need to look at more pages
+
 
     collectStoresOnAPage(
       dbStores,
-      accumItems ++ pageStoreSeq,
+      newAccumItems,
       urlRoot,
       pageNo + storeLoadWorkers) // union of this page with next page when we are asked for a full sample
   }
@@ -341,7 +376,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val o: Box[Store] = stores.where( _.lcbo_id === s.id).headOption // Load from recent DB cache if available, else create it Squeryl very friendly DSL syntax!
       o.map { t: Store =>
         t.synchUp(s) // touch it up with most recent data if dirty
-
         t
       } openOr {
         val t = create(s)
