@@ -114,9 +114,16 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   val latitude = new DoubleField(this)
   val longitude = new DoubleField(this)
 
-  val name = new StringField(this, 200)
-  val address_line_1 = new StringField(this, 400)
-  val city = new StringField(this, 80)
+  val name = new StringField(this, 200) {
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
+  val address_line_1 = new StringField(this, 200) {
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
+
+  val city = new StringField(this, 30) {
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
 
   private def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
     is_dead.get != s.is_dead ||
@@ -168,8 +175,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         // 0.9 sec to do this work with 1 thread (going to DB one by one). With 2 threads and batch access to DB went down to 0.250 sec
         // on about 400 records to update and 650 records total. When no change is required to DB, this would take 0.200 sec. (MacBook Air 2010)
         // Access to LCBO seems much faster in morning with a fully charged computer.
-        // With more complex solution, whole thing takes 2.875 secs and about 240 ms on db side end processing.
-
+        // With more complex solution, whole thing takes 2.7 secs and about 170 ms on db side end processing (best case).
         // identify the dirty and new stores for batch update and then retain all of them as the set identified by the worker
         val cleanStores: List[Store] = lcboStoresPerWorker(Clean)
         val dirtyStores: List[Store] = lcboStoresPerWorker(Dirty)
@@ -305,31 +311,26 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
     val pageStoreSeq = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}
     // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update).
-    val cleanOthers: (List[PlainStoreAsLCBOJson], List[PlainStoreAsLCBOJson]) = pageStoreSeq.partition{s: PlainStoreAsLCBOJson =>
-      val ourStore = dbStores.get(s.id)
-      isClean(s, ourStore)
-    }
+    def getStore(s: PlainStoreAsLCBOJson) = dbStores.get(s.id)
 
-   val newsDirtys = cleanOthers._2.partition{ s: PlainStoreAsLCBOJson => !dbStores.contains(s.id)}
+    val cleanOthers = pageStoreSeq.partition{ s => isClean(s, getStore(s)) }
 
-   val cleanStores: List[Store] = cleanOthers._1.map{s: PlainStoreAsLCBOJson => dbStores.get(s.id)}.flatten
-   val newStores: List[Store] = newsDirtys._1.map{s: PlainStoreAsLCBOJson => create(s)}
-   val dirtyStores: List[Store] = newsDirtys._2.map{s: PlainStoreAsLCBOJson =>
-      val opt = dbStores.get(s.id)
-      val l: Option[Store] = opt.map({p => val t: Store = copyAttributes(p, s); t})
-      l
-    }.flatten // Option is an Iterable, we exploit this.
+    val newsDirtys = cleanOthers._2.partition{ s => !dbStores.contains(s.id)}
+
+    val cleanStores: List[Store] = cleanOthers._1.flatMap{ getStore(_)}
+    val newStores = newsDirtys._1.map{ create(_)}
+    val dirtyStores = newsDirtys._2.flatMap{s =>
+      getStore(s).map({ copyAttributes(_, s)})
+    } // Option is an Iterable, we exploit this.
 
     // after a bit of gymnastics, get the map of stores indexed properly by state that we need
     // having accumulated over the pages so far.
-   val newAccumItems = Map[StoreState, List[Store]]((New -> (accumItems(New) ++ newStores) ),
-     (Dirty -> (accumItems(Dirty) ++ dirtyStores) ), (Clean -> (accumItems(Clean) ++ cleanStores) ))
-
+    val newAccumItems = Map[StoreState, List[Store]]((New -> (accumItems(New) ++ newStores) ),
+      (Dirty -> (accumItems(Dirty) ++ dirtyStores) ), (Clean -> (accumItems(Clean) ++ cleanStores) ))
 
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
 
     if (pageStoreSeq.isEmpty || isFinalPage) return newAccumItems  // no need to look at more pages
-
 
     collectStoresOnAPage(
       dbStores,
