@@ -99,7 +99,20 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
                                  longitude: Double = 0.0,
                                  name: String = "",
                                  address_line_1: String = "",
-                                 city: String = "") {}
+                                 city: String = "") {
+
+  def getStore(dbStores: Map[Int, Store]) = dbStores.get(id)
+
+  def getStoreState(dbStores: Map[Int, Store]): StoreState = {
+    val o = getStore(dbStores)
+    o match {
+      case None => New
+      case Some(s) if s.isDirty(this) => Dirty
+      case _ => Clean
+    }
+
+  }
+}
 
 class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedUpdated[Store]  {
   def meta = Store
@@ -125,7 +138,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 
-  private def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
+  def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
     is_dead.get != s.is_dead ||
     address_line_1.get != s.address_line_1
   }
@@ -310,18 +323,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
     // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
     val pageStoreSeq = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}
-    // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update).
-    def getStore(s: PlainStoreAsLCBOJson) = dbStores.get(s.id)
 
-    val cleanOthers = pageStoreSeq.partition{ s => isClean(s, getStore(s)) }
+    // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
+    val storesByState: Map[StoreState, List[PlainStoreAsLCBOJson]] = pageStoreSeq.groupBy{s: PlainStoreAsLCBOJson => s.getStoreState(dbStores)}
+    val emptyLCBOList = List[PlainStoreAsLCBOJson]()
+    val cleanStores: List[Store] = storesByState.getOrElse(Clean, emptyLCBOList).flatMap{ _.getStore(dbStores)}
 
-    val newsDirtys = cleanOthers._2.partition{ s => !dbStores.contains(s.id)}
+    val newStores: List[Store] = storesByState.getOrElse(New, emptyLCBOList).map{ create(_)}
 
-    val cleanStores: List[Store] = cleanOthers._1.flatMap{ getStore(_)}
-    val newStores = newsDirtys._1.map{ create(_)}
-    val dirtyStores = newsDirtys._2.flatMap{s =>
-      getStore(s).map({ copyAttributes(_, s)})
-    } // Option is an Iterable, we exploit this.
+    val dirtyStores: List[Store] = storesByState.getOrElse(Dirty, emptyLCBOList).flatMap{s => s.getStore(dbStores).map({ copyAttributes(_, s)})}
 
     // after a bit of gymnastics, get the map of stores indexed properly by state that we need
     // having accumulated over the pages so far.
