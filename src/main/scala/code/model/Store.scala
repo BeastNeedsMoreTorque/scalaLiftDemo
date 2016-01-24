@@ -30,14 +30,7 @@ import code.snippet.SessionCache.theStoreId
   * This is captured from JSON parsing.
   */
 
-// to denote whether a Store requires to be inserted (New), updated (Dirty), or is good as is (Clean)
-// We associate such state by comparing our Store with LCBO fresh data and place collections of stores
-// in same bucket to do batch updates (insert on New or update on Dirty and no-op on Clean)
-// to Squeryl.
-sealed trait StoreState
-object New extends StoreState
-object Dirty extends StoreState
-object Clean extends StoreState
+
 
 case class StoreAsLCBOJson (id: Int = 0,
                  is_dead: Boolean = true,
@@ -102,16 +95,6 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
                                  city: String = "") {
 
   def getStore(dbStores: Map[Int, Store]) = dbStores.get(id)
-
-  def getStoreState(dbStores: Map[Int, Store]): StoreState = {
-    val o = getStore(dbStores)
-    o match {
-      case None => New
-      case Some(s) if s.isDirty(this) => Dirty
-      case _ => Clean
-    }
-
-  }
 }
 
 class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedUpdated[Store]  {
@@ -172,8 +155,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val storeLoadWorkers = Props.getInt("store.load.workers", 1)
   private val synchLcbo = Props.getBool("store.synchLcbo", true)
 
+
   // would play a role if user selects a store from a map. A bit of an exercise for caching and threading for now.
   private val storesCache: concurrent.Map[Int, Store] = TrieMap[Int, Store]()
+
+  def fetchItems(state: EntityRecordState,
+                 mapList: Map[EntityRecordState, List[PlainStoreAsLCBOJson]],
+                 f: PlainStoreAsLCBOJson => Option[Store] ): List[Store] =
+    mapList.getOrElse(state, Nil).flatMap{ f(_)}
 
   def init() = { // could help queries find(lcbo_id)
     def synchronizeData(idx: Int, dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
@@ -181,25 +170,21 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val url = s"$LcboDomainURL/stores?"
       tryo {
         // gather stores on this page (url, idx) with classification as to whether they are new, dirty or clean
-        val initMap = Map[StoreState, List[Store]]((New -> List[Store]()), (Dirty -> List[Store]()), (Clean -> List[Store]()))
+        val initMap = Map[EntityRecordState, List[Store]](New -> Nil, Dirty -> Nil, Clean -> Nil)
         val lcboStoresPerWorker = collectStoresOnAPage(dbStores, initMap, url, idx)
         logger.trace(s"done loading to LCBO")
 
         // 0.9 sec to do this work with 1 thread (going to DB one by one). With 2 threads and batch access to DB went down to 0.250 sec
         // on about 400 records to update and 650 records total. When no change is required to DB, this would take 0.200 sec. (MacBook Air 2010)
-        // Access to LCBO seems much faster in morning with a fully charged computer.
         // With more complex solution, whole thing takes 2.7 secs and about 170 ms on db side end processing (best case).
-        // identify the dirty and new stores for batch update and then retain all of them as the set identified by the worker
-        val cleanStores: List[Store] = lcboStoresPerWorker(Clean)
-        val dirtyStores: List[Store] = lcboStoresPerWorker(Dirty)
-        val newStores: List[Store] = lcboStoresPerWorker(New)
+        // identify the dirty and new stores for batch update and then retain all of them as the set identified by the worker (not visibly slower than when there is no change to DB)
         inTransaction {
           // for the activity on separate thread for synchronizeData
           // batch update the database now.
-          updateStores(dirtyStores)
-          insertNewStores(newStores)
+          updateStores(lcboStoresPerWorker(Dirty))
+          insertNewStores(lcboStoresPerWorker(New))
         }
-        (cleanStores ++ dirtyStores ++ newStores).map(s => (s.lcbo_id.get -> s)).toMap
+        lcboStoresPerWorker.values.flatten.map(s => s.lcbo_id.get -> s).toMap // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
       }
     }
 
@@ -283,9 +268,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     itemNodes.map(_.extract[StoreAsLCBOJson])
   }
 
-  def isClean(s: PlainStoreAsLCBOJson, ourCachedStore: Option[Store]): Boolean =
-    ourCachedStore.fold {false }{ ! _.isDirty(s)} // fold defaults to false because the meaning here is that is New therefore not clean (existing and valid)
-
   @tailrec
   def updateStores(myStores: Iterable[Store]): Unit = {
     val slice = myStores.take(DBBatchSize)
@@ -313,9 +295,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // we declare types fairly often in the following because it's not trivial to follow otherwise
   @scala.annotation.tailrec
   private final def collectStoresOnAPage(dbStores: Map[Int, Store],
-                                         accumItems: Map[StoreState, List[Store]],
+                                         accumItems: Map[EntityRecordState, List[Store]],
                                          urlRoot: String,
-                                         pageNo: Int): Map[StoreState, List[Store]] = {
+                                         pageNo: Int): Map[EntityRecordState, List[Store]] = {
     val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)
     logger.info(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
@@ -325,26 +307,28 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val pageStoreSeq = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}
 
     // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-    val storesByState: Map[StoreState, List[PlainStoreAsLCBOJson]] = pageStoreSeq.groupBy{s: PlainStoreAsLCBOJson => s.getStoreState(dbStores)}
-    val emptyLCBOList = List[PlainStoreAsLCBOJson]()
-    val cleanStores: List[Store] = storesByState.getOrElse(Clean, emptyLCBOList).flatMap{ _.getStore(dbStores)}
+    val storesByState: Map[EntityRecordState, List[PlainStoreAsLCBOJson]] = pageStoreSeq.groupBy {
+      s => (dbStores.get(s.id), s) match {
+        case (None, _)  => New
+        case (Some(store), lcboStore) if store.isDirty(lcboStore) => Dirty
+        case (_ , _) => Clean
+      }
+    }
 
-    val newStores: List[Store] = storesByState.getOrElse(New, emptyLCBOList).map{ create(_)}
+    val cleanStores = accumItems(Clean) ++ fetchItems(Clean, storesByState, s => s.getStore(dbStores))
+    val dirtyStores = accumItems(Dirty) ++ fetchItems(Dirty, storesByState, s => s.getStore(dbStores).map(copyAttributes(_, s) ))
+    val newStores = accumItems(New) ++ (storesByState.getOrElse(New, Nil)).map{ create }
 
-    val dirtyStores: List[Store] = storesByState.getOrElse(Dirty, emptyLCBOList).flatMap{s => s.getStore(dbStores).map({ copyAttributes(_, s)})}
-
-    // after a bit of gymnastics, get the map of stores indexed properly by state that we need
-    // having accumulated over the pages so far.
-    val newAccumItems = Map[StoreState, List[Store]]((New -> (accumItems(New) ++ newStores) ),
-      (Dirty -> (accumItems(Dirty) ++ dirtyStores) ), (Clean -> (accumItems(Clean) ++ cleanStores) ))
+    // after preliminaries, get the map of stores indexed properly by state that we need having accumulated over the pages so far.
+    val revisedAccumItems = Map(New -> newStores, Dirty -> dirtyStores, Clean -> cleanStores)
 
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
 
-    if (pageStoreSeq.isEmpty || isFinalPage) return newAccumItems  // no need to look at more pages
+    if (pageStoreSeq.isEmpty || isFinalPage) return revisedAccumItems  // no need to look at more pages
 
     collectStoresOnAPage(
       dbStores,
-      newAccumItems,
+      revisedAccumItems,
       urlRoot,
       pageNo + storeLoadWorkers) // union of this page with next page when we are asked for a full sample
   }
