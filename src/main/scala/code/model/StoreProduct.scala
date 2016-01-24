@@ -26,14 +26,14 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
 object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] {
   private val DBBatchSize = Props.getInt("storeProduct.DBBatchSize", 1)
 
-  def create(storeId: Long, p: Product, inv: Int): StoreProduct = {
-    createRecord.storeid(storeId).productid(p.id).inventory(inv)
+  def create(storeId: Long, p: Product): StoreProduct = {
+    createRecord.storeid(storeId).productid(p.id).inventory(p.inventory.get)
   }
 
   // simply insert storeid, productid but also the inventory, that is the Int carried in myProducts 2nd component.
   @tailrec
   def insertStoreProducts(storeId: Long, myProducts: Iterable[(Product, Int)]): Unit = {
-    val slice: Iterable[StoreProduct] = myProducts.take(DBBatchSize).map(x =>  create(storeId, x._1, x._2) )
+    val slice: Iterable[StoreProduct] = myProducts.take(DBBatchSize).map(x =>  create(storeId, x._1) )
     storeProducts.insert(slice)
     val rest = myProducts.takeRight(myProducts.size - slice.size)
     if (!rest.isEmpty) insertStoreProducts(storeId, rest)

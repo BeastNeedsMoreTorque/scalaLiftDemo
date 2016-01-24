@@ -110,6 +110,8 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 
+  val inventory = new IntField(this)
+
   // intentional aliasing allowing more standard naming convention.
   def primaryCategory = primary_category
   def isDiscontinued = is_discontinued
@@ -141,6 +143,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   def createProductElemVals: List[(String, String)] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
     (("Name: ", name.get) ::
+      ("Inventory: ", inventory.toString ) ::
       ("Primary Category: ", primary_category.get) ::
       ("Secondary Category: ", secondary_category.get) ::
       ("Varietal: ", varietal.get) ::
@@ -234,7 +237,8 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       secondary_category(p.secondary_category).
       varietal(p.varietal).
       description(p.description).
-      serving_suggestion(p.serving_suggestion)
+      serving_suggestion(p.serving_suggestion).
+      inventory(p.inventory_count)
   }
   /**
     * persist a product to database handling insert or update depending on whether the entry exists already or not.
