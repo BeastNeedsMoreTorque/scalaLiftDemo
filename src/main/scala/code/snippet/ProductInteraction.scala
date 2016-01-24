@@ -20,7 +20,6 @@ import scala.xml._
   * Created by philippederome on 15-10-26.
   */
 object ProductInteraction extends Loggable {
-  private val maxSampleSize = Props.getInt("product.maxSampleSize", 10)
 
   private val interactionsToImgMap: Map[String, String] = {
     val interactionsToImgMapAsStr = Props.get("product.interactionsImageMap", "") // get it in JSON format
@@ -43,7 +42,7 @@ object ProductInteraction extends Loggable {
       * @return a JsCmd that is JavaScript Lift will execute
       */
     def prodAttributesJS(p: Product) = {
-      val nodeSeq = for (x <- p.createProductElemVals) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>
+      val nodeSeq = for (x <-  p.createProductElemVals ++ List(("Inventory: ", 6.toString )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>
       SetHtml("prodAttributes", nodeSeq)
     }
     def prodDisplayJS(prod: Product) =
@@ -62,7 +61,7 @@ object ProductInteraction extends Loggable {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
           transactionConfirmation.set("")
-          val prod = Store.recommend(maxSampleSize, theStoreId.is, theCategory.is) match {
+          val prod = Store.recommend(theStoreId.is, theCategory.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
             case Full(p) => Full(p) // returns prod normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
@@ -93,7 +92,7 @@ object ProductInteraction extends Loggable {
 
     def consume() = {
       def mayConsume(p: Product): JsCmd = {
-        Product.consume(p) match {
+        UserProduct.consume(p) match {
           case Full((userName, count)) =>
             transactionConfirmation.set(s"${p.name} has now been purchased $count time(s), $userName")
             theProduct.set(Empty)

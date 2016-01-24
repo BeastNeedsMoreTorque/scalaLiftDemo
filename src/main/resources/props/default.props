@@ -14,7 +14,6 @@ lcboDomainURL=http://lcboapi.com
 radio.selectClass=thickBorder
 radio.unselectClass=thinBorder
 
-product.maxSampleSize=150
 # implied with LCBO tests
 product.lcboMaxPerPage=100
 # implied with LCBO tests
@@ -32,7 +31,7 @@ product.DBBatchSize=500
 
 product.cacheSize=20000
 
-store.maxSampleSize=3
+store.maxSampleSize=150
 store.synchLcbo=true
 store.lcboMaxPerPage=100
 store.lcboMinPerPage=10

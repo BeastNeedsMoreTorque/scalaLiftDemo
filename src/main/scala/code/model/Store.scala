@@ -231,9 +231,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category.
     * @return
     */
-  def recommend(maxSampleSize: Int, storeId: Long, category: String): Box[Product] = {
+  def recommend(storeId: Long, category: String): Box[Product] = {
     // note: cacheSuccess grabs a lock
-    def cacheSuccess(maxSampleSize: Int, storeId: Long, category: String): Option[Product] = {
+    def cacheSuccess(storeId: Long, category: String): Option[Product] = {
       if (storeCategoriesProductsCache.contains((storeId, category)) && !storeCategoriesProductsCache((storeId, category)).isEmpty) {
         val prodIds = storeCategoriesProductsCache((storeId, category))
         val randomIndex = Random.nextInt(math.max(1, prodIds.size))
@@ -244,11 +244,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     }
 
     tryo {
-      cacheSuccess(maxSampleSize, storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
+      cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
-        val randomIndex = Random.nextInt(math.max(1, maxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
+        val randomIndex = Random.nextInt(math.max(1, MaxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
         val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
-        val randKey = prods.keySet.takeRight(1).head
+        val randKey = prods.keySet.takeRight(randomIndex+1).head
         prods(randKey)
       }
     }
@@ -449,8 +449,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
         !p.is_discontinued
       } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
-      val initMap = Map[EntityRecordState, List[(Product, Int)]](New -> Nil, Clean -> Nil, Dirty -> Nil)
-      val items: Map[EntityRecordState, List[(Product, Int)]] = collectItemsOnAPage(
+      val initMap = Map[EntityRecordState, List[Product]](New -> Nil, Clean -> Nil, Dirty -> Nil)
+      val items = collectItemsOnAPage(
         Map[Int, Product](),  // suppress reconciliation with database, just trust LCBO now.
         initMap,
         url,
@@ -458,8 +458,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         pageNo = 1,
         pageDelta = 1,
         filter)
-      val productInventories: Iterable[(Product, Int)] = items.values.take(requiredSize).flatten // we don't care about Clean/New/Dirty state here so flatten values.
-      productInventories.map( _._1).map(p => p.lcbo_id.get -> p).toMap  // remove inventory, then build a map for each product using lcbo_id as key.
+      val productInventories: Iterable[Product] = items.values.take(requiredSize).flatten // we don't care about Clean/New/Dirty state here so flatten values.
+      productInventories.map(p => p.lcbo_id.get -> p).toMap  // build a map for each product using lcbo_id as key.
     }
   }
 
@@ -482,12 +482,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private def productListByStore(dbProducts: Map[Int, Product],
                                  requiredSize: Int,
                                  store: Long,
-                                 page: Int): Map[EntityRecordState, List[(Product, Int)]] = {
+                                 page: Int): Map[EntityRecordState, List[Product]] = {
     if (requiredSize <= 0) Map()
     else {
       val url = s"$LcboDomainURL/products?store_id=$store"
       val filter = { p: ProductAsLCBOJson => !p.is_discontinued } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
-      val initMap = Map[EntityRecordState, List[(Product, Int)]] (New -> Nil, Dirty -> Nil, Clean -> Nil)
+      val initMap = Map[EntityRecordState, List[Product]] (New -> Nil, Dirty -> Nil, Clean -> Nil)
 
       collectItemsOnAPage(
         dbProducts,
@@ -528,18 +528,17 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @scala.annotation.tailrec
   private final def collectItemsOnAPage(dbProducts: Map[Int, Product],
-                                        accumItems: Map[EntityRecordState, List[(Product, Int)]],
+                                        accumItems: Map[EntityRecordState, List[Product]],
                                         urlRoot: String,
                                         requiredSize: Int,
                                         pageNo: Int,
                                         pageDelta: Int = 1,
-                                        myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): Map[EntityRecordState, List[(Product, Int)]] = {
+                                        myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): Map[EntityRecordState, List[Product]] = {
     def nextPage() = pageNo + prodLoadWorkers
     def fetchItems(state: EntityRecordState,
                    mapList: Map[EntityRecordState, List[ProductAsLCBOJson]],
-                   f: ProductAsLCBOJson => Option[Product] ): List[(Product, Int)] = {
-      val l: List[(Option[Product], Int)] = mapList.getOrElse(state, Nil).map { p => (f(p), p.inventory_count) }
-      for (item <- l; p <- item._1) yield (p, item._2) // remove the Option in Option[Product] from list l
+                   f: ProductAsLCBOJson => Option[Product] ): List[Product] = {
+      mapList.getOrElse(state, Nil).flatMap { p => f(p) } // remove the Option in Option[Product]
     }
 
     if (requiredSize <= 0) accumItems
@@ -567,10 +566,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    val cleanProducts: List[(Product, Int)] = accumItems(Clean) ++ fetchItems(Clean, productsByState, {p => p.getProduct(dbProducts)})
-    val dirtyProducts: List[(Product, Int)] = accumItems(Dirty) ++ fetchItems(Dirty, productsByState, {p => p.getProduct(dbProducts).map({ _.copyAttributes( p)})})
-    val newProducts: List[(Product, Int)] = accumItems(New) ++ productsByState.getOrElse(New, Nil).map{ p => (Product.create(p), p.inventory_count) }
-    val revisedAccumItems: Map[EntityRecordState, List[(Product, Int)]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
+    val cleanProducts: List[Product] = accumItems(Clean) ++ fetchItems(Clean, productsByState, {p => p.getProduct(dbProducts)})
+    val dirtyProducts: List[Product] = accumItems(Dirty) ++ fetchItems(Dirty, productsByState, {p => p.getProduct(dbProducts).map({ _.copyAttributes( p)})})
+    val newProducts: List[Product] = accumItems(New) ++ productsByState.getOrElse(New, Nil).map{ p => Product.create(p) }
+    val revisedAccumItems: Map[EntityRecordState, List[Product]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
 
     if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) return revisedAccumItems
     // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (when we gap due to parallelism).
@@ -587,7 +586,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       myFilter) // union of this page with next page when we are asked for a full sample
   }
 
-  def loadAll(dbProducts: Map[Int, Product], requestSize: Int, storeId: Long, idx: Int): Box[Map[EntityRecordState, List[(Product, Int)]]] =
+  def loadAll(dbProducts: Map[Int, Product], requestSize: Int, storeId: Long, idx: Int): Box[Map[EntityRecordState, List[Product]]] =
     tryo { productListByStore(dbProducts, requestSize, storeId, idx) }
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
@@ -611,18 +610,18 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         if (synchLcbo) {
           loadAll(dbProducts, productCacheSize, storeId, page) match {
             case Full(m) =>  // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-              for ((k, v) <- m) { // v List[(Product, Int)] containing product and inventory at given store as Int.
+              for ((k, v) <- m) { // v List[Product] containing product
                 k match {
                   case New =>
-                    insertNewProducts(v.filter({pair => !allDbProductIds.contains(pair._1.lcbo_id.get)} ).map(_._1)) // insert to DB those we didn't get in our query to obtain allDbProducts
-                    StoreProduct.insertStoreProducts(storeId, v) // now we can insert relationship of store-product with an inventory
+                    insertNewProducts(v.filter({p => !allDbProductIds.contains(p.lcbo_id.get)} )) // insert to DB those we didn't get in our query to obtain allDbProducts
+                    StoreProduct.insertStoreProducts(storeId, v.map(p => (p, 10))) // now we can insert relationship of store-product with an inventory of 10
                   case Dirty =>
-                    updateProducts(v.map(_._1))  // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
+                    updateProducts(v)  // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
                   case _ => ; // no-op if clean
                 }
               }
               // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
-              m.values.flatten.map(p => p._1.lcbo_id.get -> p._1).toMap // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
+              m.values.flatten.map(p => p.lcbo_id.get -> p).toMap // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
             case Failure(m, ex, _) =>
               logger.error(s"Problem loading products into cache with message $m and exception error $ex")
               Map[Int, Product]()
@@ -646,7 +645,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {
       // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
-      val initialParallelPages = (1 to prodLoadWorkers).toList  // e.g. (0,1,2,3) when using 4 threads, used to aggregate the results of each thread.
+      val initialParallelPages = (1 to prodLoadWorkers).toList  // e.g. (1,2,3,4) when using 4 threads, used to aggregate the results of each thread.
       val allTheProductsByCategory = Future.traverse(initialParallelPages)(productsByWorker)
 
       // we assume all along and depend strongly on that, that we never remove from cache. Updates that are strictly monotonic are easier to get right.
