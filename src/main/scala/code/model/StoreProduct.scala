@@ -1,13 +1,14 @@
 package code.model
 
 import code.model.MainSchema._
-import net.liftweb.db.DB
-import net.liftweb.record.field.LongField
+import net.liftweb.record.field.{LongField,IntField}
 import net.liftweb.record.{Record, MetaRecord}
-import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.squerylrecord.KeyedRecord
-import net.liftweb.util.DefaultConnectionIdentifier
+import net.liftweb.util.Props
 import org.squeryl.annotations.Column
+
+import scala.annotation.tailrec
+import scala.collection.Iterable
 
 class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long] with CreatedUpdated[StoreProduct] {
   def meta = StoreProduct
@@ -19,25 +20,24 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
 
   val storeid = new LongField(this)
   val productid = new LongField(this)
-  val inventory = new LongField(this)
+  val inventory = new IntField(this)
 }
 
 object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] {
+  private val DBBatchSize = Props.getInt("storeProduct.DBBatchSize", 1)
 
-  // absent means not there as usual in English but has no special concurrency connotation whatsoever.
-  def insertIfAbsent(storeId: Long, prodId: Long, inventory: Long): StoreProduct = {
-    DB.use(DefaultConnectionIdentifier) { connection =>
-      val rec = storeProducts.
-        where( (sp: StoreProduct) => sp.storeid === storeId and sp.productid === prodId ).
-        forUpdate.headOption // Load from DB if available, else create it Squeryl very friendly DSL syntax!
-      rec.fold  {
-        val q = createRecord.storeid(storeId).productid(prodId).inventory(inventory)
-        q.save
-        q
-      } { identity } // don't try to update for now
-    }
+  def create(storeId: Long, p: Product, inv: Int): StoreProduct = {
+    createRecord.storeid(storeId).productid(p.id).inventory(inv)
   }
 
+  // simply insert storeid, productid but also the inventory, that is the Int carried in myProducts 2nd component.
+  @tailrec
+  def insertStoreProducts(storeId: Long, myProducts: Iterable[(Product, Int)]): Unit = {
+    val slice: Iterable[StoreProduct] = myProducts.take(DBBatchSize).map(x =>  create(storeId, x._1, x._2) )
+    storeProducts.insert(slice)
+    val rest = myProducts.takeRight(myProducts.size - slice.size)
+    if (!rest.isEmpty) insertStoreProducts(storeId, rest)
+  }
 
 }
 
