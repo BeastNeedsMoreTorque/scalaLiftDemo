@@ -41,13 +41,13 @@ object ProductInteraction extends Loggable {
       * @param p Product
       * @return a JsCmd that is JavaScript Lift will execute
       */
-    def prodAttributesJS(p: Product) = {
-      val nodeSeq = for (x <-  p.createProductElemVals ++ List(("Inventory: ", 6.toString )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>
+    def prodAttributesJS(p: Product, quantity: Int) = {
+      val nodeSeq = for (x <-  p.createProductElemVals ++ List(("Quantity: ", quantity )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>
       SetHtml("prodAttributes", nodeSeq)
     }
-    def prodDisplayJS(prod: Product) =
+    def prodDisplayJS(prod: Product, quantity: Int) =
       SetHtml("prodImg", <img src={prod.imageThumbUrl.get}/>) &
-      prodAttributesJS(prod) &
+      prodAttributesJS(prod, quantity) &
       JsShowId("prodDisplay")
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
@@ -61,16 +61,17 @@ object ProductInteraction extends Loggable {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
           transactionConfirmation.set("")
-          val prod = Store.recommend(theStoreId.is, theCategory.is) match {
+          val prodInv = Store.recommend(theStoreId.is, theCategory.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
-            case Full(p) => Full(p) // returns prod normally
+            case Full(pair) => Full((pair._1, pair._2)) // returns prod and quantity in inventory normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
             case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
           }
-          prod.dmap { Noop }
-          { p: Product => theProduct.set(Full(p))
+          prodInv.dmap { Noop }
+          { pair: (Product, Int) => theProduct.set(Full(pair._1))
+                          theProductInventory.set(pair._2)
                           S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-                          prodDisplayJS(p)
+                          prodDisplayJS(pair._1, pair._2)
           }
         }
         else {
@@ -84,7 +85,7 @@ object ProductInteraction extends Loggable {
       else {
         theProduct.is.dmap { maySelect() & transactionConfirmationJS } // normal processing
         { p => S.notice("recommend", "Cancel or consume prior to a secondary recommendation")
-            prodDisplayJS(p) // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
+            prodDisplayJS(p, theProductInventory.is) // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
           // for a series of clicks on button before we have time to disable it
         }
       }

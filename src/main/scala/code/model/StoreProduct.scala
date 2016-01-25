@@ -8,7 +8,27 @@ import net.liftweb.util.Props
 import org.squeryl.annotations.Column
 
 import scala.annotation.tailrec
-import scala.collection.Iterable
+import scala.collection.{Map, Iterable}
+
+case class InventoryAsLCBOJson(product_id: Int,
+                               store_id: Int,
+                               is_dead: Boolean,
+                               updated_on: String,
+                               quantity: Int) {
+  def removeNulls: InventoryAsLCBOJson = {
+    // remove LCBO's poisoned null strings
+    def notNull(s: String) = if (s eq null) "" else s
+
+    InventoryAsLCBOJson(
+      product_id,
+      store_id,
+      is_dead,
+      notNull(updated_on),
+      quantity)
+  }
+  // dbStoreProducts is assumed bound to a StoreId, so we can key simply by product_id
+  def getProduct(dbStoreProducts: Map[Int, StoreProduct]) = dbStoreProducts.get(product_id)
+}
 
 class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long] with CreatedUpdated[StoreProduct] {
   def meta = StoreProduct
@@ -18,27 +38,43 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
 
   lazy val product = MainSchema.productToStoreProducts.right(this)
 
-  val storeid = new LongField(this)
-  val productid = new LongField(this)
-  val inventory = new IntField(this)
+  val storeid = new IntField(this)
+  val productid = new IntField(this)
+  val quantity = new IntField(this)
+
+  def isDirty(inv: InventoryAsLCBOJson): Boolean =
+    quantity.get != inv.quantity
+
+  def copyAttributes(inv: InventoryAsLCBOJson): StoreProduct = {
+    quantity.set(inv.quantity)
+    this
+  }
 }
 
 object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] {
   private val DBBatchSize = Props.getInt("storeProduct.DBBatchSize", 1)
 
-  def create(storeId: Long, p: Product, inv: Int): StoreProduct = {
-    createRecord.storeid(storeId).productid(p.id).inventory(inv)
-  }
+  def create(inv: InventoryAsLCBOJson): StoreProduct =
+    createRecord.
+      storeid(inv.store_id).
+      productid(inv.product_id).
+      quantity(inv.quantity)
 
-  // simply insert storeid, productid but also the inventory, that is the Int carried in myProducts 2nd component.
   @tailrec
-  def insertStoreProducts(storeId: Long, myProducts: Iterable[(Product, Int)]): Unit = {
-    val slice: Iterable[StoreProduct] = myProducts.take(DBBatchSize).map(x =>  create(storeId, x._1, x._2) )
-    storeProducts.insert(slice)
-    val rest = myProducts.takeRight(myProducts.size - slice.size)
-    if (!rest.isEmpty) insertStoreProducts(storeId, rest)
+  def updateStoreProducts(myStoreProducts: Iterable[StoreProduct]): Unit = {
+    val slice = myStoreProducts.take(DBBatchSize)
+    storeProducts.update(slice)
+    val rest = myStoreProducts.takeRight(myStoreProducts.size - slice.size)
+    if (!rest.isEmpty) updateStoreProducts( rest)
   }
 
+  @tailrec
+  def insertStoreProducts(myStoreProducts: Iterable[StoreProduct]): Unit = {
+    val slice: Iterable[StoreProduct] = myStoreProducts.take(DBBatchSize)
+    storeProducts.insert(slice)
+    val rest = myStoreProducts.takeRight(myStoreProducts.size - slice.size)
+    if (!rest.isEmpty) insertStoreProducts(rest)
+  }
 }
 
 
