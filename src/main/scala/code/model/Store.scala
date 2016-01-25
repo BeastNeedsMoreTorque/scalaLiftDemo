@@ -497,7 +497,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         page, // programmer client is assumed to know we use this as a page.
         prodLoadWorkers,
         filter).take(requiredSize)
-
     }
   }
 
@@ -566,10 +565,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    val cleanProducts: List[Product] = accumItems(Clean) ++ fetchItems(Clean, productsByState, {p => p.getProduct(dbProducts)})
-    val dirtyProducts: List[Product] = accumItems(Dirty) ++ fetchItems(Dirty, productsByState, {p => p.getProduct(dbProducts).map({ _.copyAttributes( p)})})
-    val newProducts: List[Product] = accumItems(New) ++ productsByState.getOrElse(New, Nil).map{ p => Product.create(p) }
-    val revisedAccumItems: Map[EntityRecordState, List[Product]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
+    val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, productsByState, {p => p.getProduct(dbProducts)})
+    val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, productsByState, {p => p.getProduct(dbProducts).map({ _.copyAttributes( p)})})
+    val newProducts = accumItems(New) ++ productsByState.getOrElse(New, Nil).map{ p => Product.create(p) }
+    val revisedAccumItems = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
 
     if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) return revisedAccumItems
     // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (when we gap due to parallelism).
@@ -595,12 +594,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def loadCache(storeId: Long) = {
 
     // Uses convenient Squeryl native Scala ORM for a simple 2-table join.
-    def GetStoreProductsFromDB: Map[Int, Product] =
+    def GetStoreProductsFromDB: Map[Int, (Product, StoreProduct)] =
       inTransaction {
         val prods = from(storeProducts, products)((sp, p) =>
           where(sp.storeid === storeId and sp.productid === p.lcbo_id  )
-            select(p))
-        prods.map(p => p.lcbo_id.get -> p).toMap
+            select (p, sp) )
+        prods.map(pair => pair._1.lcbo_id.get -> pair).toMap
       }
 
 
@@ -634,12 +633,17 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         else Map[Int, Product]()
       }
 
-    val dbProducts: Map[Int, Product] = GetStoreProductsFromDB
+    val dbProducts: Map[Int, (Product, StoreProduct)] = GetStoreProductsFromDB
     val allDbProductIds: Set[Int] = inTransaction { products.map(_.lcbo_id.get).toSet } // this "products" is actually a query.
 
     // evaluate the maps of product in parallel, tracking them by product id (lcbo_id) as key but in order to be able to cache them by category when aggregating results back.
-    def productsByWorker(idx: Int): Future[ Map[Int, Product]] =
-      Future { getProductsOfStartPage(idx, dbProducts, allDbProductIds) }
+    def productsByWorker(idx: Int): Future[ Map[Int, Product]] = {
+      def restrictToProds(dbProducts: Map[Int, (Product, StoreProduct)]) =
+        for ((k, v) <- dbProducts) yield (k, v._1)
+      Future {
+        getProductsOfStartPage(idx, restrictToProds(dbProducts), allDbProductIds)
+      }
+    }
 
     logger.trace(s"loadCache start $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
     if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {
