@@ -1,6 +1,6 @@
 package code.snippet
 
-import code.model.{StoreAsLCBOJson, Product}
+import code.model.Product
 import net.liftweb.common.{Empty, Box}
 import net.liftweb.http.SessionVar
 import net.liftweb.util.Props
@@ -15,5 +15,7 @@ object SessionCache {
   object theCategory extends SessionVar[String](defaultCategory)
   object theStoreId extends SessionVar[Int](defaultStore)
   object theProduct extends SessionVar[Box[Product]](Empty)
+  object theProductInventory extends SessionVar[Int](0)
+
   object transactionConfirmation extends SessionVar[String]("")
 }

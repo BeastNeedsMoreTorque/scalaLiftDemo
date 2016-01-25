@@ -32,8 +32,7 @@ case class ProductAsLCBOJson(id: Int,
                              varietal: String,
                              price_in_cents: Int,
                              alcohol_content: Int,
-                             volume_in_milliliters: Int,
-                             inventory_count: Int) {
+                             volume_in_milliliters: Int) {
   def removeNulls: ProductAsLCBOJson = { // remove LCBO's poisoned null strings
     def notNull(s: String) = if (s eq null) "" else s
 
@@ -51,8 +50,7 @@ case class ProductAsLCBOJson(id: Int,
       notNull(varietal),
       price_in_cents,
       alcohol_content,
-      volume_in_milliliters,
-      inventory_count)
+      volume_in_milliliters)
   }
 
   def getProduct(dbProducts: Map[Int, Product]) = dbProducts.get(id)
@@ -100,8 +98,6 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   val serving_suggestion = new StringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
   override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
-
-  val inventory = new IntField(this)
 
   // intentional aliasing allowing more standard naming convention.
   def primaryCategory = primary_category
@@ -232,8 +228,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       secondary_category(p.secondary_category).
       varietal(p.varietal).
       description(p.description).
-      serving_suggestion(p.serving_suggestion).
-      inventory(p.inventory_count)
+      serving_suggestion(p.serving_suggestion)
   }
 
 
