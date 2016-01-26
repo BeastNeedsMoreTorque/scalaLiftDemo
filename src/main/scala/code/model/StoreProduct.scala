@@ -1,6 +1,11 @@
 package code.model
 
+import java.io.IOException
+import java.net.SocketTimeoutException
+
+import code.Rest.pagerRestClient
 import code.model.MainSchema._
+import net.liftweb.common.Loggable
 import net.liftweb.record.field.{LongField,IntField}
 import net.liftweb.record.{Record, MetaRecord}
 import net.liftweb.squerylrecord.KeyedRecord
@@ -8,7 +13,10 @@ import net.liftweb.util.Props
 import org.squeryl.annotations.Column
 
 import scala.annotation.tailrec
-import scala.collection.{Map, Iterable}
+import scala.collection.concurrent.TrieMap
+import scala.collection.{concurrent, Map, Iterable}
+import scala.language.implicitConversions
+
 
 case class InventoryAsLCBOJson(product_id: Int,
                                store_id: Int,
@@ -51,8 +59,25 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
   }
 }
 
-object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] {
+object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with pagerRestClient with Loggable {
   private val DBBatchSize = Props.getInt("storeProduct.DBBatchSize", 1)
+  private implicit val formats = net.liftweb.json.DefaultFormats
+
+  // thread-safe lock free objects
+  private val storeProductsCache: concurrent.Map[(Int, Int), StoreProduct] = TrieMap()
+
+  def update(storeId: Int, storeMap: Map[Int, StoreProduct]) =
+    storeProductsCache ++= { for ( (prodId, sp) <- storeMap) yield (storeId, prodId) -> sp }
+
+  // thread somewhat unsafe (harmless race condition because we never remove (so far) and if we miss an insert, it is just a normal timing issue, i.e. returning None just as another thread inserts)
+  def getStoreProduct(storeId: Int, prodId: Int): Option[StoreProduct] = {
+    val pair = (storeId, prodId)
+    if (storeProductsCache.contains(pair)) {
+      Some(storeProductsCache( pair))
+    } else {
+      None
+    }
+  }
 
   def create(inv: InventoryAsLCBOJson): StoreProduct =
     createRecord.
@@ -75,6 +100,18 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] {
     val rest = myStoreProducts.takeRight(myStoreProducts.size - slice.size)
     if (!rest.isEmpty) insertStoreProducts(rest)
   }
+
+  @throws(classOf[SocketTimeoutException])
+  @throws(classOf[IOException])
+  @throws(classOf[ParseException])
+  @throws(classOf[MappingException])
+  def inventoryForStoreProduct(storeId: Int, productId: Int): InventoryAsLCBOJson = {
+    val uri = s"$LcboDomainURL/stores/$storeId/products/$productId/inventory"
+    logger.trace(uri)
+    val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
+    (parse(pageContent) \ "result").extract[InventoryAsLCBOJson] // more throws
+  }
+
 }
 
 

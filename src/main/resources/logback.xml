@@ -17,6 +17,7 @@
     <logger name="code.model" level="info"/>
     <logger name="code.model.Store" level="trace"/>
     <logger name="code.model.Product" level="trace"/>
+    <logger name="code.model.StoreProduct" level="trace"/>
     <logger name="code.snippet" level="info"/>
     <logger name="net.liftweb" level="warn"/>
     <logger name="bootstrap.liftweb" level="info"/>
