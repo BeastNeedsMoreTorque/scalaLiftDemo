@@ -20,6 +20,7 @@ import code.Rest.pagerRestClient
 // helper case class to extract from JSON as REST client to LCBO.
 case class ProductAsLCBOJson(id: Int,
                              is_discontinued: Boolean,
+                             is_dead: Boolean,
                              `package`: String,
                              total_package_units: Int,
                              primary_category: String,
@@ -38,6 +39,7 @@ case class ProductAsLCBOJson(id: Int,
 
     ProductAsLCBOJson(id,
       is_discontinued,
+      is_dead,
       notNull(`package`),
       total_package_units,
       notNull(primary_category),

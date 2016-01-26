@@ -814,7 +814,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           }
           Product.update(fullMap.toMap)
           logger.trace(s"product (store,categories) keys ${storeCategoriesProductsCache.keys}")
-      }
+          fetchInventories(initialParallelPages, dbStoreProducts, allDbProductIds)
+
+          }
 
       allTheProductsByCategory onFailure {
         case t => logger.error("loadCache, an error occurred because: " + t.getMessage)

@@ -37,6 +37,7 @@ store.lcboMaxPerPage=100
 store.lcboMinPerPage=10
 store.DBBatchSize=250
 store.load.workers=2
+store.PositiveInventoryIterations=10
 
 storeProduct.DBBatchSize=200
 
