@@ -155,6 +155,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private implicit val formats = net.liftweb.json.DefaultFormats
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
+  private val PositiveInventoryIterations = Props.getInt("store.PositiveInventoryIterations",  10)
+
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
   private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
   private val storeLoadWorkers = Props.getInt("store.load.workers", 1)
@@ -232,13 +234,22 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     * @return
     */
   def recommend(storeId: Int, category: String): Box[(Product, Int)] = {
+    @tailrec // iterate in sampling until we get a non-zero inventory at the store or we give up after a few trials
+    def sampleWithInventory(trial: Int, prodIds: Set[Int]): Option[(Product, Int)] = {
+      val randomIndex = Random.nextInt(math.max(1, prodIds.size))
+      val prodId = prodIds.takeRight(randomIndex).head // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
+      val quantity = StoreProduct.getStoreProduct(storeId, prodId).fold(0){ _.quantity.get} // they might actually be often out of stock, or it could be dead
+      if (quantity > 0 || trial > PositiveInventoryIterations )
+        for ( p <- Product.getProduct(prodId)) yield (p, quantity)
+      else
+        sampleWithInventory(trial+1, prodIds)
+    }
+
     // note: cacheSuccess grabs a lock
     def cacheSuccess(storeId: Int, category: String): Option[(Product, Int)] = {
       if (storeCategoriesProductsCache.contains((storeId, category)) && !storeCategoriesProductsCache((storeId, category)).isEmpty) {
         val prodIds = storeCategoriesProductsCache((storeId, category))
-        val randomIndex = Random.nextInt(math.max(1, prodIds.size))
-        val prodId = prodIds.takeRight(randomIndex).head // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
-        for ( a <- getProduct(prodId) ) yield (a,12)
+        sampleWithInventory(0, prodIds)
       }
       else Empty
     }
@@ -249,7 +260,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val randomIndex = Random.nextInt(math.max(1, MaxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
         val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
         val randKey = prods.keySet.takeRight(randomIndex+1).head
-        (prods(randKey), 12)
+        val inv = StoreProduct.inventoryForStoreProduct(storeId, randKey)
+        (prods(randKey), inv.quantity)
       }
     }
   }
@@ -506,7 +518,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[MappingException])
   private def storeProductListByStore(dbStoreProducts: Map[Int, StoreProduct],
                                  requiredSize: Int,
-                                 store: Long,
+                                 store: Int,
                                  page: Int): Map[EntityRecordState, List[StoreProduct]] = {
     if (requiredSize <= 0) Map()
     else {
@@ -524,6 +536,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         filter).take(requiredSize)
     }
   }
+
+
   /**
     * LCBO client JSON query handler. So naturally, the code is specifically written with the structure of LCBO documents in mind, with tokens as is.
     * For Liftweb JSON extraction after parse,
@@ -705,7 +719,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                 k match {
                   case New =>
                     insertNewProducts(v.filter({p => !allDbProductIds.contains(p.lcbo_id.get)} )) // insert to DB those we didn't get in our query to obtain allDbProducts
-                //    StoreProduct.insertStoreProducts(storeId, v.map(p => (p, 10))) // now we can insert relationship of store-product with an inventory of 10
                   case Dirty =>
                     updateProducts(v)  // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
                   case _ => ; // no-op if clean
@@ -759,12 +772,26 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     val allDbProductIds: Set[Int] = inTransaction { products.map(_.lcbo_id.get).toSet } // this "products" is actually a query.
 
-    // evaluate the maps of product in parallel, tracking them by product id (lcbo_id) as key but in order to be able to cache them by category when aggregating results back.
-    def productsByWorker(idx: Int): Future[ Map[Int, Product]] =
-      Future { getProductsOfStartPage(idx, dbProducts, allDbProductIds) }
+    def fetchInventories(initialPages: List[Int], dbStoreProducts: Map[Int, StoreProduct], allDbProductIds: Set[Int]) = {
+      val allTheStoreInventories = Future.traverse(initialPages)(storeProductsByWorker)
 
-    def storeProductsByWorker(idx: Int): Future[ Map[Int, StoreProduct]] =
-      Future { getStoreProductsOfStartPage(idx, dbStoreProducts, allDbProductIds) }
+      allTheStoreInventories onSuccess {
+        case maps: Iterable[Map[Int, StoreProduct]] =>
+          val fullMap: Map[Int, StoreProduct] = maps.flatten.toMap
+          StoreProduct.update(storeId, fullMap)
+      }
+
+      allTheStoreInventories onFailure {
+        case t => logger.error("loadCache, an error for inventories occurred because: " + t.getMessage)
+      }
+    }
+
+    // evaluate the maps of product in parallel, tracking them by product id (lcbo_id) as key but in order to be able to cache them by category when aggregating results back.
+    def productsByWorker(page: Int): Future[ Map[Int, Product]] =
+      Future { getProductsOfStartPage(page, dbProducts, allDbProductIds) }
+
+    def storeProductsByWorker(page: Int): Future[ Map[Int, StoreProduct]] =
+      Future { getStoreProductsOfStartPage(page, dbStoreProducts, allDbProductIds) }
 
 
     logger.trace(s"loadCache start $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
