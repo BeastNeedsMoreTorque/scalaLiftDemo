@@ -45,6 +45,8 @@ case class StoreAsLCBOJson (id: Int = 0,
                  address_line_1: String = "",
                  city: String = "",
                  distance_in_meters: Int = 0) {
+  def this(s: Store) = this(s.lcbo_id.get, false, s.latitude.get, s.longitude.get, s.name.get, s.address_line_1.get, s.city.get  )
+
   // intentional aliasing allowing more standard naming convention.
   def isDead = is_dead
 
@@ -72,13 +74,15 @@ case class StoreAsLCBOJson (id: Int = 0,
 }
 
 object StoreAsLCBOJson {
+  def apply(s: Store) = new StoreAsLCBOJson(s)
+
   private implicit val formats = net.liftweb.json.DefaultFormats
 
   /**
     * Convert a store to XML
     */
   implicit def toXml(st: StoreAsLCBOJson): Node =
-    <item>{Xml.toXml(st)}</item>
+    <store>{Xml.toXml(st)}</store>
 
 
   /**
@@ -276,6 +280,18 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       city(s.city).
       latitude(s.latitude).
       longitude(s.longitude)
+  }
+
+  def findInRectangle( lat1: String, lon1: String,
+                 lat2: String, lon2: String): Box[Iterable[StoreAsLCBOJson]] =  {
+    def inRectangle(s: StoreAsLCBOJson): Boolean = {
+      val lat = s.latitude
+      val lon = s.longitude
+
+      lat >= lat1.toDouble && lat <= lat2.toDouble &&
+      lon >= lon1.toDouble && lon <= lon2.toDouble
+    }
+    Full(storesCache.values.map(s => StoreAsLCBOJson(s)).filter(inRectangle))
   }
 
   /**
