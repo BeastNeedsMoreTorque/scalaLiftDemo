@@ -88,7 +88,7 @@ class Boot {
     LiftRules.early.append(_.setCharacterEncoding("UTF-8"))
 
     // Sends user location to determine closest store and possibly additional services.
-    LiftRules.dispatch.append(AppRest)
+    AppRest.init()
 
     // What is the function to test if a user is logged in?
     LiftRules.loggedInTest = Full(() => User.loggedIn_?)
