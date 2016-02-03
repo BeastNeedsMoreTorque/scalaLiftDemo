@@ -68,10 +68,6 @@ var lcboViewer = (function() {
                 $("#storeNearby").html("Geolocation is not supported by this browser.");
                 fetchStore(defaultOntarioLocationLat, defaultOntarioLocationLon, false);
             }
-        },
-
-        frameRadioImage: function(container, selected) {
-            toggleImage.frameRadioImage(container, selected);
         }
     }
 }());
