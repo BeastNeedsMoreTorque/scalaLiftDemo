@@ -8,7 +8,17 @@ var lcboViewer = (function() {
     var defaultOntarioLocationLat= 43.647219;  // Bay & Front LCBO address.
     var defaultOntarioLocationLon= -79.3789987;
 
+    var mapCanvas = document.getElementById('map-canvas')
+    var map;
     var fetchStore = function(lat, lon, userLocationAvailable) {
+        var userLatLon = new google.maps.LatLng(lat, lon)
+        var myOptions = {
+            center:userLatLon,zoom:12,
+            mapTypeId:google.maps.MapTypeId.HYBRID,
+            mapTypeControl:true
+        }
+        map = new google.maps.Map(mapCanvas, myOptions);
+        var userMarker = new google.maps.Marker({position:userLatLon,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
         // Show particulars of nearby store in storeNearby and also show that point in a google map.
         $.ajax({
             // liftweb interprets periods in special way for suffixes in JSON calls (req parsing), so we escape them by using commas instead.
@@ -16,14 +26,6 @@ var lcboViewer = (function() {
             type: 'GET',
             success: function(data, status){
                 var latlon = new google.maps.LatLng(data.latitude, data.longitude)
-                var mapCanvas = document.getElementById('map-canvas')
-
-                var myOptions = {
-                    center:latlon,zoom:12,
-                    mapTypeId:google.maps.MapTypeId.HYBRID,
-                    mapTypeControl:true
-                }
-                var map = new google.maps.Map(mapCanvas, myOptions);
                 var title = 'Downtown Toronto Liquor Store';
                 if (userLocationAvailable) {
                     // #storeNearby: You are XYZ.NN kms from branch <name> located at <address> in <city>
@@ -41,7 +43,7 @@ var lcboViewer = (function() {
                     $("#storeNearby").html("Downtown Toronto LCBO (user location unavailable)");
                     $("#storeAttributesTbl").hide();
                 }
-                var marker = new google.maps.Marker({position:latlon,map:map,title:title});
+                var closestMarker = new google.maps.Marker({position:latlon,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
             },
             error: function(data, status){
                 console.log("Error Data: " + data.responseText + "\nStatus: " + status );
