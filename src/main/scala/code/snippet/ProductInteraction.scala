@@ -31,7 +31,7 @@ object ProductInteraction extends Loggable {
   private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions(  List("recommend", "consume", "cancel"), "cancel", interactionsToImgMap)
 
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
-  def setBorderJS(elt: String) = Call("lcboViewer.frameRadioImage", "prodInteractionContainer", {elt})
+  def setBorderJS(elt: String) = Call("toggleImage.frameRadioImage", "prodInteractionContainer", {elt})
 
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))

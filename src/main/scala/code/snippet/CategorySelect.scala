@@ -16,7 +16,7 @@ object CategorySelect {
   private val defaultOption = RadioElements.selectOption(SessionCache.defaultCategory, LiquorCategory.toImg(SessionCache.defaultCategory) )  // selected with style that frames it
   private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.sortedSeq, SessionCache.defaultCategory, LiquorCategory.toImg)
 
-  def setBorderJS(elt: String): JsCmd = Call("lcboViewer.frameRadioImage", "prodCategoryContainer", {elt})
+  def setBorderJS(elt: String): JsCmd = Call("toggleImage.frameRadioImage", "prodCategoryContainer", {elt})
 
   /**
     * save radio button selection as next default to avoid annoying resetting to original default and make it session persistent
