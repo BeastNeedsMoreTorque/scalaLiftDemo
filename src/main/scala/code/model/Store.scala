@@ -283,7 +283,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   }
 
   def findInRectangle( lat1: String, lon1: String,
-                 lat2: String, lon2: String): Box[Iterable[StoreAsLCBOJson]] =  {
+                 lat2: String, lon2: String): Iterable[StoreAsLCBOJson] =  {
     def inRectangle(s: StoreAsLCBOJson): Boolean = {
       val lat = s.latitude
       val lon = s.longitude
@@ -291,7 +291,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       lat >= lat1.toDouble && lat <= lat2.toDouble &&
       lon >= lon1.toDouble && lon <= lon2.toDouble
     }
-    Full(storesCache.values.map(s => StoreAsLCBOJson(s)).filter(inRectangle))
+    storesCache.values.map(s => StoreAsLCBOJson(s)).filter(inRectangle)
   }
 
   /**

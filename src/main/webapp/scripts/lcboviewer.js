@@ -16,14 +16,14 @@ var lcboViewer = (function() {
             type: 'GET',
             success: function(data, status){
                 var latlon = new google.maps.LatLng(data.latitude, data.longitude)
-                var mapholder = document.getElementById('mapholder')
+                var mapCanvas = document.getElementById('map-canvas')
 
                 var myOptions = {
-                    center:latlon,zoom:14,
+                    center:latlon,zoom:12,
                     mapTypeId:google.maps.MapTypeId.HYBRID,
                     mapTypeControl:true
                 }
-                var map = new google.maps.Map(mapholder, myOptions);
+                var map = new google.maps.Map(mapCanvas, myOptions);
                 var title = 'Downtown Toronto Liquor Store';
                 if (userLocationAvailable) {
                     // #storeNearby: You are XYZ.NN kms from branch <name> located at <address> in <city>
