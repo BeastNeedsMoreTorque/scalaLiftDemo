@@ -10,10 +10,11 @@ var lcboViewer = (function() {
 
     var mapCanvas = document.getElementById('map-canvas')
     var map;
+    var closestStoreName = 'Unknown Store';
     var fetchStore = function(lat, lon, userLocationAvailable) {
         var userLatLon = new google.maps.LatLng(lat, lon)
         var myOptions = {
-            center:userLatLon,zoom:12,
+            center:userLatLon,zoom:11,
             mapTypeId:google.maps.MapTypeId.HYBRID,
             mapTypeControl:true
         }
@@ -28,11 +29,11 @@ var lcboViewer = (function() {
                 var latlon = new google.maps.LatLng(data.latitude, data.longitude)
                 var title = 'Downtown Toronto Liquor Store';
                 if (userLocationAvailable) {
-                    // #storeNearby: You are XYZ.NN kms from branch <name> located at <address> in <city>
                     var distOutput = (data.distance_in_meters/1000.0).toFixed(2) + ' kms';
                     $("#storeNearby").html('Closest LCBO store:');
                     title = "Closest Liquor Store!";
                     $("#storeName").html(data.name);
+                    closestStoreName = data.name;
                     $("#storeAddressLine1").html(data.address_line_1);
                     $("#storeCity").html(data.city);
                     $("#storeDistance").html(distOutput);
@@ -44,6 +45,31 @@ var lcboViewer = (function() {
                     $("#storeAttributesTbl").hide();
                 }
                 var closestMarker = new google.maps.Marker({position:latlon,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
+                fetchStores(map.getBounds(), data.name);
+            },
+            error: function(data, status){
+                console.log("Error Data: " + data.responseText + "\nStatus: " + status );
+                alert(data.responseText );
+            }
+        });
+    };
+
+    var fetchStores = function(bounds) {
+        var viewSouthWest = bounds.getSouthWest();
+        var viewNorthEast = bounds.getNorthEast();
+        var url = '/stores/lat1/' + viewSouthWest.lat().toString().replace('.',  ',') + '/lon1/' + viewSouthWest.lng().toString().replace('.', ',')
+                              + '/lat2/' + viewNorthEast.lat().toString().replace('.', ',')+ '/lon2/' + viewNorthEast.lng().toString().replace('.', ',');
+        $.ajax({
+            url: url,
+            type: 'GET',
+            success: function(data, status){
+                function createMarker(element, index, array) {
+                    if (element.name != closestStoreName) {
+                        var latlon = new google.maps.LatLng(element.latitude, element.longitude);
+                        var marker = new google.maps.Marker({position:latlon,map:map});
+                    }
+                }
+                data.forEach(createMarker);
             },
             error: function(data, status){
                 console.log("Error Data: " + data.responseText + "\nStatus: " + status );
