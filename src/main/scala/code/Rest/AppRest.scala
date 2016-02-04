@@ -40,12 +40,12 @@ object AppRest extends RestHelper {
         store <- Store.find(lat, lon) ?~ s"Store Not Found near location ($lat, $lon)"
       } yield store: Node  // Node is what generates XML (see converters in Store)
 
-    case "store" :: "lat1" :: DotDecimalString(lat1) :: "lon1" :: DotDecimalString(lon1)
+    case "stores" :: "lat1" :: DotDecimalString(lat1) :: "lon1" :: DotDecimalString(lon1)
       :: "lat2" :: DotDecimalString(lat2) :: "lon2" :: DotDecimalString(lon2):: Nil JsonGet _ =>
       val stores = Store.findInRectangle(lat1, lon1, lat2, lon2) //?~ s"Stores Not Found within locations ($lat1, $lon1, $lat2, $lon2)"
       Extraction.decompose(stores) // a JValue, allowing servlet to return some JSon, this is a collection.
 
-    case "store" :: "lat1" :: DotDecimalString(lat1) :: "lon1" :: DotDecimalString(lon1)
+    case "stores" :: "lat1" :: DotDecimalString(lat1) :: "lon1" :: DotDecimalString(lon1)
       :: "lat2" :: DotDecimalString(lat2) :: "lon2" :: DotDecimalString(lon2):: Nil XmlGet _ =>
       val stores = Store.findInRectangle(lat1, lon1, lat2, lon2)
       <stores>{stores.map(s => {s:Node})}</stores>
