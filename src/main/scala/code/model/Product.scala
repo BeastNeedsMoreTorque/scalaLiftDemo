@@ -72,33 +72,33 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   val lcbo_id = new IntField(this) // we don't share same PK as LCBO!
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-  override def setFilter = notNull _ :: crop _ :: super.setFilter
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val total_package_units = new IntField(this)
   val primary_category = new StringField(this, 40) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-  override def setFilter = notNull _ :: crop _ :: super.setFilter
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val name = new StringField(this, 120) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-  override def setFilter = notNull _ :: crop _  :: super.setFilter
+    override def setFilter = notNull _ :: crop _  :: super.setFilter
   }
   val image_thumb_url = new StringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-  override def setFilter = notNull _ :: crop _ :: super.setFilter
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val origin = new StringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-  override def setFilter = notNull _ :: crop _ :: super.setFilter
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val price_in_cents = new IntField(this)
   val alcohol_content = new IntField(this)
   val volume_in_milliliters = new IntField(this)
   val secondary_category = new StringField(this, 80)
   val varietal = new StringField(this, 100) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-  override def setFilter = notNull _ :: crop _ :: super.setFilter
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val description = new StringField(this, 2000) {// allow dropping some data in order to store/copy without SQL error
-  override def setFilter = notNull _ :: crop _ :: super.setFilter
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val serving_suggestion = new StringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
-  override def setFilter = notNull _ :: crop _ :: super.setFilter
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 
   // intentional aliasing allowing more standard naming convention.
@@ -186,14 +186,13 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     logger.trace(s"product size ${productsCache.size}")
   }
 
-  // thread somewhat unsafe (harmless race condition because we never remove (so far) and if we miss an insert, it is just a normal timing issue, i.e. returning None just as another thread inserts)
-  def getProduct(prodId: Int): Option[Product] = if (productsCache.contains(prodId)) Some(productsCache(prodId)) else None
+  def getProduct(prodId: Int): Option[Product] = productsCache get prodId
 
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
       val o = products.where(_.lcbo_id === p.id).forUpdate.headOption // Load from DB if available, else create it Squeryl very friendly DSL syntax!
-      o.map { q => q.synchUp(p); q } getOrElse
-      { val q = create(p); q.save; q }
+      o.fold { val q = create(p); q.save; q }
+      { q => q.synchUp(p); q }
     }
   }
 
@@ -232,6 +231,5 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       description(p.description).
       serving_suggestion(p.serving_suggestion)
   }
-
 
 }

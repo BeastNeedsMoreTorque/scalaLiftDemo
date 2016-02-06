@@ -33,12 +33,12 @@ object MainSchema extends Schema {
   val productToStoreProducts = oneToManyRelation(products, storeProducts).
     via((p,s) => p.id === s.productid)
 
-  on(userProducts) { s =>
-    declare(s.productid defineAs indexed("product_idx"))
+  on(userProducts) { up =>
+    declare(up.productid defineAs indexed("product_idx"))
   }
 
-  on(storeProducts) { x =>
-    declare(x.productid defineAs indexed("product_idx"))
+  on(storeProducts) { sp =>
+    declare(sp.productid defineAs indexed("product_idx"))
   }
 
   on(products) { p =>
