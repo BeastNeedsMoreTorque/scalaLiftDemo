@@ -205,7 +205,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       if (synchLcbo) synchronizeData(idx, dbStores) match {
           case Full(m) => m
           case Failure(m, ex, _) => throw new Exception(s"Problem loading LCBO stores into cache (worker $idx) with message '$m' and exception error '$ex'")
-          case Empty =>  throw new Exception(s"Problem loading LCBO stores into cache (worker $idx), none found")
+          case Empty => throw new Exception(s"Problem loading LCBO stores into cache (worker $idx), none found")
       }
       else dbStores // configuration tells us to trust our db contents
     }
@@ -255,7 +255,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val prodIds = storeCategoriesProductsCache((storeId, category))
         sampleWithInventory(0, prodIds)
       }
-      else Empty
+      else None
     }
 
     tryo {
@@ -285,11 +285,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def findInRectangle( swlat: String, swlng: String,
                        nelat: String, nelng: String): Iterable[StoreAsLCBOJson] =  {
     def inRectangle(s: StoreAsLCBOJson): Boolean = {
-      val lat = s.latitude
-      val lon = s.longitude
+      val lat = s.latitude; val lng = s.longitude
 
       lat >= swlat.toDouble && lat <= nelat.toDouble &&
-      lon >= swlng.toDouble && lon <= nelng.toDouble
+      lng >= swlng.toDouble && lng <= nelng.toDouble
     }
     storesCache.values.map(s => StoreAsLCBOJson(s)).filter(inRectangle)
   }
@@ -436,13 +435,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     DB.use(DefaultConnectionIdentifier) { connection =>
       val o: Box[Store] = stores.where( _.lcbo_id === s.id).headOption // Load from recent DB cache if available, else create it Squeryl very friendly DSL syntax!
-      o.map { t: Store =>
-        t.synchUp(s) // touch it up with most recent data if dirty
-        t
-      } openOr {
+      o.dmap { // empty
         val t = create(s)
         t.save
         UserStore.createRecord.userid(User.id.get).storeid(t.id).save // cascade save dependency.
+        t
+      } { t: Store =>
+        t.synchUp(s) // touch it up with most recent data if dirty
         t
       }
     }
@@ -808,7 +807,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     def storeProductsByWorker(page: Int): Future[ Map[Int, StoreProduct]] =
       Future { getStoreProductsOfStartPage(page, dbStoreProducts, allDbProductIds) }
-
 
     logger.trace(s"loadCache start $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
     if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {

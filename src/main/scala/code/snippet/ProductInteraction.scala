@@ -7,6 +7,7 @@ import net.liftweb.http.js.JE.Call
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.{S, SHtml}
+import net.liftweb.json
 import net.liftweb.json.JsonParser._
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
@@ -23,9 +24,9 @@ object ProductInteraction extends Loggable {
 
   private val interactionsToImgMap: Map[String, String] = {
     val interactionsToImgMapAsStr = Props.get("product.interactionsImageMap", "") // get it in JSON format
-    val list = parse(interactionsToImgMapAsStr) // contains list of JField(String, JString(String))
-    val v = for (elem <- list.children.toVector) yield elem.values // contains vector of (String, String)
-    v.map(_.asInstanceOf[(String, String)]).toMap[String, String] // could throw if contents that are configured are in wrong format (violating assumption of pairs (String,String)...
+    val jval: json.JValue = parse(interactionsToImgMapAsStr) // contains list of JField(String, JString(String))
+    val v = for (elem <- jval.children.toVector) yield elem.values // contains vector of (String, String)
+    v.map(_.asInstanceOf[(String, String)]).toMap  // could throw if contents that are configured are in wrong format (violating assumption of pairs (String,String)...
   }
 
   private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions(  List("recommend", "consume", "cancel"), "cancel", interactionsToImgMap)
@@ -53,7 +54,7 @@ object ProductInteraction extends Loggable {
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
     // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
     def cancelCbJS =  transactionConfirmationJS & hideProdDisplayJS
-    def consumeCbJS = hideProdDisplayJS & transactionConfirmationJS
+    def consumeCbJS = hideProdDisplayJS & transactionConfirmationJS // meant to simulate consumption of product, or possibly a commentary on one
 
     def recommend() = {
       def maySelect(): JsCmd =
@@ -79,13 +80,11 @@ object ProductInteraction extends Loggable {
           Noop     // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter
         }
 
-      if (User.currentUser.isEmpty) {
-        S.error("recommend", "recommend feature unavailable, Login first!"); Noop
-      }
-      else {
+      User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
+      { currentUser =>
         theProduct.is.dmap { maySelect() & transactionConfirmationJS } // normal processing
         { p => S.notice("recommend", "Cancel or consume prior to a secondary recommendation")
-            prodDisplayJS(p, theProductInventory.is) // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
+          prodDisplayJS(p, theProductInventory.is) // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
           // for a series of clicks on button before we have time to disable it
         }
       }
@@ -106,11 +105,9 @@ object ProductInteraction extends Loggable {
         Noop
       }
 
-      theProduct.is.dmap { S.notice("consume", "Get a product recommendation before attempting to consume")
-        Noop   // ignore consecutive clicks, ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
-      }{ p => mayConsume(p) & consumeCbJS // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
-          // So, try it as a simulation by doing a DB store.
-      }
+      // ignore consecutive clicks (when theProduct is defined), ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
+      theProduct.is.dmap { S.notice("consume", "Get a product recommendation before attempting to consume"); Noop}
+      { p => mayConsume(p) & consumeCbJS } // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
     }
 
     def cancel() = {
