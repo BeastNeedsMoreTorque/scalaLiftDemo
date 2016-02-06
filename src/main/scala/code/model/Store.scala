@@ -732,12 +732,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           loadAll(dbProducts, productCacheSize, storeId, page) match {
             case Full(m) =>  // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
               for ((k, v) <- m) { // v List[Product] containing product
-                k match {
+                Some(k) collect { // Clean is intentionally ignored
                   case New =>
                     insertNewProducts(v.filter({p => !allDbProductIds.contains(p.lcbo_id.get)} )) // insert to DB those we didn't get in our query to obtain allDbProducts
                   case Dirty =>
                     updateProducts(v)  // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
-                  case _ => ; // no-op if clean
                 }
               }
               // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
@@ -760,12 +759,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           loadAllStoreProducts(dbStoreProducts, productCacheSize, storeId, page) match {
             case Full(m) =>  // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
               for ((k, v) <- m) { // v List[StoreProduct] containing product
-                k match {
+                Some(k) collect { // Clean is intentionally ignored
                   case New =>
                     StoreProduct.insertStoreProducts(v) // now we can insert relationship of store-product with an inventory of 10
                   case Dirty =>
                     StoreProduct.updateStoreProducts(v)
-                  case _ => ; // no-op if clean
                 }
               }
               // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
