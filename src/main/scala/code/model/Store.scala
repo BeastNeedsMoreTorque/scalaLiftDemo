@@ -282,14 +282,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       longitude(s.longitude)
   }
 
-  def findInRectangle( lat1: String, lon1: String,
-                 lat2: String, lon2: String): Iterable[StoreAsLCBOJson] =  {
+  def findInRectangle( swlat: String, swlng: String,
+                       nelat: String, nelng: String): Iterable[StoreAsLCBOJson] =  {
     def inRectangle(s: StoreAsLCBOJson): Boolean = {
       val lat = s.latitude
       val lon = s.longitude
 
-      lat >= lat1.toDouble && lat <= lat2.toDouble &&
-      lon >= lon1.toDouble && lon <= lon2.toDouble
+      lat >= swlat.toDouble && lat <= nelat.toDouble &&
+      lon >= swlng.toDouble && lon <= nelng.toDouble
     }
     storesCache.values.map(s => StoreAsLCBOJson(s)).filter(inRectangle)
   }
@@ -298,18 +298,18 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     * Find the closest store by coordinates, caching is not applicable as we cannot guess what store is closest to input
     * unless we do a geo query in DB ourselves, which is excessive effort given LCBO API.
     */
-  def find( lat: String,  lon: String): Box[StoreAsLCBOJson] =  {
-    def findStore(lat: String, lon: String): Box[StoreAsLCBOJson] = {
+  def find( lat: String,  lng: String): Box[StoreAsLCBOJson] =  {
+    def findStore(lat: String, lng: String): Box[StoreAsLCBOJson] = {
       val url = s"$LcboDomainURL/stores?where_not=is_dead" +
         additionalParam("lat", lat) +
-        additionalParam("lon", lon)
+        additionalParam("lon", lng)
       tryo {
         val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url).headOption
-        b.openOrThrowException(s"No store found near ($lat, $lon)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo.
+        b.openOrThrowException(s"No store found near ($lat, $lng)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo.
       }
     }
 
-    findStore(lat, lon) match {
+    findStore(lat, lng) match {
       case Full(x) =>
         theStoreId.set(x.id)
         Full(x)
