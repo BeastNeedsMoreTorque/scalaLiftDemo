@@ -19,7 +19,6 @@ import scala.collection.concurrent.TrieMap
 import scala.collection.{concurrent, Map, Iterable}
 import scala.language.implicitConversions
 
-
 case class InventoryAsLCBOJson(product_id: Int,
                                store_id: Int,
                                is_dead: Boolean,
@@ -71,15 +70,8 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   def update(storeId: Int, storeMap: Map[Int, StoreProduct]) =
     storeProductsCache ++= { for ( (prodId, sp) <- storeMap) yield (storeId, prodId) -> sp }
 
-  // thread somewhat unsafe (harmless race condition because we never remove (so far) and if we miss an insert, it is just a normal timing issue, i.e. returning None just as another thread inserts)
-  def getStoreProduct(storeId: Int, prodId: Int): Option[StoreProduct] = {
-    val pair = (storeId, prodId)
-    if (storeProductsCache.contains(pair)) {
-      Some(storeProductsCache( pair))
-    } else {
-      None
-    }
-  }
+  def getStoreProduct(storeId: Int, prodId: Int): Option[StoreProduct] =
+    storeProductsCache get (storeId, prodId)
 
   def create(inv: InventoryAsLCBOJson): StoreProduct =
     createRecord.
