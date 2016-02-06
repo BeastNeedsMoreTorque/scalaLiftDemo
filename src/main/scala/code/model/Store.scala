@@ -304,7 +304,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         additionalParam("lat", lat) +
         additionalParam("lon", lng)
       tryo {
-        val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url).headOption
+        val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url)
         b.openOrThrowException(s"No store found near ($lat, $lng)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo.
       }
     }
@@ -327,11 +327,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[java.io.IOException])
   @throws(classOf[java.net.SocketTimeoutException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-  private final def collectFirstMatchingStore( uri: String): List[StoreAsLCBOJson] = {
+  private final def collectFirstMatchingStore( uri: String): Option[StoreAsLCBOJson] = {
     logger.trace(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
-    val itemNodes = (jsonRoot \ "result").children.drop(1) // Uses XPath-like querying to extract data from parsed object jsObj.
+    val itemNodes = (jsonRoot \ "result").children.headOption // Uses XPath-like querying to extract data from parsed object jsObj.
     itemNodes.map(_.extract[StoreAsLCBOJson])
   }
 
