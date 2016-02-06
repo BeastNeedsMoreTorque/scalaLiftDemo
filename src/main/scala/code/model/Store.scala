@@ -282,6 +282,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       longitude(s.longitude)
   }
 
+  // SouthWest coordinates and then NorthEast coordinates
   def findInRectangle( swlat: String, swlng: String,
                        nelat: String, nelng: String): Iterable[StoreAsLCBOJson] =  {
     def inRectangle(s: StoreAsLCBOJson): Boolean = {
@@ -785,7 +786,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val dbProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v._1)
     val dbStoreProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v._2)
 
-    val allDbProductIds: Set[Int] = inTransaction { products.map(_.lcbo_id.get).toSet } // this "products" is actually a query.
+    val allDbProductIds: Set[Int] = inTransaction {
+      from(products)(p => select(p.lcbo_id.get)).toSet }
 
     def fetchInventories(initialPages: List[Int], dbStoreProducts: Map[Int, StoreProduct], allDbProductIds: Set[Int]) = {
       val allTheStoreInventories = Future.traverse(initialPages)(storeProductsByWorker)
@@ -829,8 +831,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           Product.update(fullMap.toMap)
           logger.trace(s"product (store,categories) keys ${storeCategoriesProductsCache.keys}")
           fetchInventories(initialParallelPages, dbStoreProducts, allDbProductIds)
-
-          }
+      }
 
       allTheProductsByCategory onFailure {
         case t => logger.error("loadCache, an error occurred because: " + t.getMessage)
