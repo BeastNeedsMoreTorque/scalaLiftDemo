@@ -37,7 +37,7 @@ object ProductInteraction extends Loggable {
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
     /**
-      * Generates a list of <li></li> elements as nodes of element prodAttributes
+      * Generates a list of <tr></tr> elements as nodes of element prodAttributes within an assumed table
       *
       * @param p Product
       * @return a JsCmd that is JavaScript Lift will execute
@@ -47,7 +47,7 @@ object ProductInteraction extends Loggable {
       SetHtml("prodAttributes", nodeSeq)
     }
     def prodDisplayJS(prod: Product, quantity: Int) =
-      SetHtml("prodImg", <img src={prod.imageThumbUrl.get}/>) &
+      SetHtml("prodImgSpan", <img src={prod.imageThumbUrl.get}/>) &
       prodAttributesJS(prod, quantity) &
       JsShowId("prodDisplay")
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser

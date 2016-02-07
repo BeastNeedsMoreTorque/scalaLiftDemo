@@ -35,6 +35,7 @@ Upgrade liftweb fairly aggressively (2.6 is latest as of Fall 2015), read releas
 Dec 22: bugs
 forcing data category (coolers) too large for product.primary_category causes a crash instead of catching exception nicely.
 Solved with tryo and 3rd value of Box (Failure) and getting rid of Scala Try (Dec 26).
+Later on, used setFilter and crop from liftweb Record.
 
 Seeing crappy Unmapped Lift-like parameter seen in request [/]: F1248216611878RCLVMO
 when using snippets instead of comet and mixing up login/logout with 2 sessions in the same browser.
@@ -48,3 +49,6 @@ Error on loading cache for category should not fail for full category but only f
 
 Jan 11 2016
 Should handle well oversized data items when storing to database (just truncate)
+Resolved: setFilter and crop
+
+Feb 7: added google maps support with directions, markers, and store selection.
