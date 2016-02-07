@@ -13,8 +13,9 @@ import net.liftweb.util.Helpers._
   * Created by philippederome on 2015-12-05.
   */
 object CategorySelect {
-  private val defaultOption = RadioElements.selectOption(SessionCache.defaultCategory, LiquorCategory.toImg(SessionCache.defaultCategory) )  // selected with style that frames it
-  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.sortedSeq, SessionCache.defaultCategory, LiquorCategory.toImg)
+  private val categoryImg = LiquorCategory.toImg(SessionCache.defaultCategory)
+  private val defaultOption = RadioElements.selectOption(SessionCache.defaultCategory, categoryImg)  // selected with style that frames it
+  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.categoriesSeq, SessionCache.defaultCategory, LiquorCategory.toImg)
 
   def setBorderJS(elt: String): JsCmd = Call("toggleImage.frameRadioImage", "prodCategoryContainer", {elt})
 
