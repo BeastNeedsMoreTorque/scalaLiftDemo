@@ -14,6 +14,8 @@ var lcboViewer = (function() {
   var storeDistance;  // could also get storeDuration if we wanted.
   var closestStoreName = 'Unknown Store';
   var distMatrixService = new google.maps.DistanceMatrixService();
+  var directionsService = new google.maps.DirectionsService();
+  var directionsDisplay;
 
   var fetchStore = function(userLatLng, userLocationAvailable, storeSelectedByApp) {
     var myOptions = {
@@ -33,9 +35,12 @@ var lcboViewer = (function() {
           clearMarkers();
         }
       });
-
+      directionsDisplay = new google.maps.DirectionsRenderer();
+      directionsDisplay.setMap(map);
       userMarker = new google.maps.Marker({position:userLatLng,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
     }
+
+
     // Show particulars of nearby store in storeNearby and also show that point in a google map.
     $.ajax({
       // liftweb interprets periods in special way for suffixes in JSON calls (req parsing), so we escape them by using commas instead.
@@ -65,6 +70,7 @@ var lcboViewer = (function() {
         if (storeSelectedByApp == true) {
           var closestMarker = new google.maps.Marker({position:latlng,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
           fetchAllStores();
+          getDirections(latlng);
         }
       },
       error: function(data, status){
@@ -104,6 +110,21 @@ var lcboViewer = (function() {
     }, lcboViewer.distMatrixCB);
   };
 
+  var getDirections = function(latLng) {
+   var request = {
+      origin: userLocation,
+      destination: latLng,
+      travelMode: google.maps.TravelMode.DRIVING
+    };
+    directionsService.route(request, function(result, status) {
+      if (status == google.maps.DirectionsStatus.OK) {
+        directionsDisplay.setMap(null);
+        directionsDisplay.setMap(map);
+        directionsDisplay.setDirections(result);
+      }
+    });
+  };
+
   var fetchStoreNearUser = function(position) {
     userLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
     fetchStore( userLocation, true, true);
@@ -123,6 +144,7 @@ var lcboViewer = (function() {
     marker.addListener('click', function(e){
       fetchStore(e.latLng, true, false);
       evaluateDistance(e.latLng);
+      getDirections(e.latLng);
     });
     markers.push(marker);
   };
