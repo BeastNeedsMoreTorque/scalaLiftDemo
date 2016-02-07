@@ -8,6 +8,7 @@ var lcboViewer = (function() {
   var defaultOntarioLocation = new google.maps.LatLng(43.647219, -79.3789987); // Bay & Front LCBO address.
   var mapCanvas = document.getElementById('map-canvas');
   var map;
+  var markers = [];
   var userMarker;
   var userLocation;
   var storeDistance;
@@ -18,14 +19,17 @@ var lcboViewer = (function() {
   var fetchStore = function(userLatLng, userLocationAvailable, storeSelectedByApp) {
     var myOptions = {
       center:userLatLng,
-      zoom:11,
+      zoom:12,
       mapTypeId:google.maps.MapTypeId.HYBRID,
       mapTypeControl:true
     }
     if (storeSelectedByApp == true) {
       map = new google.maps.Map(mapCanvas, myOptions);
       map.addListener('bounds_changed', function() {
-        lcboViewer.fetchStores();
+        clearMarkers()
+        if (map.zoom > 10) {
+          fetchStores();
+        }
       });
 
       userMarker = new google.maps.Marker({position:userLatLng,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
@@ -58,8 +62,33 @@ var lcboViewer = (function() {
         }
         if (storeSelectedByApp == true) {
           var closestMarker = new google.maps.Marker({position:latlng,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
-          lcboViewer.fetchStores();
+          fetchStores();
         }
+      },
+      error: function(data, status){
+        console.log("Error Data: " + data.responseText + "\nStatus: " + status );
+        alert(data.responseText );
+      }
+    });
+  };
+
+  var fetchStores = function() {
+    var viewSouthWest = map.getBounds().getSouthWest();
+    var viewNorthEast = map.getBounds().getNorthEast();
+    var url = '/stores/swlat/' + viewSouthWest.lat().toString().replace('.',  ',') + '/swlng/' + viewSouthWest.lng().toString().replace('.', ',')
+                + '/nelat/' + viewNorthEast.lat().toString().replace('.', ',')+ '/nelng/' + viewNorthEast.lng().toString().replace('.', ',');
+    $.ajax({
+      url: url,
+      type: 'GET',
+      success: function(data, status){
+        function createMarker(element, index, array) {
+          if (element.name != closestStoreName) {
+            var latlng = new google.maps.LatLng(element.latitude, element.longitude);
+            //var marker = new google.maps.Marker({position:latlng,map:map});
+            addMarker(latlng);
+          }
+        }
+        data.forEach(createMarker);
       },
       error: function(data, status){
         console.log("Error Data: " + data.responseText + "\nStatus: " + status );
@@ -87,6 +116,41 @@ var lcboViewer = (function() {
     fetchStore(defaultOntarioLocation, false, true);
   };
 
+  // Adds a marker to the map and push to the array.
+  var addMarker = function(location) {
+    var marker = new google.maps.Marker({
+      position: location,
+      map: map
+    });
+    marker.addListener('click', function(e){
+      fetchStore(e.latLng, true, false);
+      evaluateDistance(e.latLng);
+    });
+    markers.push(marker);
+  };
+
+  // Sets the map on all markers in the array.
+  var setMapOnAll = function (map) {
+    for (var i = 0; i < markers.length; i++) {
+      markers[i].setMap(map);
+    }
+  };
+
+  // Removes the markers from the map, but keeps them in the array.
+  var clearMarkers= function() {
+    setMapOnAll(null);
+  };
+
+  // Shows any markers currently in the array.
+  var showMarkers = function() {
+    setMapOnAll(map);
+  };
+
+  // Deletes all markers in the array by removing references to them.
+  var deleteMarkers = function() {
+    clearMarkers();
+    markers = [];
+  };
 
   return {
     distMatrixCB: function(response, status) {
@@ -103,34 +167,6 @@ var lcboViewer = (function() {
           }
         }
       }
-    },
-
-    fetchStores: function() {
-      var viewSouthWest = map.getBounds().getSouthWest();
-      var viewNorthEast = map.getBounds().getNorthEast();
-      var url = '/stores/swlat/' + viewSouthWest.lat().toString().replace('.',  ',') + '/swlng/' + viewSouthWest.lng().toString().replace('.', ',')
-                  + '/nelat/' + viewNorthEast.lat().toString().replace('.', ',')+ '/nelng/' + viewNorthEast.lng().toString().replace('.', ',');
-      $.ajax({
-        url: url,
-        type: 'GET',
-        success: function(data, status){
-          function createMarker(element, index, array) {
-            if (element.name != closestStoreName) {
-              var latlng = new google.maps.LatLng(element.latitude, element.longitude);
-              var marker = new google.maps.Marker({position:latlng,map:map});
-              marker.addListener('click', function(e){
-                fetchStore(e.latLng, true, false);
-                evaluateDistance(e.latLng);
-              });
-            }
-          }
-          data.forEach(createMarker);
-        },
-        error: function(data, status){
-          console.log("Error Data: " + data.responseText + "\nStatus: " + status );
-          alert(data.responseText );
-        }
-      });
     },
 
     fetchStoreFromPosition: function() {
