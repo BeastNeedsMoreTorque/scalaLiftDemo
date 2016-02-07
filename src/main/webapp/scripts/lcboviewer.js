@@ -11,8 +11,7 @@ var lcboViewer = (function() {
   var markers = [];
   var userMarker;
   var userLocation;
-  var storeDistance;
-  var storeDuration;
+  var storeDistance;  // could also get storeDuration if we wanted.
   var closestStoreName = 'Unknown Store';
   var distMatrixService = new google.maps.DistanceMatrixService();
 
@@ -28,7 +27,10 @@ var lcboViewer = (function() {
       map.addListener('bounds_changed', function() {
         clearMarkers()
         if (map.zoom > 10) {
-          fetchStores();
+          showMarkers();
+        }
+        else {
+          clearMarkers();
         }
       });
 
@@ -50,9 +52,9 @@ var lcboViewer = (function() {
           $("#storeAddressLine1").html(data.address_line_1);
           $("#storeCity").html(data.city);
           if (storeSelectedByApp) {
-            storeDistance = (data.distance_in_meters/1000.0).toFixed(2) + ' km'; // otherwise service should provide it (race condition mind you)
+            storeDistance = (data.distance_in_meters/1000.0).toFixed(2) + ' km'; // otherwise service should provide it (race condition mind you); same format as Google Maps.
+            $("#storeDistance").html(storeDistance);
           }
-          $("#storeDistance").html(storeDistance);
           $("#storeLat").html(data.latitude);
           $("#storeLon").html(data.longitude);
           $("#storeAttributesTbl").show();
@@ -62,7 +64,7 @@ var lcboViewer = (function() {
         }
         if (storeSelectedByApp == true) {
           var closestMarker = new google.maps.Marker({position:latlng,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
-          fetchStores();
+          fetchAllStores();
         }
       },
       error: function(data, status){
@@ -72,11 +74,8 @@ var lcboViewer = (function() {
     });
   };
 
-  var fetchStores = function() {
-    var viewSouthWest = map.getBounds().getSouthWest();
-    var viewNorthEast = map.getBounds().getNorthEast();
-    var url = '/stores/swlat/' + viewSouthWest.lat().toString().replace('.',  ',') + '/swlng/' + viewSouthWest.lng().toString().replace('.', ',')
-                + '/nelat/' + viewNorthEast.lat().toString().replace('.', ',')+ '/nelng/' + viewNorthEast.lng().toString().replace('.', ',');
+  var fetchAllStores = function() {
+    var url = '/stores';
     $.ajax({
       url: url,
       type: 'GET',
@@ -84,7 +83,6 @@ var lcboViewer = (function() {
         function createMarker(element, index, array) {
           if (element.name != closestStoreName) {
             var latlng = new google.maps.LatLng(element.latitude, element.longitude);
-            //var marker = new google.maps.Marker({position:latlng,map:map});
             addMarker(latlng);
           }
         }
@@ -154,16 +152,15 @@ var lcboViewer = (function() {
 
   return {
     distMatrixCB: function(response, status) {
-      console.log("distMatrixCB " + response);
       if (status == google.maps.DistanceMatrixStatus.OK) {
         var origins = response.originAddresses;
         var destinations = response.destinationAddresses;
         if(origins.length > 0) {
           var results = response.rows[0].elements;
-          if(results.length > 0) {
+          if(results.length > 0 ) {
             var element = results[0];
             storeDistance = element.distance.text;
-            storeDuration = element.duration.text;
+            $("#storeDistance").html(storeDistance);
           }
         }
       }
