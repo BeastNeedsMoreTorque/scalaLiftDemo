@@ -13,9 +13,7 @@ var lcboViewer = (function() {
   var storeDistance;
   var storeDuration;
   var closestStoreName = 'Unknown Store';
-
   var distMatrixService = new google.maps.DistanceMatrixService();
-
 
   var fetchStore = function(userLatLng, userLocationAvailable, storeSelectedByApp) {
     var myOptions = {
@@ -26,6 +24,10 @@ var lcboViewer = (function() {
     }
     if (storeSelectedByApp == true) {
       map = new google.maps.Map(mapCanvas, myOptions);
+      map.addListener('bounds_changed', function() {
+        lcboViewer.fetchStores();
+      });
+
       userMarker = new google.maps.Marker({position:userLatLng,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
     }
     // Show particulars of nearby store in storeNearby and also show that point in a google map.
