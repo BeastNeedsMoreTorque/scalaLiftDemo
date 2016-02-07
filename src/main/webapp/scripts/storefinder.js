@@ -81,9 +81,8 @@ var storeFinder = (function() {
   };
 
   var fetchAllStores = function() {
-    var url = '/stores';
     $.ajax({
-      url: url,
+      url: '/stores',
       type: 'GET',
       success: function(data, status){
         function createMarker(element, index, array) {
