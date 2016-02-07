@@ -26,6 +26,14 @@ object AppRest extends RestHelper {
    * findInRectangle /store/swlat/43,0/swlng/-80,0/nelat/44,00/nelng/-79,00.json (or .xml)
    */
   serve {
+    case "stores" :: Nil JsonGet _ =>
+      val stores = Store.findAll()
+      Extraction.decompose(stores) // a JValue, allowing servlet to return some JSon, this is a collection.
+
+    case "stores" :: Nil XmlGet _ =>
+      val stores = Store.findAll()
+      <stores>{stores.map(s => {s:Node})}</stores>
+
     case "stores" :: "lat" :: DotDecimalString(lat) :: "lng" :: DotDecimalString(lng) :: Nil JsonGet _ =>
       for {
       // find the store, and if it's not found,
@@ -40,15 +48,6 @@ object AppRest extends RestHelper {
         store <- Store.find(lat, lng) ?~ s"Store Not Found near location ($lat, $lng)"
       } yield store: Node  // Node is what generates XML (see converters in Store)
 
-    case "stores" :: "swlat" :: DotDecimalString(swlat) :: "swlng" :: DotDecimalString(swlng)
-      :: "nelat" :: DotDecimalString(nelat) :: "nelng" :: DotDecimalString(nelng):: Nil JsonGet _ =>
-      val stores = Store.findInRectangle(swlat, swlng, nelat, nelng) //?~ s"Stores Not Found within locations (...)"
-      Extraction.decompose(stores) // a JValue, allowing servlet to return some JSon, this is a collection.
-
-    case "stores" :: "swlat" :: DotDecimalString(swlat) :: "swlng" :: DotDecimalString(swlng)
-      :: "nelat" :: DotDecimalString(nelat) :: "nelng" :: DotDecimalString(nelng):: Nil XmlGet _ =>
-      val stores = Store.findInRectangle(swlat, swlng, nelat, nelng) //?~ s"Stores Not Found within locations (...)"
-      <stores>{stores.map(s => {s:Node})}</stores>
   }
 
 }

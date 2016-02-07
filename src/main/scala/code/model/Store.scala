@@ -282,17 +282,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       longitude(s.longitude)
   }
 
-  // SouthWest coordinates and then NorthEast coordinates
-  def findInRectangle( swlat: String, swlng: String,
-                       nelat: String, nelng: String): Iterable[StoreAsLCBOJson] =  {
-    def inRectangle(s: StoreAsLCBOJson): Boolean = {
-      val lat = s.latitude; val lng = s.longitude
-
-      lat >= swlat.toDouble && lat <= nelat.toDouble &&
-      lng >= swlng.toDouble && lng <= nelng.toDouble
-    }
-    storesCache.values.map(s => StoreAsLCBOJson(s)).filter(inRectangle)
-  }
+  def findAll(): Iterable[StoreAsLCBOJson] =
+    storesCache.values.map(s => StoreAsLCBOJson(s))
 
   /**
     * Find the closest store by coordinates, caching is not applicable as we cannot guess what store is closest to input
