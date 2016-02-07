@@ -1,10 +1,10 @@
 "use strict";
 
-// Global variable, singleton lcboViewer
+// Global variable, singleton storeFinder
 // API:
 // <localhost:port>/store/lat/<lat>/lon/<lon> gives closest store from coordinate(lat,lon).
 // Currently supported Store  (see lcboapi.com): id, name, is_dead, latitude, longitude, distance_in_meters (from specified location), address_line_1, city
-var lcboViewer = (function() {
+var storeFinder = (function() {
   var defaultOntarioLocation = new google.maps.LatLng(43.647219, -79.3789987); // Bay & Front LCBO address.
   var mapCanvas = document.getElementById('map-canvas');
   var map;
@@ -107,7 +107,7 @@ var lcboViewer = (function() {
       origins: [userLocation],
       destinations: [latLng],
       travelMode: google.maps.TravelMode.DRIVING
-    }, lcboViewer.distMatrixCB);
+    }, storeFinder.distMatrixCB);
   };
 
   var getDirections = function(latLng) {
@@ -200,7 +200,7 @@ var lcboViewer = (function() {
 }());
 
 $(document).ready(function(){
-  lcboViewer.fetchStoreFromPosition();
+  storeFinder.fetchStoreFromPosition();
 });
 
 
