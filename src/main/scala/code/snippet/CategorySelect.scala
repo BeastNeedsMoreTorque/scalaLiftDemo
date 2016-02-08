@@ -29,6 +29,7 @@ object CategorySelect {
     * @see http://stackoverflow.com/questions/15879991/get-checkbox-and-radio-button-value-in-lift
     */
   def render = {
+    theCategory.set(SessionCache.defaultCategory)  // on refresh, we set category to defaultOption and hence we should change Session State too.
     ".options" #> LabelStyle.toForm(SHtml.ajaxRadio(
       radioOptions, Full(defaultOption),
       (choice: RadioElements) => {

@@ -33,12 +33,20 @@
 
       <hr> <!--Need enough spacing beneath the buttons-->
       <div id="prodDisplay" hidden>
-          <div class="span-8">
-              <span>Recommended product:</span><br>
-              <table id="prodAttributes" style="width:100%"></table>   <!--generate other product items on the fly as simple tr and td elements-->
-          </div>
-          <div class="span-8 last">
-                <span id="prodImgSpan"><img src="#"/></span>
+          <span>Recommended products:</span><br>
+          <div id="prodContainer">
+            <!-- There will be several of these that would be generated for each product-->
+            <div class="span-8"> <!--generate other product items on the fly as table with tr and td elements-->
+                <table>
+                    <tr>
+                        <td class="prodAttrHead">some attribute</td>
+                        <td class="prodAttrContent">some value</td>
+                    </tr>}
+                </table>
+            </div>
+            <div class="span-8 last">  <!-- generate img with URL inside this div on the fly-->
+                <img src="#"/>
+            </div>
           </div>
       </div>
       <span id="transactionConfirmation"></span>
