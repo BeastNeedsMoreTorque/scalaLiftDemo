@@ -1,8 +1,8 @@
 package code.snippet
 
 import code.model.LiquorCategory
-import code.snippet.SessionCache.theCategory
-import net.liftweb.common.Full
+import code.snippet.SessionCache.{theProduct, theCategory}
+import net.liftweb.common.{Empty, Full}
 import net.liftweb.http.SHtml
 import net.liftweb.http.js.JE.Call
 import net.liftweb.http.js.JsCmds._
@@ -29,6 +29,7 @@ object CategorySelect {
     * @see http://stackoverflow.com/questions/15879991/get-checkbox-and-radio-button-value-in-lift
     */
   def render = {
+    theProduct.set(Empty)
     theCategory.set(SessionCache.defaultCategory)  // on refresh, we set category to defaultOption and hence we should change Session State too.
     ".options" #> LabelStyle.toForm(SHtml.ajaxRadio(
       radioOptions, Full(defaultOption),
