@@ -56,10 +56,6 @@ var storeFinder = (function() {
           closestStoreName = data.name;
           $("#storeAddressLine1").html(data.address_line_1);
           $("#storeCity").html(data.city);
-          if (storeSelectedByApp) {
-            storeDistance = (data.distance_in_meters/1000.0).toFixed(2) + ' km'; // otherwise service should provide it (race condition mind you); same format as Google Maps.
-            $("#storeDistance").html(storeDistance);
-          }
           $("#storeLat").html(data.latitude);
           $("#storeLon").html(data.longitude);
           $("#storeAttributesTbl").show();
@@ -69,6 +65,7 @@ var storeFinder = (function() {
         }
         if (storeSelectedByApp == true) {
           var closestMarker = new google.maps.Marker({position:latlng,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
+          closestMarker.addListener('click', storeFinder.storeClickCB);
           fetchAllStores();
           getDirections(latlng);
         }
@@ -140,11 +137,7 @@ var storeFinder = (function() {
       position: location,
       map: map
     });
-    marker.addListener('click', function(e){
-      fetchStore(e.latLng, true, false);
-      evaluateDistance(e.latLng);
-      getDirections(e.latLng);
-    });
+    marker.addListener('click', storeFinder.storeClickCB);
     markers.push(marker);
   };
 
@@ -172,6 +165,12 @@ var storeFinder = (function() {
   };
 
   return {
+    storeClickCB: function(e) {
+      fetchStore(e.latLng, true, false);
+      evaluateDistance(e.latLng);
+      getDirections(e.latLng);
+    },
+
     distMatrixCB: function(response, status) {
       if (status == google.maps.DistanceMatrixStatus.OK) {
         var origins = response.originAddresses;
