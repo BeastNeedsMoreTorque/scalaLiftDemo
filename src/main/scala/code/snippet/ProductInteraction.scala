@@ -40,8 +40,9 @@ object ProductInteraction extends Loggable {
     def prodDisplayJS(prod: Product, quantity: Int) = {
       val attributesNodeSeq = <table style="width:100%">{for (x <-  prod.createProductElemVals ++ List(("Quantity: ", quantity )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
       val imgNodeSeq = <img src={prod.imageThumbUrl.get}/>
-      val attrsAndImgNodesSeq = <div class="span-8">{attributesNodeSeq}</div><div class="span-8 last">{imgNodeSeq}</div>
-      SetHtml("prodContainer", attrsAndImgNodesSeq) &
+      val attrsAndImgNodesSeq = <div><div class="span-8">{attributesNodeSeq}</div><div class="span-8 last">{imgNodeSeq}</div></div><hr></hr>
+      val severalDivs = attrsAndImgNodesSeq // add more in a loop if needed
+      SetHtml("prodContainer", severalDivs) &
       JsShowId("prodDisplay")
     }
 
