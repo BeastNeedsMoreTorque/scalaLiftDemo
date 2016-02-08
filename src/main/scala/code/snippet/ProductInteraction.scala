@@ -36,20 +36,15 @@ object ProductInteraction extends Loggable {
 
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
-    /**
-      * Generates a list of <tr></tr> elements as nodes of element prodAttributes within an assumed table
-      *
-      * @param p Product
-      * @return a JsCmd that is JavaScript Lift will execute
-      */
-    def prodAttributesJS(p: Product, quantity: Int) = {
-      val nodeSeq = for (x <-  p.createProductElemVals ++ List(("Quantity: ", quantity )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>
-      SetHtml("prodAttributes", nodeSeq)
-    }
-    def prodDisplayJS(prod: Product, quantity: Int) =
-      SetHtml("prodImgSpan", <img src={prod.imageThumbUrl.get}/>) &
-      prodAttributesJS(prod, quantity) &
+
+    def prodDisplayJS(prod: Product, quantity: Int) = {
+      val attributesNodeSeq = <table style="width:100%">{for (x <-  prod.createProductElemVals ++ List(("Quantity: ", quantity )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
+      val imgNodeSeq = <img src={prod.imageThumbUrl.get}/>
+      val attrsAndImgNodesSeq = <div class="span-8">{attributesNodeSeq}</div><div class="span-8 last">{imgNodeSeq}</div>
+      SetHtml("prodContainer", attrsAndImgNodesSeq) &
       JsShowId("prodDisplay")
+    }
+
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
     // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
@@ -69,10 +64,11 @@ object ProductInteraction extends Loggable {
             case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
           }
           prodInv.dmap { Noop }
-          { pair: (Product, Int) => theProduct.set(Full(pair._1))
-                          theProductInventory.set(pair._2)
-                          S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-                          prodDisplayJS(pair._1, pair._2)
+          { pair =>
+            theProduct.set(Full(pair._1))
+            theProductInventory.set(pair._2)
+            S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
+            prodDisplayJS(pair._1, pair._2)
           }
         }
         else {
@@ -84,7 +80,7 @@ object ProductInteraction extends Loggable {
       { currentUser =>
         theProduct.is.dmap { maySelect() & transactionConfirmationJS } // normal processing
         { p => S.notice("recommend", "Cancel or consume prior to a secondary recommendation")
-          prodDisplayJS(p, theProductInventory.is) // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
+          // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
           // for a series of clicks on button before we have time to disable it
         }
       }
