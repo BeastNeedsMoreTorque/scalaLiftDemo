@@ -11,6 +11,7 @@ import net.liftweb.json
 import net.liftweb.json.JsonParser._
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
+import scala.annotation.tailrec
 import scala.xml._
 
 /**
@@ -21,6 +22,7 @@ import scala.xml._
   * Created by philippederome on 15-10-26.
   */
 object ProductInteraction extends Loggable {
+  val prodsPerPageToDisplay = Math.max(1,Props.getInt("product.prodsPerPageToDisplay", 5)) // it'd be very unconscious to choose less than 1.
 
   private val interactionsToImgMap: Map[String, String] = {
     val interactionsToImgMapAsStr = Props.get("product.interactionsImageMap", "") // get it in JSON format
@@ -37,11 +39,21 @@ object ProductInteraction extends Loggable {
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
 
-    def prodDisplayJS(prod: Product, quantity: Int) = {
-      val attributesNodeSeq = <table style="width:100%">{for (x <-  prod.createProductElemVals ++ List(("Quantity: ", quantity )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
-      val imgNodeSeq = <img src={prod.imageThumbUrl.get}/>
-      val attrsAndImgNodesSeq = <div><div class="span-8">{attributesNodeSeq}</div><div class="span-8 last">{imgNodeSeq}</div></div><hr></hr>
-      val severalDivs = attrsAndImgNodesSeq // add more in a loop if needed
+    def prodDisplayJS(prodQties: Iterable[(Int, Product)]) = {
+      def getSingleDiv(el: (Int, Product)): NodeSeq = {
+        val attributesNodeSeq = <table style="width:100%">{for (x <-  el._2.createProductElemVals ++ List(("Quantity: ", el._1 )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
+        val imgNodeSeq = <img src={el._2.imageThumbUrl.get}/>
+        val ns: NodeSeq =  <div><div class="span-8">{attributesNodeSeq}</div><div class="span-8 last">{imgNodeSeq}</div></div><hr></hr>
+        ns
+      }
+
+      @tailrec
+      def getDivs(currNodeSeq: NodeSeq, l: Iterable[(Int, Product)]): NodeSeq = {
+        if (l.isEmpty) return currNodeSeq
+        getDivs(currNodeSeq ++ getSingleDiv(l.head), l.tail)
+      }
+
+      val severalDivs = getDivs(NodeSeq.Empty, prodQties)
       SetHtml("prodContainer", severalDivs) &
       JsShowId("prodDisplay")
     }
@@ -58,18 +70,18 @@ object ProductInteraction extends Loggable {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
           transactionConfirmation.set("")
-          val prodInv = Store.recommend(theStoreId.is, theCategory.is) match {
+          val prodInvSeq = Store.recommend(theStoreId.is, theCategory.is, prodsPerPageToDisplay) match {
             // we want to distinguish error messages to user to provide better diagnostics.
-            case Full(pair) => Full((pair._1, pair._2)) // returns prod and quantity in inventory normally
+            case Full(pairs) => Full(pairs) // returns prod and quantity in inventory normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
             case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
           }
-          prodInv.dmap { Noop }
-          { pair =>
-            theProduct.set(Full(pair._1))
-            theProductInventory.set(pair._2)
+          prodInvSeq.dmap { Noop }
+          { qtyProds =>
+            theProduct.set(Full(qtyProds.head._2))
+            theProductInventory.set(qtyProds.head._1)
             S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-            prodDisplayJS(pair._1, pair._2)
+            prodDisplayJS( qtyProds)
           }
         }
         else {
