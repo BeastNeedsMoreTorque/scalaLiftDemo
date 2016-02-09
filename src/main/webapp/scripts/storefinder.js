@@ -2,7 +2,7 @@
 
 // Global variable, singleton storeFinder
 // API:
-// <localhost:port>/store/lat/<lat>/lon/<lon> gives closest store from coordinate(lat,lon).
+// <localhost:port>/stores/lat/<lat>/lng/<lng> gives closest store from coordinate(lat,lng).
 // Currently supported Store  (see lcboapi.com): id, name, is_dead, latitude, longitude, distance_in_meters (from specified location), address_line_1, city
 var storeFinder = (function() {
   var defaultOntarioLocation = new google.maps.LatLng(43.647219, -79.3789987); // Bay & Front LCBO address.
@@ -28,7 +28,7 @@ var storeFinder = (function() {
       map = new google.maps.Map(mapCanvas, myOptions);
       map.addListener('bounds_changed', function() {
         clearMarkers()
-        if (map.zoom > 10) {
+        if (this.zoom > 10) {
           showMarkers();
         }
         else {

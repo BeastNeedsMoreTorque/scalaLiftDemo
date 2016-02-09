@@ -228,7 +228,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     }
   }
 
-
   /**
     * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
     * Select a random product that matches the parameters subject to a max sample size.
@@ -237,23 +236,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category.
     * @return
     */
-  def recommend(storeId: Int, category: String): Box[(Product, Int)] = {
-    @tailrec // iterate in sampling until we get a non-zero inventory at the store or we give up after a few trials
-    def sampleWithInventory(trial: Int, prodIds: Set[Int]): Option[(Product, Int)] = {
-      val randomIndex = Random.nextInt(math.max(1, prodIds.size))
-      val prodId = prodIds.takeRight(randomIndex).head // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
-      val quantity = StoreProduct.getStoreProduct(storeId, prodId).fold(0){ _.quantity.get} // they might actually be often out of stock, or it could be dead
-      if (quantity > 0 || trial > PositiveInventoryIterations )
-        for ( p <- Product.getProduct(prodId)) yield (p, quantity)
-      else
-        sampleWithInventory(trial+1, prodIds)
-    }
-
-    // note: cacheSuccess grabs a lock
-    def cacheSuccess(storeId: Int, category: String): Option[(Product, Int)] = {
+  def recommend(storeId: Int, category: String, requestSize: Int): Box[Iterable[(Int, Product)]] = {
+    // note: cacheSuccess (top level code) grabs a lock
+    def cacheSuccess(storeId: Int, category: String): Option[Iterable[(Int, Product)]] = {
       if (storeCategoriesProductsCache.contains((storeId, category)) && !storeCategoriesProductsCache((storeId, category)).isEmpty) {
         val prodIds = storeCategoriesProductsCache((storeId, category))
-        sampleWithInventory(0, prodIds)
+        val randomIndex = Random.nextInt(math.max(1, prodIds.size))
+        val prodSelection = prodIds.takeRight(randomIndex).take(requestSize) // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
+        Option(for (id <- prodSelection;
+                    p <- Product.getProduct(id)) yield  (StoreProduct.getStoreProduct(storeId, id).fold(0)(_.quantity.get), p))
       }
       else None
     }
@@ -262,10 +253,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
         val randomIndex = Random.nextInt(math.max(1, MaxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-        val prods = productListByStoreCategory(randomIndex + 1, storeId, category) // index is 0-based but requiredSize is 1-based so add 1,
-        val randKey = prods.keySet.takeRight(randomIndex+1).head
-        val inv = StoreProduct.inventoryForStoreProduct(storeId, randKey)
-        (prods(randKey), inv.quantity)
+        val prods = productListByStoreCategory(randomIndex + requestSize, storeId, category) // index is 0-based but requiredSize is 1-based so add requestSize,
+        val randKeys = prods.keySet.takeRight(randomIndex+1)
+        prods.takeRight(randomIndex+1).take(requestSize)
       }
     }
   }
