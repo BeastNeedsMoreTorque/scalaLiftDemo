@@ -6,6 +6,7 @@
 <div id="centre" data-lift="surround?with=main;at=content">
     <head>
         <script src="scripts/toggleimg.js"></script>
+        <script src="scripts/prodselection.js"></script>
         <script src="scripts/storefinder.js"></script>
 
         <link rel="stylesheet" type="text/css" href="index.css">
@@ -31,27 +32,31 @@
       </div>
       <div class="span-9 last"></div> <!-- filler to ensure box for prodInteractionContainer does not go too far to the right -->
 
-      <hr> <!--Need enough spacing beneath the buttons-->
-      <div id="prodDisplay" hidden>
-          <span>Recommended products:</span><br>
-          <div id="prodContainer">
-              <!-- There will be several of these that would be generated for each product-->
-              <div>  <!-- a container for layout-->
-              <div class="span-8"> <!--generate other product items on the fly as table with tr and td elements-->
-                  <table>
-                      <tr>
-                          <td class="prodAttrHead">some attribute</td>
-                          <td class="prodAttrContent">some value</td>
-                      </tr>}
-                  </table>
-              </div>
-              <div class="span-8 last">  <!-- generate img with URL inside this div on the fly-->
-                  <img src="#"/>
-              </div>
-              </div>
-              <hr>
-          </div>
-      </div>
+        <hr> <!--Need enough spacing beneath the buttons-->
+        <div id="prodDisplay" hidden >
+            <input  name="chosenProds" id="chosenProds" width="300"/>
+            <span>Recommended products:</span><br>
+            <div id="prodContainer" class="prodContainer">
+                <!-- There will be several of these that would be generated for each product-->
+                <div>  <!-- a container for layout-->
+                    <div class="span-8"> <!--generate other product items on the fly as table with tr and td elements-->
+                        <table>
+                            <tr>
+                                <td class="prodAttrHead">some attribute</td>
+                                <td class="prodAttrContent">some value</td>
+                            </tr>}
+                        </table>/
+                        <label><input type="checkbox" class="productCB" name="product" value="Cider">Some Name</label>
+                    </div>
+                    <div class="span-8 last">  <!-- generate img with URL inside this div on the fly-->
+                        <img src="#"/>
+                    </div>
+                </div>
+                <hr>
+            </div>
+        </div>
+
+
       <span id="transactionConfirmation"></span>
     </div>
 </div>

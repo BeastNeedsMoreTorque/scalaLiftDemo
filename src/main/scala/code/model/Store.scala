@@ -34,9 +34,6 @@ import code.snippet.SessionCache.theStoreId
   * Created by philippederome on 15-11-01.
   * This is captured from JSON parsing.
   */
-
-
-
 case class StoreAsLCBOJson (id: Int = 0,
                  is_dead: Boolean = true,
                  latitude: Double = 0.0,
@@ -253,9 +250,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
         val randomIndex = Random.nextInt(math.max(1, MaxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-        val prods = productListByStoreCategory(randomIndex + requestSize, storeId, category) // index is 0-based but requiredSize is 1-based so add requestSize,
-        val randKeys = prods.keySet.takeRight(randomIndex+1)
-        prods.takeRight(randomIndex+1).take(requestSize)
+        val prods = productMapByStoreCategory(randomIndex + requestSize, storeId, category) // index is 0-based but requiredSize is 1-based so add requestSize,
+        prods.takeRight(randomIndex+1).take(requestSize).values.map(p => (0,p))
       }
     }
   }
@@ -451,7 +447,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def productListByStoreCategory(requiredSize: Int, store: Long, category: String): Map[Int, Product] = {
+  private def productMapByStoreCategory(requiredSize: Int, store: Long, category: String): Map[Int, Product] = {
     if (requiredSize <= 0) Map()
     else {
       val url = s"$LcboDomainURL/products?store_id=$store" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
