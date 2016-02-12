@@ -23,6 +23,7 @@ import scala.xml._
   */
 object ProductInteraction extends Loggable {
   val prodsPerPageToDisplay = Math.max(1,Props.getInt("product.prodsPerPageToDisplay", 5)) // it'd be very unconscious to choose less than 1.
+  var prodNames = ""
 
   private val interactionsToImgMap: Map[String, String] = {
     val interactionsToImgMapAsStr = Props.get("product.interactionsImageMap", "") // get it in JSON format
@@ -39,11 +40,13 @@ object ProductInteraction extends Loggable {
   def render = {
     def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
 
-    def prodDisplayJS(prodQties: Iterable[(Int, Product)]) = {
+    def prodDisplayJS(qtyProds: Iterable[(Int, Product)]) = {
       def getSingleDiv(el: (Int, Product)): NodeSeq = {
-        val attributesNodeSeq = <table style="width:100%">{for (x <-  el._2.createProductElemVals ++ List(("Quantity: ", el._1 )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
+       //
+        val checkBoxSeq = <label><input type="checkbox" class="productCB" onclick="prodSelection.checkBoxCB(this)" name="product" value={el._2.name.get}></input>{el._2.name.get}</label>
+        val attributesNodeSeq = <table>{for (x <-  el._2.createProductElemVals ++ List(("Quantity: ", el._1 )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
         val imgNodeSeq = <img src={el._2.imageThumbUrl.get}/>
-        val ns: NodeSeq =  <div><div class="span-8">{attributesNodeSeq}</div><div class="span-8 last">{imgNodeSeq}</div></div><hr></hr>
+        val ns: NodeSeq =  <div><div class="span-8">{attributesNodeSeq}{checkBoxSeq}</div><div class="span-8 last">{imgNodeSeq}</div></div><hr></hr>
         ns
       }
 
@@ -53,8 +56,9 @@ object ProductInteraction extends Loggable {
         getDivs(currNodeSeq ++ getSingleDiv(l.head), l.tail)
       }
 
-      val severalDivs = getDivs(NodeSeq.Empty, prodQties)
+      val severalDivs = getDivs(NodeSeq.Empty, qtyProds)
       SetHtml("prodContainer", severalDivs) &
+      Call("prodSelection.clear") &
       JsShowId("prodDisplay")
     }
 
@@ -126,13 +130,15 @@ object ProductInteraction extends Loggable {
       cancelCbJS
     }
 
+    "name=chosenProds" #> SHtml.text(prodNames, {println("chosenProd!");prodNames = _}) &
     ".options" #> LabelStyle.toForm( SHtml.ajaxRadio( radioOptions, Empty,
-       (choice: RadioElements) => {
-         choice.name match {
-           case "consume" => consume() & setBorderJS(choice.name)
-           case "recommend" => recommend() & setBorderJS(choice.name)
-           case "cancel" => cancel() & setBorderJS(choice.name)
-           case _ => Noop // for safety
+      (choice: RadioElements) => {
+        println(s"form got $prodNames")
+        choice.name match {
+          case "consume" => consume() & setBorderJS(choice.name)
+          case "recommend" => recommend() & setBorderJS(choice.name)
+          case "cancel" => cancel() & setBorderJS(choice.name)
+          case _ => Noop // for safety
         }
       }))
   }

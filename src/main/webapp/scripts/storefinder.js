@@ -66,6 +66,7 @@ var storeFinder = (function() {
         if (storeSelectedByApp == true) {
           var closestMarker = new google.maps.Marker({position:latlng,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
           closestMarker.addListener('click', storeFinder.storeClickCB);
+          evaluateDistance(latlng);
           fetchAllStores();
           getDirections(latlng);
         }
