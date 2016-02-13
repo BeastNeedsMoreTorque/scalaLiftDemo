@@ -251,6 +251,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
         val randomIndex = Random.nextInt(math.max(1, MaxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
         val prods = productMapByStoreCategory(randomIndex + requestSize, storeId, category) // index is 0-based but requiredSize is 1-based so add requestSize,
+        Product.update(prods) // important! If we're just starting webapp, cache could still be empty and we'll need to be able to look this up!
         prods.takeRight(randomIndex+1).take(requestSize).values.map(p => (0,p))
       }
     }
