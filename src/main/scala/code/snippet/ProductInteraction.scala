@@ -4,15 +4,17 @@ import code.model._
 import code.snippet.SessionCache._
 import net.liftweb.common._
 import net.liftweb.http.js.JE.Call
-import net.liftweb.http.js.JsCmd
+import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.{S, SHtml}
 import net.liftweb.json
-import net.liftweb.json.JsonParser._
+import net.liftweb.json.JsonParser.parse
+import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 import scala.annotation.tailrec
 import scala.xml._
+import scala.language.implicitConversions
 
 /**
   * This snippet contains state only via HTTP session (A Liftweb snippet is a web page fragment that has autonomous existence
@@ -22,9 +24,9 @@ import scala.xml._
   * Created by philippederome on 15-10-26.
   */
 object ProductInteraction extends Loggable {
-  val prodsPerPageToDisplay = Math.max(1,Props.getInt("product.prodsPerPageToDisplay", 5)) // it'd be very unconscious to choose less than 1.
-  var prodNames = ""
+  private implicit val formats = net.liftweb.json.DefaultFormats
 
+  val prodsPerPageToDisplay = Math.max(1,Props.getInt("product.prodsPerPageToDisplay", 5)) // it'd be very unconscious to choose less than 1.
   private val interactionsToImgMap: Map[String, String] = {
     val interactionsToImgMapAsStr = Props.get("product.interactionsImageMap", "") // get it in JSON format
     val jval: json.JValue = parse(interactionsToImgMapAsStr) // contains list of JField(String, JString(String))
@@ -42,8 +44,7 @@ object ProductInteraction extends Loggable {
 
     def prodDisplayJS(qtyProds: Iterable[(Int, Product)]) = {
       def getSingleDiv(el: (Int, Product)): NodeSeq = {
-       //
-        val checkBoxSeq = <label><input type="checkbox" class="productCB" onclick="prodSelection.checkBoxCB(this)" name="product" value={el._2.name.get}></input>{el._2.name.get}</label>
+        val checkBoxSeq = <label><input type="checkbox" class="productCB" name="product" value={el._2.name.get}></input>{el._2.name.get}</label>
         val attributesNodeSeq = <table>{for (x <-  el._2.createProductElemVals ++ List(("Quantity: ", el._1 )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
         val imgNodeSeq = <img src={el._2.imageThumbUrl.get}/>
         val ns: NodeSeq =  <div><div class="span-8">{attributesNodeSeq}{checkBoxSeq}</div><div class="span-8 last">{imgNodeSeq}</div></div><hr></hr>
@@ -58,7 +59,6 @@ object ProductInteraction extends Loggable {
 
       val severalDivs = getDivs(NodeSeq.Empty, qtyProds)
       SetHtml("prodContainer", severalDivs) &
-      Call("prodSelection.clear") &
       JsShowId("prodDisplay")
     }
 
@@ -129,11 +129,17 @@ object ProductInteraction extends Loggable {
       S.error("")
       cancelCbJS
     }
+    def logProducts(j: JValue): JsCmd = {
+      val jsonOpt = j.extractOpt[String].map( parse(_))
+      val namesSeq: Option[List[String]] = jsonOpt.map( json => {for (p <- json.children)  yield p.extract[String]  } )
+      namesSeq.foreach( _.map( logger.info(_)))
+      Noop
+    }
 
-    "name=chosenProds" #> SHtml.text(prodNames, {println("chosenProd!");prodNames = _}) &
+    "button [onclick]" #>
+      SHtml.jsonCall( JE.Call("prodSelection.currentProds"), logProducts _ ) andThen
     ".options" #> LabelStyle.toForm( SHtml.ajaxRadio( radioOptions, Empty,
       (choice: RadioElements) => {
-        println(s"form got $prodNames")
         choice.name match {
           case "consume" => consume() & setBorderJS(choice.name)
           case "recommend" => recommend() & setBorderJS(choice.name)
