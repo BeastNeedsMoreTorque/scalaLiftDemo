@@ -88,18 +88,18 @@ object ProductInteraction extends Loggable {
 
     def consumeCbJS = hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of product, or possibly a commentary on one
 
-    def recommend() = {
+    def recommend = {
       def maySelect(): JsCmd =
         if (theStoreId.is > 0 ) {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
-          val prodInvSeq = Store.recommend(theStoreId.is, theCategory.is, prodsPerPageToDisplay) match {
+          val qtyProdSeq = Store.recommend(theStoreId.is, theCategory.is, prodsPerPageToDisplay) match {
             // we want to distinguish error messages to user to provide better diagnostics.
             case Full(pairs) => Full(pairs) // returns prod and quantity in inventory normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
             case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
           }
-          prodInvSeq.dmap { Noop }
+          qtyProdSeq.dmap { Noop }
           { qtyProds =>
             S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
             prodDisplayJS( qtyProds)
@@ -132,35 +132,33 @@ object ProductInteraction extends Loggable {
         val feedback = products.map(mayConsumeItem _)
         feedback.map( _.error).filter(!_.isEmpty).map(S.error(_)) // show all errors when we attempted to go to DB for user products relationship
         val confirmations = feedback.filter( !_.confirmation.isEmpty) // select those for which we have no error and explicit useful message
-        if (!confirmations.isEmpty) transactionsConfirmationJS(confirmations.head.userName, confirmations.map(_.confirmation)) // confirm and show only if there's something interesting
-        else Noop
+        if (!confirmations.isEmpty) transactionsConfirmationJS(confirmations.head.userName, confirmations.map(_.confirmation)) & consumeCbJS // confirm and show only if there's something interesting
+        else {S.error("could not reconcile product id in cache!"); Noop}
       }
 
       // ignore consecutive clicks (when theRecommendedProducts is defined), ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
       if (lcbo_ids.isEmpty) { S.notice("consume", "Select some recommended products before attempting to consume"); Noop}
-      else  mayConsume & consumeCbJS  // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
+      else mayConsume // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
     }
 
-    def cancel() = {
+    def cancel = {
       S.error("")
       cancelCbJS
     }
 
     def consumeProducts(j: JValue): JsCmd = {
       val jsonOpt = j.extractOpt[String].map( parse(_))
-      val lcboIdsSeq: Option[List[Int]] = jsonOpt.map( json => {for (p <- json.children)  yield p.extract[Int]  } )
-      consume(lcboIdsSeq.fold(List[Int]())(identity)) & setBorderJS("consume")
+      val lcboIdsSeq: Option[List[Int]] = jsonOpt.map( json => {for (p <- json.children) yield p.extract[Int]} )
+      consume(lcboIdsSeq.fold(List[Int]())(identity))
     }
 
+    // call to setBorderJS after button activation simply highlights that button was pressed.
     "@consume [onclick]" #>
-      SHtml.jsonCall( JE.Call("prodSelection.currentProds"), consumeProducts _ ) &
-    ".options" #> LabelStyle.toForm( SHtml.ajaxRadio( radioOptions, Empty,
-      (choice: RadioElements) => {
-        choice.name match {
-          case "recommend" => recommend() & setBorderJS(choice.name)
-          case "cancel" => cancel() & setBorderJS(choice.name)
-          case _ => Noop // for safety
-        }
-      }))
+      SHtml.jsonCall( JE.Call("prodSelection.currentProds"),
+                      { j: JValue => consumeProducts(j) & setBorderJS("consume")}) & // fetch in JSON with JS Call the lcbo product IDs and then deal with them
+    "@recommend [onclick]" #>
+      SHtml.ajaxInvoke({() => recommend & setBorderJS("recommend")}) &
+    "@cancel [onclick]" #>
+      SHtml.ajaxInvoke({() => cancel & setBorderJS("cancel")})
   }
 }
