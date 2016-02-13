@@ -34,20 +34,36 @@ object ProductInteraction extends Loggable {
     v.map(_.asInstanceOf[(String, String)]).toMap  // could throw if contents that are configured are in wrong format (violating assumption of pairs (String,String)...
   }
 
-  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions(  List("recommend", "consume", "cancel"), "cancel", interactionsToImgMap)
+  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions(  List("recommend", "cancel"), "cancel", interactionsToImgMap)
 
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
   def setBorderJS(elt: String) = Call("toggleImage.frameRadioImage", "prodInteractionContainer", {elt})
 
   def render = {
-    def transactionConfirmationJS = SetHtml("transactionConfirmation", Text(transactionConfirmation.is))
+    def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[String]) = {
+      def getSingleLI(el: String): NodeSeq = {
+        val ns: NodeSeq = <li>{el}</li>
+        ns
+      }
+      @tailrec
+      def getLIs(currNodeSeq: NodeSeq, l: Iterable[String]): NodeSeq = {
+        if (l.isEmpty) return currNodeSeq
+        getLIs(currNodeSeq ++ getSingleLI(l.head), l.tail)
+      }
+      val severalLIs = getLIs(NodeSeq.Empty, confirmationMsgs)
+
+      SetHtml("transactionsConfirmationUser", Text(user)) &
+      SetHtml("transactionsConfirmation", severalLIs) &
+      JsShowId("confirmationDiv")
+    }
 
     def prodDisplayJS(qtyProds: Iterable[(Int, Product)]) = {
       def getSingleDiv(el: (Int, Product)): NodeSeq = {
-        val checkBoxSeq = <label><input type="checkbox" class="productCB" name="product" value={el._2.name.get}></input>{el._2.name.get}</label>
+        // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
+        val checkBoxNodeSeq = <label><input type="checkbox" class="productCB" name="product" value={el._2.lcbo_id.get.toString}></input>{el._2.name.get}</label>
         val attributesNodeSeq = <table>{for (x <-  el._2.createProductElemVals ++ List(("Quantity: ", el._1 )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
         val imgNodeSeq = <img src={el._2.imageThumbUrl.get}/>
-        val ns: NodeSeq =  <div><div class="span-8">{attributesNodeSeq}{checkBoxSeq}</div><div class="span-8 last">{imgNodeSeq}</div></div><hr></hr>
+        val ns: NodeSeq =  <div><div class="span-8">{attributesNodeSeq}{checkBoxNodeSeq}</div><div class="span-8 last">{imgNodeSeq}</div></div><hr></hr>
         ns
       }
 
@@ -59,21 +75,22 @@ object ProductInteraction extends Loggable {
 
       val severalDivs = getDivs(NodeSeq.Empty, qtyProds)
       SetHtml("prodContainer", severalDivs) &
+      JsHideId("confirmationDiv") &
       JsShowId("prodDisplay")
     }
 
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
     // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
-    def cancelCbJS =  transactionConfirmationJS & hideProdDisplayJS
-    def consumeCbJS = hideProdDisplayJS & transactionConfirmationJS // meant to simulate consumption of product, or possibly a commentary on one
+    def cancelCbJS =  hideProdDisplayJS & JsHideId("confirmationDiv") // transactionsConfirmationJS
+
+    def consumeCbJS = hideProdDisplayJS    // meant to simulate consumption of product, or possibly a commentary on one
 
     def recommend() = {
       def maySelect(): JsCmd =
         if (theStoreId.is > 0 ) {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
-          transactionConfirmation.set("")
           val prodInvSeq = Store.recommend(theStoreId.is, theCategory.is, prodsPerPageToDisplay) match {
             // we want to distinguish error messages to user to provide better diagnostics.
             case Full(pairs) => Full(pairs) // returns prod and quantity in inventory normally
@@ -82,8 +99,6 @@ object ProductInteraction extends Loggable {
           }
           prodInvSeq.dmap { Noop }
           { qtyProds =>
-            theProduct.set(Full(qtyProds.head._2))
-            theProductInventory.set(qtyProds.head._1)
             S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
             prodDisplayJS( qtyProds)
           }
@@ -94,54 +109,52 @@ object ProductInteraction extends Loggable {
         }
 
       User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
-      { currentUser =>
-        theProduct.is.dmap { maySelect() & transactionConfirmationJS } // normal processing
-        { p => S.notice("recommend", "Cancel or consume prior to a secondary recommendation")
-          // ignore consecutive clicks for flow control, ensuring we take only the user's first click as actionable
-          // for a series of clicks on button before we have time to disable it
-        }
-      }
+      { user => maySelect()} // normal processing
     }
 
-    def consume() = {
-      def mayConsume(p: Product): JsCmd = {
+    def consume(lcbo_ids: List[Int]) = {
+      case class Feedback(userName: String, confirmation: String, error: String)
+      def mayConsumeItem(p: Product): Feedback = {
         UserProduct.consume(p) match {
           case Full((userName, count)) =>
-            transactionConfirmation.set(s"${p.name} has now been purchased $count time(s), $userName")
-            theProduct.set(Empty)
-            S.error("") // workaround clearCurrentNotices clears error message now that this is good, to get a clean screen.
+            Feedback(userName, s"${p.name} $count time(s)", "")
           case Failure(x, ex, _) =>
-            S.error(s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
+            Feedback(userName="", confirmation="", error = s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
           case Empty =>
-            S.error(s"Unable to sell you product ${p.name}")
+            Feedback(userName="", confirmation="", error = s"Unable to sell you product ${p.name}")
         }
-        Noop
       }
 
-      // ignore consecutive clicks (when theProduct is defined), ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
-      theProduct.is.dmap { S.notice("consume", "Get a product recommendation before attempting to consume"); Noop}
-      { p => mayConsume(p) & consumeCbJS } // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
+      def mayConsume: JsCmd = {
+        val products = lcbo_ids.flatten(Product.getProduct (_))
+        val feedback = products.map(mayConsumeItem _)
+        feedback.map( _.error).filter(!_.isEmpty).map(S.error(_)) // show all errors when we attempted to go to DB for user products relationship
+        val confirmations = feedback.filter( !_.confirmation.isEmpty) // select those for which we have no error and explicit useful message
+        if (!confirmations.isEmpty) transactionsConfirmationJS(confirmations.head.userName, confirmations.map(_.confirmation)) // confirm and show only if there's something interesting
+        else Noop
+      }
+
+      // ignore consecutive clicks (when theRecommendedProducts is defined), ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
+      if (lcbo_ids.isEmpty) { S.notice("consume", "Select some recommended products before attempting to consume"); Noop}
+      else  mayConsume & consumeCbJS  // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
     }
 
     def cancel() = {
-      transactionConfirmation.set("")
-      theProduct.set(Empty)
       S.error("")
       cancelCbJS
     }
-    def logProducts(j: JValue): JsCmd = {
+
+    def consumeProducts(j: JValue): JsCmd = {
       val jsonOpt = j.extractOpt[String].map( parse(_))
-      val namesSeq: Option[List[String]] = jsonOpt.map( json => {for (p <- json.children)  yield p.extract[String]  } )
-      namesSeq.foreach( _.map( logger.info(_)))
-      Noop
+      val lcboIdsSeq: Option[List[Int]] = jsonOpt.map( json => {for (p <- json.children)  yield p.extract[Int]  } )
+      consume(lcboIdsSeq.fold(List[Int]())(identity)) & setBorderJS("consume")
     }
 
-    "button [onclick]" #>
-      SHtml.jsonCall( JE.Call("prodSelection.currentProds"), logProducts _ ) andThen
+    "@consume [onclick]" #>
+      SHtml.jsonCall( JE.Call("prodSelection.currentProds"), consumeProducts _ ) &
     ".options" #> LabelStyle.toForm( SHtml.ajaxRadio( radioOptions, Empty,
       (choice: RadioElements) => {
         choice.name match {
-          case "consume" => consume() & setBorderJS(choice.name)
           case "recommend" => recommend() & setBorderJS(choice.name)
           case "cancel" => cancel() & setBorderJS(choice.name)
           case _ => Noop // for safety

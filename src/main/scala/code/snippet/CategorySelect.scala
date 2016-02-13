@@ -1,8 +1,8 @@
 package code.snippet
 
 import code.model.LiquorCategory
-import code.snippet.SessionCache.{theProduct, theCategory}
-import net.liftweb.common.{Empty, Full}
+import code.snippet.SessionCache.theCategory
+import net.liftweb.common.Full
 import net.liftweb.http.SHtml
 import net.liftweb.http.js.JE.Call
 import net.liftweb.http.js.JsCmds._
@@ -17,7 +17,7 @@ object CategorySelect {
   private val defaultOption = RadioElements.selectOption(SessionCache.defaultCategory, categoryImg)  // selected with style that frames it
   private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.categoriesSeq, SessionCache.defaultCategory, LiquorCategory.toImg)
 
-  def setBorderJS(elt: String): JsCmd = Call("toggleImage.frameRadioImage", "prodCategoryContainer", {elt})
+  def setBorderJS(elt: String): JsCmd = Call("toggleButton.frame", "prodCategoryContainer", {elt})
 
   /**
     * save radio button selection as next default to avoid annoying resetting to original default and make it session persistent
@@ -29,7 +29,6 @@ object CategorySelect {
     * @see http://stackoverflow.com/questions/15879991/get-checkbox-and-radio-button-value-in-lift
     */
   def render = {
-    theProduct.set(Empty)
     theCategory.set(SessionCache.defaultCategory)  // on refresh, we set category to defaultOption and hence we should change Session State too.
     ".options" #> LabelStyle.toForm(SHtml.ajaxRadio(
       radioOptions, Full(defaultOption),
