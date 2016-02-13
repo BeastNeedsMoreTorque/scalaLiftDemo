@@ -37,7 +37,11 @@ object ProductInteraction extends Loggable {
   private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions(  List("recommend", "cancel"), "cancel", interactionsToImgMap)
 
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
-  def setBorderJS(elt: String) = Call("toggleImage.frameRadioImage", "prodInteractionContainer", {elt})
+  private val showProdDisplayJS =  JsShowId("prodDisplay")
+  private val showConfirmationJS =  JsShowId("confirmationDiv")
+  private val hideConfirmationJS =  JsHideId("confirmationDiv")
+
+  def setBorderJS(elt: String) = Call("toggleButton.frame", "prodInteractionContainer", {elt})
 
   def render = {
     def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[String]) = {
@@ -54,7 +58,7 @@ object ProductInteraction extends Loggable {
 
       SetHtml("transactionsConfirmationUser", Text(user)) &
       SetHtml("transactionsConfirmation", severalLIs) &
-      JsShowId("confirmationDiv")
+      showConfirmationJS
     }
 
     def prodDisplayJS(qtyProds: Iterable[(Int, Product)]) = {
@@ -74,17 +78,15 @@ object ProductInteraction extends Loggable {
       }
 
       val severalDivs = getDivs(NodeSeq.Empty, qtyProds)
-      SetHtml("prodContainer", severalDivs) &
-      JsHideId("confirmationDiv") &
-      JsShowId("prodDisplay")
+      SetHtml("prodContainer", severalDivs) & hideConfirmationJS & showProdDisplayJS
     }
 
     // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser
     // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
     // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
-    def cancelCbJS =  hideProdDisplayJS & JsHideId("confirmationDiv") // transactionsConfirmationJS
+    def cancelCbJS =  hideProdDisplayJS & hideConfirmationJS
 
-    def consumeCbJS = hideProdDisplayJS    // meant to simulate consumption of product, or possibly a commentary on one
+    def consumeCbJS = hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of product, or possibly a commentary on one
 
     def recommend() = {
       def maySelect(): JsCmd =
