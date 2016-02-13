@@ -5,7 +5,7 @@
 <body data-lift-content-id="centre">
 <div id="centre" data-lift="surround?with=main;at=content">
     <head>
-        <script src="scripts/toggleimg.js"></script>
+        <script src="scripts/togglebutton.js"></script>
         <script src="scripts/prodselection.js"></script>
         <script src="scripts/storefinder.js"></script>
 
@@ -23,12 +23,12 @@
     </div>
     <div data-lift="ProductInteraction">
       <div id="prodInteractionContainer" class="span-7">
-          <button>Check</button>
           <div class="box">
           <span class="options">
             <input type="radio" value="Option 1" hidden> <!-- there will be three img elements acting as radio buttons with hidden radio buttons-->
-          </span><br>
-          <span class="f2">recommend</span><span class="f2">consume</span><span class="f2">cancel</span>
+          </span><input type="image" class="thinBorder" name="consume" title="consume" src="/images/winesmall.jpg">
+              <br>
+          <span class="f2">recommend</span><span class="f2">cancel</span><span class="f2">consume</span><!-- should probably be generated -->
           </div>
       </div>
       <div class="span-9 last"></div> <!-- filler to ensure box for prodInteractionContainer does not go too far to the right -->
@@ -55,8 +55,12 @@
             </div>
         </div>
 
-
-      <span id="transactionConfirmation"></span>
+      <div id="confirmationDiv" hidden>
+        <span id="transactionsConfirmationUser"></span><span id="purchasePhrase">, you have now purchased</span>
+        <div id="transactionsConfirmation">
+          <li>a selected product</li>
+        </div>
+      </div>
     </div>
 </div>
 

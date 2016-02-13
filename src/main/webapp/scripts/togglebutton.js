@@ -1,6 +1,6 @@
 "use strict";
 
-var toggleImage = (function() {
+var toggleButton = (function() {
     var thickBorder = 'thickBorder';
     var thinBorder = 'thinBorder';
 
@@ -9,10 +9,10 @@ var toggleImage = (function() {
     };
 
     return {
-        // adds a selected thick frame around selected img element and sets thin frame around the deselected/old one.
-        frameRadioImage: function(container, newSelection) {
-            var images = $("#"+container).find("img").get(); // they are img descendants of the container
-            var oldSelection = images.find(function(selector){
+        // adds a selected thick frame around selected element and sets thin frame around the deselected/old one.
+        frame: function(container, newSelection) {
+            var nodes = $("#"+container).find('*').get(); // they are descendants of the container
+            var oldSelection = nodes.find(function(selector){
                 return $(selector).hasClass(thickBorder);
             });
             if (typeof oldSelection != 'undefined') toggleSelect(oldSelection, thinBorder, thickBorder);
