@@ -236,7 +236,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def recommend(storeId: Int, category: String, requestSize: Int): Box[Iterable[(Int, Product)]] = {
     // note: cacheSuccess (top level code) grabs a lock
     def cacheSuccess(storeId: Int, category: String): Option[Iterable[(Int, Product)]] = {
-      if (storeCategoriesProductsCache.contains((storeId, category)) && !storeCategoriesProductsCache((storeId, category)).isEmpty) {
+      if (storeCategoriesProductsCache.contains((storeId, category)) && storeCategoriesProductsCache((storeId, category)).nonEmpty) {
         val prodIds = storeCategoriesProductsCache((storeId, category))
         val randomIndex = Random.nextInt(math.max(1, prodIds.size))
         val prodSelection = prodIds.takeRight(randomIndex).take(requestSize) // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
@@ -318,7 +318,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val slice = myStores.take(DBBatchSize)
     stores.update(slice)
     val rest = myStores.takeRight(myStores.size - slice.size)
-    if (!rest.isEmpty) updateStores( rest)
+    if (rest.nonEmpty) updateStores( rest)
   }
 
   @tailrec
@@ -326,7 +326,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val slice = myStores.take(DBBatchSize)
     stores.insert(slice)
     val rest = myStores.takeRight(myStores.size - slice.size)
-    if (!rest.isEmpty) insertNewStores(rest)
+    if (rest.nonEmpty) insertNewStores(rest)
   }
 
   private final def getSingleStore( uri: String): PlainStoreAsLCBOJson = {
@@ -362,7 +362,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     val cleanStores = accumItems(Clean) ++ fetchItems(Clean, storesByState, s => s.getStore(dbStores))
     val dirtyStores = accumItems(Dirty) ++ fetchItems(Dirty, storesByState, s => s.getStore(dbStores).map(copyAttributes(_, s) ))
-    val newStores = accumItems(New) ++ (storesByState.getOrElse(New, Nil)).map{ create }
+    val newStores = accumItems(New) ++ storesByState.getOrElse(New, Nil).map{ create }
 
     // after preliminaries, get the map of stores indexed properly by state that we need having accumulated over the pages so far.
     val revisedAccumItems = Map(New -> newStores, Dirty -> dirtyStores, Clean -> cleanStores)
@@ -565,14 +565,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                                         pageNo: Int,
                                         pageDelta: Int = 1,
                                         myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): Map[EntityRecordState, List[Product]] = {
-    def nextPage() = pageNo + prodLoadWorkers
+    def nextPage = pageNo + prodLoadWorkers
     def fetchItems(state: EntityRecordState,
                    mapList: Map[EntityRecordState, List[ProductAsLCBOJson]],
                    f: ProductAsLCBOJson => Option[Product] ): List[Product] = {
       mapList.getOrElse(state, Nil).flatMap { p => f(p) } // remove the Option in Option[Product]
     }
 
-    if (requiredSize <= 0) accumItems
+    if (requiredSize <= 0) return accumItems
     // specify the URI for the LCBO api url for liquor selection
     val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
     logger.info(uri)
@@ -630,14 +630,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                                         pageNo: Int,
                                         pageDelta: Int = 1,
                                         myFilter: InventoryAsLCBOJson => Boolean = { sp: InventoryAsLCBOJson => true }): Map[EntityRecordState, List[StoreProduct]] = {
-    def nextPage() = pageNo + prodLoadWorkers
+    def nextPage = pageNo + prodLoadWorkers
     def fetchItems(state: EntityRecordState,
                    mapList: Map[EntityRecordState, List[InventoryAsLCBOJson]],
                    f: InventoryAsLCBOJson => Option[StoreProduct] ): List[StoreProduct] = {
       mapList.getOrElse(state, Nil).flatMap { p => f(p) } // remove the Option in Option[Product]
     }
 
-    if (requiredSize <= 0) accumItems
+    if (requiredSize <= 0) return accumItems
     // specify the URI for the LCBO api url for liquor selection
     val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
     logger.info(uri)
@@ -799,7 +799,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           val fullMap = maps.flatten
           for ((id, p) <- fullMap) {
             val storeCatKey = (storeId, p.primary_category.get)
-            if (!storeCategoriesProductsCache.putIfAbsent(storeCatKey, Set(id)).isEmpty  ) {
+            if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, Set(id)).isDefined  ) {
               // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
               storeCategoriesProductsCache(storeCatKey) +=  id
             }
