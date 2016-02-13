@@ -84,7 +84,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     val slice = myStoreProducts.take(DBBatchSize)
     storeProducts.update(slice)
     val rest = myStoreProducts.takeRight(myStoreProducts.size - slice.size)
-    if (!rest.isEmpty) updateStoreProducts( rest)
+    if (rest.nonEmpty) updateStoreProducts( rest)
   }
 
   @tailrec
@@ -92,7 +92,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     val slice: Iterable[StoreProduct] = myStoreProducts.take(DBBatchSize)
     storeProducts.insert(slice)
     val rest = myStoreProducts.takeRight(myStoreProducts.size - slice.size)
-    if (!rest.isEmpty) insertStoreProducts(rest)
+    if (rest.nonEmpty) insertStoreProducts(rest)
   }
 
   @throws(classOf[SocketTimeoutException])

@@ -34,7 +34,7 @@ case class ProductAsLCBOJson(id: Int,
                              price_in_cents: Int,
                              alcohol_content: Int,
                              volume_in_milliliters: Int) {
-  def removeNulls: ProductAsLCBOJson = { // remove LCBO's poisoned null strings
+  def removeNulls(): ProductAsLCBOJson = { // remove LCBO's poisoned null strings
     def notNull(s: String) = if (s eq null) "" else s
 
     ProductAsLCBOJson(id,
@@ -197,7 +197,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val slice = myProducts.take(DBBatchSize)
     products.update(slice)
     val rest = myProducts.takeRight(myProducts.size - slice.size)
-    if (!rest.isEmpty) updateProducts( rest)
+    if (rest.nonEmpty) updateProducts( rest)
   }
 
   @tailrec
@@ -205,7 +205,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val slice = myProducts.take(DBBatchSize)
     products.insert(slice)
     val rest = myProducts.takeRight(myProducts.size - slice.size)
-    if (!rest.isEmpty) insertNewProducts(rest)
+    if (rest.nonEmpty) insertNewProducts(rest)
   }
 
   def create(p: ProductAsLCBOJson): Product = {

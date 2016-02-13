@@ -128,11 +128,11 @@ object ProductInteraction extends Loggable {
       }
 
       def mayConsume: JsCmd = {
-        val products = lcbo_ids.flatten(Product.getProduct (_))
-        val feedback = products.map(mayConsumeItem _)
-        feedback.map( _.error).filter(!_.isEmpty).map(S.error(_)) // show all errors when we attempted to go to DB for user products relationship
+        val products = lcbo_ids.flatten(Product.getProduct)
+        val feedback = products.map(mayConsumeItem)
+        feedback.map( _.error).filter(!_.isEmpty).map(S.error) // show all errors when we attempted to go to DB for user products relationship
         val confirmations = feedback.filter( !_.confirmation.isEmpty) // select those for which we have no error and explicit useful message
-        if (!confirmations.isEmpty) transactionsConfirmationJS(confirmations.head.userName, confirmations.map(_.confirmation)) & consumeCbJS // confirm and show only if there's something interesting
+        if (confirmations.nonEmpty) transactionsConfirmationJS(confirmations.head.userName, confirmations.map(_.confirmation)) & consumeCbJS // confirm and show only if there's something interesting
         else {S.error("could not reconcile product id in cache!"); Noop}
       }
 
@@ -147,7 +147,7 @@ object ProductInteraction extends Loggable {
     }
 
     def consumeProducts(j: JValue): JsCmd = {
-      val jsonOpt = j.extractOpt[String].map( parse(_))
+      val jsonOpt = j.extractOpt[String].map( parse)
       val lcboIdsSeq: Option[List[Int]] = jsonOpt.map( json => {for (p <- json.children) yield p.extract[Int]} )
       consume(lcboIdsSeq.fold(List[Int]())(identity))
     }
