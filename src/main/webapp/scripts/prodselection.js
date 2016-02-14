@@ -17,7 +17,6 @@ var prodSelection = (function() {
       }
       var effectiveCostEl = $(siblings).find("input.prodCost");
       $(effectiveCostEl).val(cost.toFixed(2));
-
     },
 
     currentProds: function(data) {
@@ -40,8 +39,7 @@ var prodSelection = (function() {
         selectedItems.push(data);
         selectedProdIds.push(lcbo_id); // this is the lcbo id of the product
       });
-      //console.log(JSON.stringify(selectedItems));
-      return JSON.stringify(selectedProdIds);
+      return JSON.stringify(selectedItems);
     }
   }
 }());

@@ -38,7 +38,7 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
     * @return the user who requested the product and the number of times the user has purchased this product as a pair/tuple.
     *         May throw but would be caught as a Failure within Box to be consumed higher up.
     */
-  def persist(p: Product) = {
+  def persist(p: Product, quantity: Int) = {
     User.currentUser.dmap { Failure("unable to store transaction, Login first!").asA[(String, Long)] }
     { user => // normal case
       // update it with new details; we could verify that there is a difference between LCBO and our version first...
@@ -57,19 +57,19 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
             val userProd: Box[UserProduct] = userProducts.where(u => u.user_c === user.id.get and u.productid === q.id).forUpdate.headOption
             if (userProd.isEmpty) {
               // (Product would be stored in DB with no user interest)
-              count = 1
+              count = quantity
               UserProduct.createRecord.user_c(user.id.get).productid(q.id).selectionscount(count).save // cascade save dependency.
             } else {
               // cascade save dependency (there should only be one entry to update).
               userProd.map { u =>
-                count = u.selectionscount.get + 1
+                count = u.selectionscount.get + quantity
                 u.selectionscount.set(count)
                 u.updated.set(u.updated.defaultValue)
                 u.update // Active Record pattern )
               } // from compiler perspective the map could have been a no-op, but that's not really possible in practice.
             }
           } openOr {
-            count = 1 // we never saw that product before and user shows interest, store both.
+            count = quantity // we never saw that product before and user shows interest, store both.
             p.save
             UserProduct.createRecord.user_c(user.id.get).productid(p.id).selectionscount(count).save // cascade save dependency.
           }
@@ -84,7 +84,7 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
     * @param product contains a product
     * @return a Box capturing any exception to be reported further up, capturing how many times user has consumed product.
     */
-  def consume(product: Product): Box[(String, Long)] = persist(product) // yeah, could do other things such as real payment transaction and exchange of asset.
+  def consume(product: Product, quantity: Int): Box[(String, Long)] = persist(product, quantity) // yeah, could do other things such as real payment transaction and exchange of asset.
 
 }
 
