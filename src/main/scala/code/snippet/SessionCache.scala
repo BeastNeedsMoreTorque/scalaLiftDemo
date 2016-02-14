@@ -14,4 +14,6 @@ object SessionCache {
 
   object theCategory extends SessionVar[String](defaultCategory)
   object theStoreId extends SessionVar[Int](defaultStore)
+  object theRecommendCount extends SessionVar[Int](1)
+
 }

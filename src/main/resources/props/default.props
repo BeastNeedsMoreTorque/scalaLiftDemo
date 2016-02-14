@@ -28,7 +28,6 @@ product.Category=wine
 product.synchLcbo=true
 product.load.workers=2
 product.DBBatchSize=500
-product.prodsPerPageToDisplay=10
 
 product.cacheSize=20000
 

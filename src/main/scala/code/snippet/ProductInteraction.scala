@@ -6,12 +6,14 @@ import net.liftweb.common._
 import net.liftweb.http.js.JE.Call
 import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds._
-import net.liftweb.http.{S, SHtml}
+import net.liftweb.http.S
 import net.liftweb.json
 import net.liftweb.json.JsonParser.parse
 import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
+import net.liftweb.http.SHtml.{ajaxInvoke,ajaxSelect,jsonCall}
+
 import scala.annotation.tailrec
 import scala.xml._
 import scala.language.implicitConversions
@@ -26,7 +28,6 @@ import scala.language.implicitConversions
 object ProductInteraction extends Loggable {
   private implicit val formats = net.liftweb.json.DefaultFormats
 
-  val prodsPerPageToDisplay = Math.max(1,Props.getInt("product.prodsPerPageToDisplay", 5)) // it'd be very unconscious to choose less than 1.
   private val interactionsToImgMap: Map[String, String] = {
     val interactionsToImgMapAsStr = Props.get("product.interactionsImageMap", "") // get it in JSON format
     val jval: json.JValue = parse(interactionsToImgMapAsStr) // contains list of JField(String, JString(String))
@@ -105,7 +106,7 @@ object ProductInteraction extends Loggable {
         if (theStoreId.is > 0 ) {
           // validates expected numeric input TheStore (a http session attribute) and when valid,
           // do real handling of accessing LCBO data
-          val qtyProdSeq = Store.recommend(theStoreId.is, theCategory.is, prodsPerPageToDisplay) match {
+          val qtyProdSeq = Store.recommend(theStoreId.is, theCategory.is, theRecommendCount.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
             case Full(pairs) => Full(pairs) // returns prod and quantity in inventory normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
@@ -165,13 +166,25 @@ object ProductInteraction extends Loggable {
       consume(selectedProducts.fold(List[SelectedProduct]())(identity))
     }
 
+    val recommendCountValues = Map[String, Int](
+      "1" -> 1,
+      "5" -> 5,
+      "10" -> 10,
+      "20" -> 20
+    )
+    val recommendCountDefault = Full("1")
+    val recommendCountOptions : List[(String,String)] = recommendCountValues.keys.map(p => (p,p)).toList
+
     // call to setBorderJS after button activation simply highlights that button was pressed.
     "@consume [onclick]" #>
-      SHtml.jsonCall( JE.Call("prodSelection.currentProds"),
+      jsonCall( JE.Call("prodSelection.currentProds"),
                       { j: JValue => consumeProducts(j) & setBorderJS("consume")}) & // fetch in JSON with JS Call the lcbo product IDs and then deal with them
     "@recommend [onclick]" #>
-      SHtml.ajaxInvoke({() => recommend & setBorderJS("recommend")}) &
+      ajaxInvoke({() => recommend & setBorderJS("recommend")}) &
     "@cancel [onclick]" #>
-      SHtml.ajaxInvoke({() => cancel & setBorderJS("cancel")})
+      ajaxInvoke({() => cancel & setBorderJS("cancel")}) &
+    "select" #> ajaxSelect(recommendCountOptions, recommendCountDefault,
+      { selected: String => theRecommendCount.set(toInt(selected)); Noop })
+
   }
 }
