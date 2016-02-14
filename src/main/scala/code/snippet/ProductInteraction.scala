@@ -43,14 +43,17 @@ object ProductInteraction extends Loggable {
 
   def setBorderJS(elt: String) = Call("toggleButton.frame", "prodInteractionContainer", {elt})
 
+  case class SelectedProduct(lcbo_id: Int, quantity: Int, cost: Double)
+
   def render = {
-    def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[String]) = {
-      def getSingleLI(el: String): NodeSeq = {
-        val ns: NodeSeq = <li>{el}</li>
+    def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[(SelectedProduct, String)]) = {
+      def getSingleLI(el: (SelectedProduct, String)): NodeSeq = {
+        val formattedCost =     f"${el._1.cost}%1.2f"
+        val ns: NodeSeq = <li>{el._2} at cost of ${formattedCost} for {el._1.quantity} extra units</li>
         ns
       }
       @tailrec
-      def getLIs(currNodeSeq: NodeSeq, l: Iterable[String]): NodeSeq = {
+      def getLIs(currNodeSeq: NodeSeq, l: Iterable[(SelectedProduct, String)]): NodeSeq = {
         if (l.isEmpty) return currNodeSeq
         getLIs(currNodeSeq ++ getSingleLI(l.head), l.tail)
       }
@@ -123,10 +126,10 @@ object ProductInteraction extends Loggable {
       { user => maySelect()} // normal processing
     }
 
-    def consume(lcbo_ids: List[Int]) = {
+    def consume(selectedProds: List[SelectedProduct]) = {
       case class Feedback(userName: String, confirmation: String, error: String)
-      def mayConsumeItem(p: Product): Feedback = {
-        UserProduct.consume(p) match {
+      def mayConsumeItem(p: Product, quantity: Int): Feedback = {
+        UserProduct.consume(p, quantity) match {
           case Full((userName, count)) =>
             Feedback(userName, s"${p.name} $count time(s)", "")
           case Failure(x, ex, _) =>
@@ -137,17 +140,18 @@ object ProductInteraction extends Loggable {
       }
 
       def mayConsume: JsCmd = {
-        val products = lcbo_ids.flatten(Product.getProduct)
-        val feedback = products.map(mayConsumeItem)
-        feedback.map( _.error).filter(_.nonEmpty).map(S.error) // show all errors when we attempted to go to DB for user products relationship
-        val confirmations = feedback.filter( _.confirmation.nonEmpty) // select those for which we have no error and explicit useful message
-        if (confirmations.nonEmpty) transactionsConfirmationJS(confirmations.head.userName, confirmations.map(_.confirmation)) & consumeCbJS // confirm and show only if there's something interesting
+        val productPairs: List[(SelectedProduct, Option[Product])] = selectedProds.map(p => (p, Product.getProduct(p.lcbo_id)))
+        val feedback: List[(SelectedProduct, Feedback)] = for (pair <- productPairs;
+                            p <- pair._2;
+                            f <- Option(mayConsumeItem(p, pair._1.quantity))) yield(pair._1, f) //products.map(mayConsumeItem)
+        feedback.map {pair: (SelectedProduct, Feedback) => pair._2.error}.filter(_.nonEmpty).map(S.error) // show all errors when we attempted to go to DB for user products relationship
+        val confirmations = feedback.filter( _._2.confirmation.nonEmpty) // select those for which we have no error and explicit useful message
+        if (confirmations.nonEmpty) transactionsConfirmationJS(confirmations.head._2.userName, confirmations.map{pair => (pair._1, pair._2.confirmation) }) & consumeCbJS // confirm and show only if there's something interesting
         else {S.error("could not reconcile product id in cache!"); Noop}
       }
 
-      // ignore consecutive clicks (when theRecommendedProducts is defined), ensuring we do not attempt to consume multiple times in a row on a string of clicks from user
-      if (lcbo_ids.isEmpty) { S.notice("consume", "Select some recommended products before attempting to consume"); Noop}
-      else mayConsume // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
+      if (selectedProds.nonEmpty) mayConsume // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
+      else { S.notice("consume", "Select some recommended products before attempting to consume"); Noop}
     }
 
     def cancel = {
@@ -157,8 +161,8 @@ object ProductInteraction extends Loggable {
 
     def consumeProducts(j: JValue): JsCmd = {
       val jsonOpt = j.extractOpt[String].map( parse)
-      val lcboIdsSeq: Option[List[Int]] = jsonOpt.map( json => {for (p <- json.children) yield p.extractOpt[Int]}.flatten )
-      consume(lcboIdsSeq.fold(List[Int]())(identity))
+      val selectedProducts: Option[List[SelectedProduct]] = jsonOpt.map( json => {for (p <- json.children) yield p.extractOpt[SelectedProduct]}.flatten )
+      consume(selectedProducts.fold(List[SelectedProduct]())(identity))
     }
 
     // call to setBorderJS after button activation simply highlights that button was pressed.
