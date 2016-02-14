@@ -63,17 +63,20 @@ object ProductInteraction extends Loggable {
 
     def prodDisplayJS(qtyProds: Iterable[(Int, Product)]) = {
       def getSingleDiv(el: (Int, Product)): NodeSeq = {
-        val lcbo_id = el._2.lcbo_id.toString
-        val name = el._2.name.get
-        val attributesNS = <table>{for (x <-  el._2.createProductElemVals ++ List(("Quantity: ", el._1 )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
+        val quantity = el._1
+        val prod = el._2
+        val lcbo_id = prod.lcbo_id.toString
+        val name = prod.name.get
+        val attributesNS = <table>{for (x <-  prod.createProductElemVals ++ List(("Quantity: ", quantity)) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
 
         // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
-        val checkBoxNS = <label><input type="checkbox" value={lcbo_id}></input>{name}</label><br></br>
+        val checkBoxNS = <label><input type="checkbox" onclick="prodSelection.updateItem(this);" value={lcbo_id}></input>{name}</label><br></br>
         val quantityNS = <label>Item Quantity:<input type="text" class="prodQty" name={lcbo_id}></input></label><br></br>
-        val costNS = <label>Cost:<input type="text" class="prodCost" name={lcbo_id}></input></label>
+        val costNS = <label>Cost:<input type="text" class="prodCost" name={lcbo_id} value={prod.price}></input></label>
+        val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"></input>
 
-        val imgNS = <img src={el._2.imageThumbUrl.get}/>
-        val ns: NodeSeq =  <div><div class="span-8">{attributesNS}{checkBoxNS}{quantityNS}{costNS}</div><div class="span-8 last">{imgNS}</div></div><hr></hr>
+        val imgNS = <img src={prod.imageThumbUrl.get}/>
+        val ns: NodeSeq =  <div><div class="span-8">{attributesNS}{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div><div class="span-8 last">{imgNS}</div></div><hr></hr>
         ns
       }
 
