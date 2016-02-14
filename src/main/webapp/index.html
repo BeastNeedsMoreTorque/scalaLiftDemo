@@ -11,7 +11,7 @@
 
         <link rel="stylesheet" type="text/css" href="index.css">
     </head>
-    You will be presented with a random LCBO product available at the store nearest you matching chosen category.
+    You will be presented with a random selection of available LCBO products available for a store and category of your choice.
     <br><hr>
     <div data-lift="CategorySelect">
       <div id="prodCategoryContainer" class="box">
@@ -23,7 +23,7 @@
     </div>
     <div data-lift="ProductInteraction">
       <div id="prodInteractionContainer" class="span-7">
-          Products to recommend:
+          #Products to recommend:
           <select>
               <option value="1">1</option>
           </select>
@@ -49,13 +49,13 @@
                                 <td class="prodAttrContent">some value</td>
                             </tr>
                         </table>
-                        <input type="text" class="hiddenProdCost" value="" hidden> <!-- to keep the unit cost as a reference for JS-->
-                        <label><input type="checkbox" name="product" value="123456">Some Name</label>
-                        <label>Item Quantity:<input type="text" class="prodQty" value=""/></label>
-                        <label>Cost:<input type="text" class="prodCost" value="" readonly/></label> <!-- running cost of product times quantity, or cost when qty N/A-->
                     </div>
                     <div class="span-8 last">  <!-- generate img with URL inside this div on the fly-->
-                      <img src="#"/>
+                      <img src="#"/><br>
+                        <input type="text" class="hiddenProdCost" value="" hidden> <!-- to keep the unit cost as a reference for JS-->
+                        <label><input type="checkbox" class="prodSelectInput" value="123456">Some Name</label>
+                        <label class="prodSelectLbl">Quantity:<input type="text" class="prodQty prodSelectInput" value=""/></label>
+                        <label class="prodSelectLbl">Cost:<input type="text" class="prodCost prodSelectInput" value="" readonly/></label> <!-- running cost of product times quantity, or cost when qty N/A-->
                     </div>
                 </div>
                 <hr>
@@ -63,7 +63,10 @@
         </div>
 
       <div id="confirmationDiv" hidden>
-        <span id="transactionsConfirmationUser"></span><span id="purchasePhrase">, you have now purchased</span>
+        <span id="transactionsConfirmationUser"></span>
+          <span>, you have now purchased </span>
+          <span id="purchaseAmount"></span>
+          <span> worth of liquor, be sober and kind to your guests!</span>
         <div id="transactionsConfirmation">
           <li>a selected product</li>
         </div>

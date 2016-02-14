@@ -34,3 +34,13 @@
         .prodAttrContent {
         /* put whatever a web designer thinks is good here */
         }
+
+        .prodSelectInput {
+        float:right;
+        clear:both;
+        }
+
+        input.prodSelectInput {
+        width: 40px;
+        }
+
