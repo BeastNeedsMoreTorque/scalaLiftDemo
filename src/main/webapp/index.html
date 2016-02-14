@@ -43,12 +43,12 @@
                             <tr>
                                 <td class="prodAttrHead">some attribute</td>
                                 <td class="prodAttrContent">some value</td>
-                            </tr>}
+                            </tr>
                         </table>
-                        <input type="text" class="hiddenProdCost" value="" hidden>
+                        <input type="text" class="hiddenProdCost" value="" hidden> <!-- to keep the unit cost as a reference for JS-->
                         <label><input type="checkbox" name="product" value="123456">Some Name</label>
                         <label>Item Quantity:<input type="text" class="prodQty" value=""/></label>
-                        <label>Cost:<input type="text" class="prodCost" value="" readonly/></label>
+                        <label>Cost:<input type="text" class="prodCost" value="" readonly/></label> <!-- running cost of product times quantity, or cost when qty N/A-->
                     </div>
                     <div class="span-8 last">  <!-- generate img with URL inside this div on the fly-->
                       <img src="#"/>
