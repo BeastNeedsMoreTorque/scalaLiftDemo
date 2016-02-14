@@ -75,7 +75,7 @@ object ProductInteraction extends Loggable {
         // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
         val checkBoxNS = <label><input type="checkbox" onclick="prodSelection.updateItem(this);" value={lcbo_id}></input>{name}</label><br></br>
         val quantityNS = <label>Item Quantity:<input type="text" class="prodQty" name={lcbo_id}></input></label><br></br>
-        val costNS = <label>Cost:<input type="text" class="prodCost" name={lcbo_id} value={prod.price}></input></label>
+        val costNS = <label>Cost:<input type="text" class="prodCost" name={lcbo_id} value={prod.price} readonly="readonly"></input></label>
         val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"></input>
 
         val imgNS = <img src={prod.imageThumbUrl.get}/>
