@@ -46,11 +46,13 @@ object ProductInteraction extends Loggable {
 
   case class SelectedProduct(lcbo_id: Int, quantity: Int, cost: Double)
 
+  def formatInDollars(d: Double) = "$" +f"$d%1.2f" // EN lang (FR has it at tail! Shamelessly unconcerned about locale here).
+
   def render = {
     def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[(SelectedProduct, String)]) = {
       def getSingleLI(el: (SelectedProduct, String)): NodeSeq = {
-        val formattedCost =     f"${el._1.cost}%1.2f"
-        val ns: NodeSeq = <li>{el._2} at cost of ${formattedCost} for {el._1.quantity} extra units</li>
+        val formattedCost = formatInDollars(el._1.cost)
+        val ns: NodeSeq = <li>{el._2} at cost of {formattedCost} for {el._1.quantity} extra units</li>
         ns
       }
       @tailrec
@@ -59,8 +61,10 @@ object ProductInteraction extends Loggable {
         getLIs(currNodeSeq ++ getSingleLI(l.head), l.tail)
       }
       val severalLIs = getLIs(NodeSeq.Empty, confirmationMsgs)
+      val totalBill = formatInDollars(confirmationMsgs.map{x => x._1.quantity * x._1.cost}.sum)
 
       SetHtml("transactionsConfirmationUser", Text(user)) &
+      SetHtml("purchaseAmount", Text(totalBill)) &
       SetHtml("transactionsConfirmation", severalLIs) &
       showConfirmationJS
     }
@@ -74,13 +78,13 @@ object ProductInteraction extends Loggable {
         val attributesNS = <table>{for (x <-  prod.createProductElemVals ++ List(("Quantity: ", quantity)) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
 
         // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
-        val checkBoxNS = <label><input type="checkbox" onclick="prodSelection.updateItem(this);" value={lcbo_id}></input>{name}</label><br></br>
-        val quantityNS = <label>Item Quantity:<input type="text" class="prodQty" name={lcbo_id}></input></label><br></br>
-        val costNS = <label>Cost:<input type="text" class="prodCost" name={lcbo_id} value={prod.price} readonly="readonly"></input></label>
+        val checkBoxNS = <label><input type="checkbox" class="prodSelectInput" onclick="prodSelection.updateItem(this);" value={lcbo_id}></input>{name}</label><br></br>
+        val quantityNS = <label>Item Quantity:<input type="text" class="prodQty prodSelectInput" name={lcbo_id}></input></label><br></br>
+        val costNS = <label>Cost:<input type="text" class="prodCost prodSelectInput" name={lcbo_id} value={prod.price} readonly="readonly"></input></label>
         val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"></input>
 
         val imgNS = <img src={prod.imageThumbUrl.get}/>
-        val ns: NodeSeq =  <div><div class="span-8">{attributesNS}{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div><div class="span-8 last">{imgNS}</div></div><hr></hr>
+        val ns: NodeSeq =  <div><div class="span-8">{attributesNS}</div><div class="span-8 last">{imgNS}<br></br>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div></div><hr></hr>
         ns
       }
 
