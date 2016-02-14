@@ -239,9 +239,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       if (storeCategoriesProductsCache.contains((storeId, category)) && storeCategoriesProductsCache((storeId, category)).nonEmpty) {
         val prodIds = storeCategoriesProductsCache((storeId, category))
         val randomIndex = Random.nextInt(math.max(1, prodIds.size))
-        val prodSelection = prodIds.takeRight(randomIndex).take(requestSize) // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
-        Option(for (id <- prodSelection;
-                    p <- Product.getProduct(id)) yield  (StoreProduct.getStoreProduct(storeId, id).fold(0)(_.quantity.get), p))
+        val prodSelection = prodIds.takeRight(randomIndex) // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
+        val filteredSelection =
+          for (id <- prodSelection;
+               p <- Product.getProduct(id);
+               inv <- StoreProduct.getStoreProduct(storeId, id);
+               qty <- Option(inv.quantity.get) if qty > 0 ) yield  (qty, p)
+        Option(filteredSelection.take(requestSize))
       }
       else None
     }
@@ -252,7 +256,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val randomIndex = Random.nextInt(math.max(1, MaxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
         val prods = productMapByStoreCategory(randomIndex + requestSize, storeId, category) // index is 0-based but requiredSize is 1-based so add requestSize,
         Product.update(prods) // important! If we're just starting webapp, cache could still be empty and we'll need to be able to look this up!
-        prods.takeRight(randomIndex+1).take(requestSize).values.map(p => (0,p))
+        val filteredSelection =
+          for (id <- prods.keys;
+               p <- Option(prods(id));
+               inv <- StoreProduct.getStoreProduct(storeId, id); // optimistic cache lookup, predicated on aggressive cache load for store
+               qty <- Option(inv.quantity.get) if qty > 0 ) yield  (qty, p)
+        filteredSelection.take(requestSize)
       }
     }
   }
@@ -283,6 +292,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         additionalParam("lon", lng)
       tryo {
         val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url)
+        b.map(s => loadCache(s.id)) // preemptive cache load for a store user should be interested in
         b.openOrThrowException(s"No store found near ($lat, $lng)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo.
       }
     }
@@ -310,7 +320,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children.headOption // Uses XPath-like querying to extract data from parsed object jsObj.
-    itemNodes.map(_.extract[StoreAsLCBOJson])
+    itemNodes.map(_.extractOpt[StoreAsLCBOJson]).flatten
   }
 
   @tailrec
@@ -349,7 +359,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
     // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
-    val pageStoreSeq = {for (p <- itemNodes) yield p.extract[PlainStoreAsLCBOJson]}
+    val pageStoreSeq = {for (p <- itemNodes) yield p.extractOpt[PlainStoreAsLCBOJson]}.flatten
 
     // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val storesByState: Map[EntityRecordState, List[PlainStoreAsLCBOJson]] = pageStoreSeq.groupBy {
@@ -367,7 +377,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // after preliminaries, get the map of stores indexed properly by state that we need having accumulated over the pages so far.
     val revisedAccumItems = Map(New -> newStores, Dirty -> dirtyStores, Clean -> cleanStores)
 
-    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
+    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
 
     if (pageStoreSeq.isEmpty || isFinalPage) return revisedAccumItems  // no need to look at more pages
 
@@ -585,8 +595,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // Collects into our list of products the attributes we care about (extract[Product]). Then filter out unwanted data.
     // fyi: throws Mapping exception.
     //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
-    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
-    val totalPages = (jsonRoot \ "pager" \ "total_pages").extract[Int]
+    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
+    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
 
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val productsByState: Map[EntityRecordState, List[ProductAsLCBOJson]] = items.groupBy {
@@ -650,8 +660,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // Collects into our list of products the attributes we care about (extract[Product]). Then filter out unwanted data.
     // fyi: throws Mapping exception.
     //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
-    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extract[Boolean]
-    val totalPages = (jsonRoot \ "pager" \ "total_pages").extract[Int]
+    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
+    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
 
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val storeProductsByState: Map[EntityRecordState, List[InventoryAsLCBOJson]] = items.groupBy {
@@ -772,10 +782,34 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         case maps: Iterable[Map[Int, StoreProduct]] =>
           val fullMap: Map[Int, StoreProduct] = maps.flatten.toMap
           StoreProduct.update(storeId, fullMap)
+          fetchProducts(initialPages)
       }
 
       allTheStoreInventories onFailure {
         case t => logger.error("loadCache, an error for inventories occurred because: " + t.getMessage)
+      }
+    }
+    def fetchProducts(initialPages: List[Int]) = {
+
+      val allTheProductsByCategory = Future.traverse(initialPages)(productsByWorker)
+
+      // we assume all along and depend strongly on that, that we never remove from cache. Updates that are strictly monotonic are easier to get right.
+      allTheProductsByCategory onSuccess {
+        case maps: Iterable[Map[Int, Product]] =>
+          val fullMap = maps.flatten
+          for ((id, p) <- fullMap) {
+            val storeCatKey = (storeId, p.primary_category.get)
+            if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, Set(id)).isDefined  ) {
+              // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
+              storeCategoriesProductsCache(storeCatKey) +=  id
+            }
+          }
+          Product.update(fullMap.toMap)
+          logger.trace(s"product (store,categories) keys ${storeCategoriesProductsCache.keys}")
+      }
+
+      allTheProductsByCategory onFailure {
+        case t => logger.error("loadCache, an error occurred because: " + t.getMessage)
       }
     }
 
@@ -791,27 +825,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
       val initialParallelPages = (1 to prodLoadWorkers).toList  // e.g. (1,2,3,4) when using 4 threads, used to aggregate the results of each thread.
-      val allTheProductsByCategory = Future.traverse(initialParallelPages)(productsByWorker)
+      fetchInventories(initialParallelPages, dbStoreProducts, allDbProductIds)
 
-      // we assume all along and depend strongly on that, that we never remove from cache. Updates that are strictly monotonic are easier to get right.
-      allTheProductsByCategory onSuccess {
-        case maps: Iterable[Map[Int, Product]] =>
-          val fullMap = maps.flatten
-          for ((id, p) <- fullMap) {
-            val storeCatKey = (storeId, p.primary_category.get)
-            if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, Set(id)).isDefined  ) {
-              // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
-              storeCategoriesProductsCache(storeCatKey) +=  id
-            }
-          }
-          Product.update(fullMap.toMap)
-          logger.trace(s"product (store,categories) keys ${storeCategoriesProductsCache.keys}")
-          fetchInventories(initialParallelPages, dbStoreProducts, allDbProductIds)
-      }
-
-      allTheProductsByCategory onFailure {
-        case t => logger.error("loadCache, an error occurred because: " + t.getMessage)
-      }
     }
   }
 }

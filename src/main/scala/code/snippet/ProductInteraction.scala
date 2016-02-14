@@ -63,11 +63,17 @@ object ProductInteraction extends Loggable {
 
     def prodDisplayJS(qtyProds: Iterable[(Int, Product)]) = {
       def getSingleDiv(el: (Int, Product)): NodeSeq = {
+        val lcbo_id = el._2.lcbo_id.toString
+        val name = el._2.name.get
+        val attributesNS = <table>{for (x <-  el._2.createProductElemVals ++ List(("Quantity: ", el._1 )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
+
         // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
-        val checkBoxNodeSeq = <label><input type="checkbox" class="productCB" name="product" value={el._2.lcbo_id.get.toString}></input>{el._2.name.get}</label>
-        val attributesNodeSeq = <table>{for (x <-  el._2.createProductElemVals ++ List(("Quantity: ", el._1 )) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
-        val imgNodeSeq = <img src={el._2.imageThumbUrl.get}/>
-        val ns: NodeSeq =  <div><div class="span-8">{attributesNodeSeq}{checkBoxNodeSeq}</div><div class="span-8 last">{imgNodeSeq}</div></div><hr></hr>
+        val checkBoxNS = <label><input type="checkbox" value={lcbo_id}></input>{name}</label><br></br>
+        val quantityNS = <label>Item Quantity:<input type="text" class="prodQty" name={lcbo_id}></input></label><br></br>
+        val costNS = <label>Cost:<input type="text" class="prodCost" name={lcbo_id}></input></label>
+
+        val imgNS = <img src={el._2.imageThumbUrl.get}/>
+        val ns: NodeSeq =  <div><div class="span-8">{attributesNS}{checkBoxNS}{quantityNS}{costNS}</div><div class="span-8 last">{imgNS}</div></div><hr></hr>
         ns
       }
 
@@ -130,8 +136,8 @@ object ProductInteraction extends Loggable {
       def mayConsume: JsCmd = {
         val products = lcbo_ids.flatten(Product.getProduct)
         val feedback = products.map(mayConsumeItem)
-        feedback.map( _.error).filter(!_.isEmpty).map(S.error) // show all errors when we attempted to go to DB for user products relationship
-        val confirmations = feedback.filter( !_.confirmation.isEmpty) // select those for which we have no error and explicit useful message
+        feedback.map( _.error).filter(_.nonEmpty).map(S.error) // show all errors when we attempted to go to DB for user products relationship
+        val confirmations = feedback.filter( _.confirmation.nonEmpty) // select those for which we have no error and explicit useful message
         if (confirmations.nonEmpty) transactionsConfirmationJS(confirmations.head.userName, confirmations.map(_.confirmation)) & consumeCbJS // confirm and show only if there's something interesting
         else {S.error("could not reconcile product id in cache!"); Noop}
       }
@@ -148,7 +154,7 @@ object ProductInteraction extends Loggable {
 
     def consumeProducts(j: JValue): JsCmd = {
       val jsonOpt = j.extractOpt[String].map( parse)
-      val lcboIdsSeq: Option[List[Int]] = jsonOpt.map( json => {for (p <- json.children) yield p.extract[Int]} )
+      val lcboIdsSeq: Option[List[Int]] = jsonOpt.map( json => {for (p <- json.children) yield p.extractOpt[Int]}.flatten )
       consume(lcboIdsSeq.fold(List[Int]())(identity))
     }
 
