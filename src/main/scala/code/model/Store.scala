@@ -239,13 +239,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       if (storeCategoriesProductsCache.contains((storeId, category)) && storeCategoriesProductsCache((storeId, category)).nonEmpty) {
         val prodIds = storeCategoriesProductsCache((storeId, category))
         val randomIndex = Random.nextInt(math.max(1, prodIds.size))
-        val prodSelection = prodIds.takeRight(randomIndex) // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
+        val prodSelection = prodIds.take(randomIndex) // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
         val filteredSelection =
           for (id <- prodSelection;
                p <- Product.getProduct(id);
                inv <- StoreProduct.getStoreProduct(storeId, id);
                qty <- Option(inv.quantity.get) if qty > 0 ) yield  (qty, p)
-        Option(filteredSelection.take(requestSize))
+        Option(filteredSelection.takeRight(requestSize))
       }
       else None
     }
@@ -261,7 +261,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                p <- Option(prods(id));
                inv <- StoreProduct.getStoreProduct(storeId, id); // optimistic cache lookup, predicated on aggressive cache load for store
                qty <- Option(inv.quantity.get) if qty > 0 ) yield  (qty, p)
-        filteredSelection.take(requestSize)
+        filteredSelection.takeRight(requestSize)
       }
     }
   }
