@@ -324,20 +324,20 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   }
 
   @tailrec
-  def updateStores(myStores: Iterable[Store]): Unit = {
-    val slice = myStores.take(DBBatchSize)
-    stores.update(slice)
-    val rest = myStores.takeRight(myStores.size - slice.size)
-    if (rest.nonEmpty) updateStores( rest)
-  }
+  def updateStores(myStores: Iterable[Store]): Unit =
+    if (myStores.nonEmpty) {
+      val (chunk, rest) = myStores.splitAt(DBBatchSize)
+      stores.update(chunk)
+      updateStores(rest)
+    }
 
   @tailrec
-  def insertNewStores( myStores: Iterable[Store]): Unit = {
-    val slice = myStores.take(DBBatchSize)
-    stores.insert(slice)
-    val rest = myStores.takeRight(myStores.size - slice.size)
-    if (rest.nonEmpty) insertNewStores(rest)
-  }
+  def insertNewStores( myStores: Iterable[Store]): Unit =
+    if (myStores.nonEmpty) {
+      val (chunk, rest) = myStores.splitAt(DBBatchSize)
+      stores.insert(chunk)
+      insertNewStores(rest)
+    }
 
   private final def getSingleStore( uri: String): PlainStoreAsLCBOJson = {
     logger.debug(uri)

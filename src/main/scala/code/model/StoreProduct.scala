@@ -80,20 +80,20 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       quantity(inv.quantity)
 
   @tailrec
-  def updateStoreProducts(myStoreProducts: Iterable[StoreProduct]): Unit = {
-    val slice = myStoreProducts.take(DBBatchSize)
-    storeProducts.update(slice)
-    val rest = myStoreProducts.takeRight(myStoreProducts.size - slice.size)
-    if (rest.nonEmpty) updateStoreProducts( rest)
-  }
+  def updateStoreProducts(myStoreProducts: Iterable[StoreProduct]): Unit =
+    if (myStoreProducts.nonEmpty) {
+      val (chunk, rest) = myStoreProducts.splitAt(DBBatchSize)
+      storeProducts.update(chunk)
+      updateStoreProducts(rest)
+    }
 
   @tailrec
-  def insertStoreProducts(myStoreProducts: Iterable[StoreProduct]): Unit = {
-    val slice: Iterable[StoreProduct] = myStoreProducts.take(DBBatchSize)
-    storeProducts.insert(slice)
-    val rest = myStoreProducts.takeRight(myStoreProducts.size - slice.size)
-    if (rest.nonEmpty) insertStoreProducts(rest)
-  }
+  def insertStoreProducts(myStoreProducts: Iterable[StoreProduct]): Unit =
+    if (myStoreProducts.nonEmpty) {
+      val (chunk, rest) = myStoreProducts.splitAt(DBBatchSize)
+      storeProducts.insert(chunk)
+      insertStoreProducts(rest)
+    }
 
   @throws(classOf[SocketTimeoutException])
   @throws(classOf[IOException])
@@ -107,7 +107,3 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   }
 
 }
-
-
-
-
