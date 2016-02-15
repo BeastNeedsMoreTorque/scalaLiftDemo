@@ -4,9 +4,6 @@ import code.model.LiquorCategory
 import code.snippet.SessionCache.theCategory
 import net.liftweb.common.Full
 import net.liftweb.http.SHtml
-import net.liftweb.http.js.JE.Call
-import net.liftweb.http.js.JsCmds._
-import net.liftweb.http.js.JsCmd
 import net.liftweb.util.Helpers._
 
 /**
@@ -16,8 +13,6 @@ object CategorySelect {
   private val categoryImg = LiquorCategory.toImg(SessionCache.defaultCategory)
   private val defaultOption = RadioElements.selectOption(SessionCache.defaultCategory, categoryImg)  // selected with style that frames it
   private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.categoriesSeq, SessionCache.defaultCategory, LiquorCategory.toImg)
-
-  def setBorderJS(elt: String): JsCmd = Call("toggleButton.frame", "prodCategoryContainer", {elt})
 
   /**
     * save radio button selection as next default to avoid annoying resetting to original default and make it session persistent
@@ -34,7 +29,7 @@ object CategorySelect {
       radioOptions, Full(defaultOption),
       (choice: RadioElements) => {
         theCategory.set(choice.name)
-        setBorderJS(choice.name)
+        JSUtilities.setBorderJS("prodCategoryContainer", choice.name)
       }))
   }
 }
