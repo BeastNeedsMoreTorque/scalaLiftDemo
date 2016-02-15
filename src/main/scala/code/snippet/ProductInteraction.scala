@@ -46,23 +46,25 @@ object ProductInteraction extends Loggable {
 
   def setBorderJS(elt: String) = Call("toggleButton.frame", "prodInteractionContainer", {elt})
 
+  case class QuantityOfProduct(quantity: Int, product: Product)
   case class SelectedProduct(lcbo_id: Int, quantity: Int, cost: Double)
   val formatter = NumberFormat.getCurrencyInstance()
 
   def render = {
-    def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[(SelectedProduct, String)]) = {
-      def getSingleLI(el: (SelectedProduct, String)): NodeSeq = {
-        val formattedCost = formatter format el._1.cost
-        val ns: NodeSeq = <li>{el._2} at cost of {formattedCost} for {el._1.quantity} extra units</li>
+    case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
+    def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]) = {
+      def getSingleLI(el: PurchasedProductConfirmation): NodeSeq = {
+        val formattedCost = formatter format el.selectedProduct.cost
+        val ns: NodeSeq = <li>{el.confirmation} at cost of {formattedCost} for {el.selectedProduct.quantity} extra units</li>
         ns
       }
       @tailrec
-      def getLIs(currNodeSeq: NodeSeq, l: Iterable[(SelectedProduct, String)]): NodeSeq = {
+      def getLIs(currNodeSeq: NodeSeq, l: Iterable[PurchasedProductConfirmation]): NodeSeq = {
         if (l.isEmpty) return currNodeSeq
         getLIs(currNodeSeq ++ getSingleLI(l.head), l.tail)
       }
       val severalLIs = getLIs(NodeSeq.Empty, confirmationMsgs)
-      val totalBill = formatter.format(confirmationMsgs.map{x => x._1.quantity * x._1.cost}.sum)
+      val totalBill = formatter.format(confirmationMsgs.map{x => x.selectedProduct.cost}.sum)
 
       SetHtml("transactionsConfirmationUser", Text(user)) &
       SetHtml("purchaseAmount", Text(totalBill)) &
@@ -70,13 +72,13 @@ object ProductInteraction extends Loggable {
       showConfirmationJS
     }
 
-    def prodDisplayJS(qtyProds: Iterable[(Int, Product)]) = {
-      def getSingleDiv(el: (Int, Product)): NodeSeq = {
-        val quantity = el._1
-        val prod = el._2
+    def prodDisplayJS(qtyProds: Iterable[QuantityOfProduct]) = {
+      def getSingleDiv(el: QuantityOfProduct): NodeSeq = {
+        val quantity = el.quantity
+        val prod = el.product
         val lcbo_id = prod.lcbo_id.toString
         val name = prod.name.get
-        val attributesNS = <table>{for (x <-  prod.createProductElemVals ++ List(("Quantity: ", quantity)) ) yield <tr><td class="prodAttrHead">{x._1}</td><td class="prodAttrContent">{x._2}</td></tr>}</table>
+        val attributesNS = <table>{for (x <- prod.createProductElemVals ++ List(ProductAttribute("Quantity: ", quantity.toString)) ) yield <tr><td class="prodAttrHead">{x.key}</td><td class="prodAttrContent">{x.value}</td></tr>}</table>
 
         // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
         val checkBoxNS = <label><input type="checkbox" class="prodSelectInput" onclick="prodSelection.updateItem(this);" value={lcbo_id}></input>{name}</label><br></br>
@@ -90,7 +92,7 @@ object ProductInteraction extends Loggable {
       }
 
       @tailrec
-      def getDivs(currNodeSeq: NodeSeq, l: Iterable[(Int, Product)]): NodeSeq = {
+      def getDivs(currNodeSeq: NodeSeq, l: Iterable[QuantityOfProduct]): NodeSeq = {
         if (l.isEmpty) return currNodeSeq
         getDivs(currNodeSeq ++ getSingleDiv(l.head), l.tail)
       }
@@ -120,7 +122,7 @@ object ProductInteraction extends Loggable {
           qtyProdSeq.dmap { Noop }
           { qtyProds =>
             S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-            prodDisplayJS( qtyProds)
+            prodDisplayJS( qtyProds.map(x => QuantityOfProduct(x._1, x._2)))
           }
         }
         else {
@@ -149,10 +151,14 @@ object ProductInteraction extends Loggable {
         val productPairs: List[(SelectedProduct, Option[Product])] = selectedProds.map(p => (p, Product.getProduct(p.lcbo_id)))
         val feedback: List[(SelectedProduct, Feedback)] = for (pair <- productPairs;
                             p <- pair._2;
-                            f <- Option(mayConsumeItem(p, pair._1.quantity))) yield(pair._1, f) //products.map(mayConsumeItem)
+                            f <- Option(mayConsumeItem(p, pair._1.quantity))) yield(pair._1, f)
         feedback.map {pair: (SelectedProduct, Feedback) => pair._2.error}.filter(_.nonEmpty).map(S.error) // show all errors when we attempted to go to DB for user products relationship
         val confirmations = feedback.filter( _._2.confirmation.nonEmpty) // select those for which we have no error and explicit useful message
-        if (confirmations.nonEmpty) transactionsConfirmationJS(confirmations.head._2.userName, confirmations.map{pair => (pair._1, pair._2.confirmation) }) & consumeCbJS // confirm and show only if there's something interesting
+        if (confirmations.nonEmpty)
+          transactionsConfirmationJS(confirmations.head._2.userName,
+                                     confirmations.map{pair =>
+                                       PurchasedProductConfirmation(pair._1, pair._2.confirmation) }) &
+            consumeCbJS // confirm and show only if there's something interesting
         else {S.error("could not reconcile product id in cache!"); Noop}
       }
 

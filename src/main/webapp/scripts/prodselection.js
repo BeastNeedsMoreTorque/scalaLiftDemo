@@ -39,8 +39,8 @@ var prodSelection = (function() {
         var quantityEl = $(siblings).find("input.prodQty");
         var quantity = parseInt($(quantityEl).val()) || 0;
 
-        var costEl = $(siblings).find("input.prodCost");
-        var cost = parseCurrency($(costEl).val());
+        var fixedCostEl = $(siblings).parent().find("input.hiddenProdCost");
+        var cost = quantity * parseCurrency($(fixedCostEl).val());
 
         var data = {
           lcbo_id: lcbo_id,
