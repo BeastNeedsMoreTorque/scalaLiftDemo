@@ -1,5 +1,7 @@
 package code.model
 
+import java.text.NumberFormat
+
 import scala.annotation.tailrec
 import scala.collection.concurrent.TrieMap
 import scala.collection._
@@ -59,6 +61,7 @@ case class ProductAsLCBOJson(id: Int,
 
 }
 
+case class ProductAttribute(key: String, value: String)
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -108,10 +111,11 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   def imageThumbUrl = image_thumb_url
   def Package = `package`.get // alias to avoid back ticks
 
+  val formatter = NumberFormat.getCurrencyInstance() // Not French Canada, which does it differently...
+
   // Change unit of currency from cents to dollars and Int to String
   def price: String = {
-    val p = price_in_cents.get / 100.0
-    f"$p%1.2f"
+    formatter format (price_in_cents.get / 100.0)
   } // since we perverted meaning somewhat by changing unit from cents to dollars
 
   // Change scale by 100 to normal conventions, foregoing LCBO's use of Int (for ex. 1200 becomes "12.0%" including the percent sign)
@@ -129,20 +133,20 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
-  def createProductElemVals: List[(String, String)] =
+  def createProductElemVals: List[ProductAttribute] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
-    (("Name: ", name.get) ::
-      ("Primary Category: ", primary_category.get) ::
-      ("Secondary Category: ", secondary_category.get) ::
-      ("Varietal: ", varietal.get) ::
-      ("Package: ", Package) ::
-      ("Volume: ", volumeInLitre) ::
-      ("Price: ", "$" + price) ::
-      ("Description: ", description.get) ::
-      ("Serving Suggestion: ", serving_suggestion.get) ::
-      ("Alcohol content: ", alcoholContent) ::
-      ("Origin: ", origin.get) ::
-      Nil).filter({ p: (String, String) => p._2 != "null" && !p._2.isEmpty })
+    ( ProductAttribute("Name: ", name.get) ::
+      ProductAttribute("Primary Category: ", primary_category.get) ::
+      ProductAttribute("Secondary Category: ", secondary_category.get) ::
+      ProductAttribute("Varietal: ", varietal.get) ::
+      ProductAttribute ("Package: ", Package) ::
+      ProductAttribute ("Volume: ", volumeInLitre) ::
+      ProductAttribute ("Price: ", price) ::
+      ProductAttribute("Description: ", description.get) ::
+      ProductAttribute("Serving Suggestion: ", serving_suggestion.get) ::
+      ProductAttribute("Alcohol content: ", alcoholContent) ::
+      ProductAttribute ("Origin: ", origin.get) ::
+      Nil).filter({ p: ProductAttribute => p.value != "null" && p.value.nonEmpty })
 
   def isDirty(p: ProductAsLCBOJson): Boolean = {
     price_in_cents.get != p.price_in_cents ||
