@@ -14,7 +14,6 @@ import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.util.Props
 import org.squeryl.annotations.Column
 
-import scala.annotation.tailrec
 import scala.collection.concurrent.TrieMap
 import scala.collection.{concurrent, Map, Iterable}
 import scala.language.implicitConversions
@@ -79,21 +78,13 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       productid(inv.product_id).
       quantity(inv.quantity)
 
-  @tailrec
-  def updateStoreProducts(myStoreProducts: Iterable[StoreProduct]): Unit =
-    if (myStoreProducts.nonEmpty) {
-      val (chunk, rest) = myStoreProducts.splitAt(DBBatchSize)
-      storeProducts.update(chunk)
-      updateStoreProducts(rest)
-    }
+  def updateStoreProducts(myStoreProducts: Iterable[StoreProduct]) =
+      myStoreProducts.grouped(DBBatchSize).
+        foreach{ storeProducts.update }
 
-  @tailrec
-  def insertStoreProducts(myStoreProducts: Iterable[StoreProduct]): Unit =
-    if (myStoreProducts.nonEmpty) {
-      val (chunk, rest) = myStoreProducts.splitAt(DBBatchSize)
-      storeProducts.insert(chunk)
-      insertStoreProducts(rest)
-    }
+  def insertStoreProducts(myStoreProducts: Iterable[StoreProduct]) =
+      myStoreProducts.grouped(DBBatchSize).
+        foreach{ storeProducts.insert }
 
   @throws(classOf[SocketTimeoutException])
   @throws(classOf[IOException])

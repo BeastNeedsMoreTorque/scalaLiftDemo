@@ -2,7 +2,6 @@ package code.model
 
 import java.text.NumberFormat
 
-import scala.annotation.tailrec
 import scala.collection.concurrent.TrieMap
 import scala.collection._
 
@@ -196,22 +195,14 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     }
   }
 
-  @tailrec
-  def updateProducts(myProducts: Iterable[Product]): Unit =
-    if (myProducts.nonEmpty) {
-      val (chunk, rest) = myProducts.splitAt(DBBatchSize)
-      products.update(chunk)
-      updateProducts(rest)
-    }
+  def updateProducts(myProducts: Iterable[Product]) =
+      myProducts.grouped(DBBatchSize).
+        foreach{ products.update }
 
+  def insertProducts( myProducts: Iterable[Product]) =
+      myProducts.grouped(DBBatchSize).
+        foreach{ products.insert }
 
-  @tailrec
-  def insertNewProducts( myProducts: Iterable[Product]): Unit =
-    if (myProducts.nonEmpty) {
-      val (chunk, rest) = myProducts.splitAt(DBBatchSize)
-      products.insert(chunk)
-      insertNewProducts(rest)
-    }
 
   def create(p: ProductAsLCBOJson): Product = {
     // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...

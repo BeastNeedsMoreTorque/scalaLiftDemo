@@ -66,7 +66,7 @@ case class StoreAsLCBOJson (id: Int = 0,
       ("Your Distance: ", distanceInKMs) ::
       ("Latitude: ", latitude.toString) ::
       ("Longitude: ", longitude.toString) ::
-      Nil).filter({ p: (String, String) => p._2 != "null" && p._2.nonEmpty })
+      Nil).filter({ case (label,q) => label != "null" && label.nonEmpty })
 
 }
 
@@ -192,7 +192,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           // for the activity on separate thread for synchronizeData
           // batch update the database now.
           updateStores(lcboStoresPerWorker(Dirty))
-          insertNewStores(lcboStoresPerWorker(New))
+          insertStores(lcboStoresPerWorker(New))
         }
         lcboStoresPerWorker.values.flatten.map(s => s.lcbo_id.get -> s).toMap // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
       }
@@ -320,24 +320,16 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children.headOption // Uses XPath-like querying to extract data from parsed object jsObj.
-    itemNodes.map(_.extractOpt[StoreAsLCBOJson]).flatten
+    itemNodes.flatMap(_.extractOpt[StoreAsLCBOJson])
   }
 
-  @tailrec
-  def updateStores(myStores: Iterable[Store]): Unit =
-    if (myStores.nonEmpty) {
-      val (chunk, rest) = myStores.splitAt(DBBatchSize)
-      stores.update(chunk)
-      updateStores(rest)
-    }
+  def updateStores(myStores: Iterable[Store]) =
+    myStores.grouped(DBBatchSize).
+      foreach{ stores.update }
 
-  @tailrec
-  def insertNewStores( myStores: Iterable[Store]): Unit =
-    if (myStores.nonEmpty) {
-      val (chunk, rest) = myStores.splitAt(DBBatchSize)
-      stores.insert(chunk)
-      insertNewStores(rest)
-    }
+  def insertStores( myStores: Iterable[Store]) =
+    myStores.grouped(DBBatchSize).
+      foreach{ stores.insert }
 
   private final def getSingleStore( uri: String): PlainStoreAsLCBOJson = {
     logger.debug(uri)
@@ -711,7 +703,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val prods = from(storeProducts, products)((sp, p) =>
           where(sp.storeid === storeId and sp.productid === p.lcbo_id  )
             select (p, sp) )
-        prods.map(pair => pair._1.lcbo_id.get -> ProductWithInventory(pair._1, pair._2)).toMap
+        prods.map({ case (p, sp) => p.lcbo_id.get -> ProductWithInventory(p, sp)}).toMap
       }
 
 
@@ -723,7 +715,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
               for ((k, v) <- m) { // v List[Product] containing product
                 Some(k) collect { // Clean is intentionally ignored
                   case New =>
-                    insertNewProducts(v.filter({p => !allDbProductIds.contains(p.lcbo_id.get)} )) // insert to DB those we didn't get in our query to obtain allDbProducts
+                    insertProducts(v.filter({p => !allDbProductIds.contains(p.lcbo_id.get)} )) // insert to DB those we didn't get in our query to obtain allDbProducts
                   case Dirty =>
                     updateProducts(v)  // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
                 }

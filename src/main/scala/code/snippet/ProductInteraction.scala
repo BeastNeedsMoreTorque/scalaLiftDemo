@@ -3,7 +3,6 @@ package code.snippet
 import code.model._
 import code.snippet.SessionCache._
 import net.liftweb.common._
-import net.liftweb.http.js.JE.Call
 import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.S
@@ -113,7 +112,7 @@ object ProductInteraction extends Loggable {
           quantityProdSeq.dmap { Noop } // we gave notice of error already via JS, nothing else to do
           { pairs => // normal case
             S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-            prodDisplayJS( pairs.map(pair => QuantityOfProduct(pair._1, pair._2)))
+            prodDisplayJS( pairs.map{case (quantity, p) => QuantityOfProduct(quantity, p)})
           }
         }
         else {
@@ -148,8 +147,8 @@ object ProductInteraction extends Loggable {
       }
 
       def mayConsume(selectedProds: List[SelectedProduct]): JsCmd = {
-        def mayConsumeItem(p: Product, quantity: Int): Feedback = {
-          UserProduct.consume(p, quantity) match {
+        def mayConsumeItem(p: Product, quantity: Int): Option[Feedback] = {
+          val x = UserProduct.consume(p, quantity) match {
             case Full((userName, count)) =>
               Feedback(userName, success=true, s"${p.name} $count unit(s) over the years")
             case Failure(x, ex, _) =>
@@ -157,12 +156,13 @@ object ProductInteraction extends Loggable {
             case Empty =>
               Feedback(userName="", success=false, s"Unable to sell you product ${p.name}")
           }
+          Option(x)
         }
 
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
         val feedback: List[(SelectedProduct, Feedback)] = for (sp <- selectedProds;
                                                                product <- Product.getProduct(sp.lcbo_id);
-                                                               f <- Option(mayConsumeItem(product, sp.quantity))) yield(sp, f)
+                                                               f <- mayConsumeItem(product, sp.quantity)) yield(sp, f)
         val partition = feedback.groupBy(_._2.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
         partition.get(false).map( _.map{ _._2.message}.map(S.error)) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
         val goodConfirmations = partition.get(true) // select those for which we have success and positive message
@@ -171,8 +171,8 @@ object ProductInteraction extends Loggable {
           Noop
         } { goodList: List[(SelectedProduct, Feedback)] =>
             val confirmationMessages =
-              goodList.map{pair =>
-                               PurchasedProductConfirmation(pair._1, pair._2.message) } // get some particulars about cost and quantity in addition to message
+              goodList.map{case(selectedProd, feedBck) =>
+                               PurchasedProductConfirmation(selectedProd, feedBck.message) } // get some particulars about cost and quantity in addition to message
             transactionsConfirmationJS(goodList.head._2.userName, confirmationMessages) &
             hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
         }
