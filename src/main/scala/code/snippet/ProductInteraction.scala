@@ -55,7 +55,7 @@ object ProductInteraction extends Loggable {
     def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]) = {
       def getSingleLI(el: PurchasedProductConfirmation): NodeSeq = {
         val formattedCost = formatter format el.selectedProduct.cost
-        val ns: NodeSeq = <li>{el.confirmation} at cost of {formattedCost} for {el.selectedProduct.quantity} extra units</li>
+        val ns: NodeSeq = <li>{el.confirmation} including the cost of today's purchase at {formattedCost} for {el.selectedProduct.quantity} extra units</li>
         ns
       }
       @tailrec
@@ -139,7 +139,7 @@ object ProductInteraction extends Loggable {
       def mayConsumeItem(p: Product, quantity: Int): Feedback = {
         UserProduct.consume(p, quantity) match {
           case Full((userName, count)) =>
-            Feedback(userName, s"${p.name} $count time(s)", "")
+            Feedback(userName, s"${p.name} $count unit(s) over the years", "")
           case Failure(x, ex, _) =>
             Feedback(userName="", confirmation="", error = s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
           case Empty =>
