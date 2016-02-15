@@ -52,8 +52,6 @@ object ProductInteraction extends Loggable {
   }
 
   def render = {
-    def setBorderJS(elementId: String) = Call("toggleButton.frame", "prodInteractionContainer", {elementId})
-
     def recommend: JsCmd = {
       def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd = {
         def getDiv(qOfProd: QuantityOfProduct): NodeSeq = {
@@ -127,82 +125,83 @@ object ProductInteraction extends Loggable {
       { user => maySelect} // normal processing
     }
 
-    def consumeProducts(j: JValue): JsCmd = {
-      def consume(selectedProds: List[SelectedProduct]): JsCmd = {
-        def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
-          def getListItem(item: PurchasedProductConfirmation): NodeSeq = {
-            def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Int): String =
-              s"${confirmation} including the cost of today's purchase at ${formattedCost} for ${quantity} extra units"
+    def consumeProducts(selection: JValue): JsCmd = {
+      def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
+        def getListItem(item: PurchasedProductConfirmation): NodeSeq = {
+          def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Int): String =
+            s"${confirmation} including the cost of today's purchase at ${formattedCost} for ${quantity} extra units"
 
-            val formattedCost = formatter format item.selectedProduct.cost
-            val liContent = purchaseConfirmationMessage(item.confirmation, formattedCost, item.selectedProduct.quantity)
-            val ns: NodeSeq = <li>{liContent}</li>
-            ns
-          }
-
-          val totalCost = confirmationMsgs.map{ _.selectedProduct.cost}.sum
-          val formattedTotalCost = formatter.format(totalCost)
-          val listItems = confirmationMsgs.map(getListItem).foldLeft(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => (a ++ b))
-
-          SetHtml("transactionsConfirmationUser", Text(user)) &
-          SetHtml("purchaseAmount", Text(formattedTotalCost)) &
-          SetHtml("transactionsConfirmation", listItems) &
-          showConfirmationJS
+          val formattedCost = formatter format item.selectedProduct.cost
+          val liContent = purchaseConfirmationMessage(item.confirmation, formattedCost, item.selectedProduct.quantity)
+          val ns: NodeSeq = <li>{liContent}</li>
+          ns
         }
 
-        def mayConsume: JsCmd = {
-          def mayConsumeItem(p: Product, quantity: Int): Feedback = {
-            UserProduct.consume(p, quantity) match {
-              case Full((userName, count)) =>
-                Feedback(userName, success=true, s"${p.name} $count unit(s) over the years")
-              case Failure(x, ex, _) =>
-                Feedback(userName="", success=false, s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
-              case Empty =>
-                Feedback(userName="", success=false, s"Unable to sell you product ${p.name}")
-            }
-          }
+        val totalCost = confirmationMsgs.map{ _.selectedProduct.cost}.sum
+        val formattedTotalCost = formatter.format(totalCost)
+        val listItems = confirmationMsgs.map(getListItem).foldLeft(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => (a ++ b))
 
-          // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
-          val feedback: List[(SelectedProduct, Feedback)] = for (sp <- selectedProds;
-                                                                 product <- Product.getProduct(sp.lcbo_id);
-                                                                 f <- Option(mayConsumeItem(product, sp.quantity))) yield(sp, f)
-          val partition = feedback.groupBy(_._2.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
-          partition.get(false).map( _.map{ _._2.message}.map(S.error)) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
-          val goodConfirmations = partition.get(true) // select those for which we have success and positive message
-          goodConfirmations.fold {
-            S.error("could not reconcile any selected product id in cache!") // they all failed!
-            Noop
-          } { goodList: List[(SelectedProduct, Feedback)] =>
-              val confirmationMessages =
-                goodList.map{pair =>
-                                 PurchasedProductConfirmation(pair._1, pair._2.message) } // get some particulars about cost and quantity in addition to message
-              transactionsConfirmationJS(goodList.head._2.userName, confirmationMessages) &
-              hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
-          }
-        }
-
-        if (selectedProds.nonEmpty) mayConsume // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
-        else { S.notice("consume", "Select some recommended products before attempting to consume"); Noop}
+        SetHtml("transactionsConfirmationUser", Text(user)) &
+        SetHtml("purchaseAmount", Text(formattedTotalCost)) &
+        SetHtml("transactionsConfirmation", listItems) &
+        showConfirmationJS
       }
 
-      val jsonOpt = j.extractOpt[String].map( parse)
-      val selectedProducts: Option[List[SelectedProduct]] = jsonOpt.map( json => {for (p <- json.children) yield p.extractOpt[SelectedProduct]}.flatten )
-      consume(selectedProducts.fold(List[SelectedProduct]())(identity))
+      def mayConsume(selectedProds: List[SelectedProduct]): JsCmd = {
+        def mayConsumeItem(p: Product, quantity: Int): Feedback = {
+          UserProduct.consume(p, quantity) match {
+            case Full((userName, count)) =>
+              Feedback(userName, success=true, s"${p.name} $count unit(s) over the years")
+            case Failure(x, ex, _) =>
+              Feedback(userName="", success=false, s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
+            case Empty =>
+              Feedback(userName="", success=false, s"Unable to sell you product ${p.name}")
+          }
+        }
+
+        // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
+        val feedback: List[(SelectedProduct, Feedback)] = for (sp <- selectedProds;
+                                                               product <- Product.getProduct(sp.lcbo_id);
+                                                               f <- Option(mayConsumeItem(product, sp.quantity))) yield(sp, f)
+        val partition = feedback.groupBy(_._2.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
+        partition.get(false).map( _.map{ _._2.message}.map(S.error)) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
+        val goodConfirmations = partition.get(true) // select those for which we have success and positive message
+        goodConfirmations.fold {
+          S.error("could not reconcile any selected product id in cache!") // they all failed!
+          Noop
+        } { goodList: List[(SelectedProduct, Feedback)] =>
+            val confirmationMessages =
+              goodList.map{pair =>
+                               PurchasedProductConfirmation(pair._1, pair._2.message) } // get some particulars about cost and quantity in addition to message
+            transactionsConfirmationJS(goodList.head._2.userName, confirmationMessages) &
+            hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
+        }
+      }
+
+      val jsonOpt = selection.extractOpt[String].map( parse)
+      val selectedProducts = jsonOpt.map( json => {for (p <- json.children) yield p.extractOpt[SelectedProduct]}.flatten )
+      selectedProducts.fold{
+        S.warning("Select some recommended products before attempting to consume")
+        Noop
+      }{
+        mayConsume
+      }
     }
 
     def cancel: JsCmd = {
       S.error("")
       hideProdDisplayJS & hideConfirmationJS
     }
+    val actionButtonsContainer = "prodInteractionContainer"
 
     // call to setBorderJS after button activation simply highlights that button was pressed.
     "@consume [onclick]" #>
       jsonCall( JE.Call("prodSelection.currentProds"),
-                      { j: JValue => consumeProducts(j) & setBorderJS("consume")}) & // fetch in JSON with JS Call the lcbo product IDs and then deal with them
+                      { j: JValue => consumeProducts(j) & JSUtilities.setBorderJS(actionButtonsContainer, "consume")}) & // fetch in JSON with JS Call the lcbo product IDs and then deal with them
     "@recommend [onclick]" #>
-      ajaxInvoke({() => recommend & setBorderJS("recommend")}) &
+      ajaxInvoke({() => recommend & JSUtilities.setBorderJS(actionButtonsContainer, "recommend")}) &
     "@cancel [onclick]" #>
-      ajaxInvoke({() => cancel & setBorderJS("cancel")}) &
+      ajaxInvoke({() => cancel & JSUtilities.setBorderJS(actionButtonsContainer, "cancel")}) &
     "select" #> ajaxSelect(RecommendCount.options, RecommendCount.default,
       { selected: String => theRecommendCount.set(toInt(selected)); Noop })
   }
