@@ -18,6 +18,8 @@ import scala.annotation.tailrec
 import scala.xml._
 import scala.language.implicitConversions
 
+import java.text.NumberFormat
+
 /**
   * This snippet contains state only via HTTP session (A Liftweb snippet is a web page fragment that has autonomous existence
   * equivalent to a page with framework
@@ -45,13 +47,12 @@ object ProductInteraction extends Loggable {
   def setBorderJS(elt: String) = Call("toggleButton.frame", "prodInteractionContainer", {elt})
 
   case class SelectedProduct(lcbo_id: Int, quantity: Int, cost: Double)
-
-  def formatInDollars(d: Double) = "$" +f"$d%1.2f" // EN lang (FR has it at tail! Shamelessly unconcerned about locale here).
+  val formatter = NumberFormat.getCurrencyInstance()
 
   def render = {
     def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[(SelectedProduct, String)]) = {
       def getSingleLI(el: (SelectedProduct, String)): NodeSeq = {
-        val formattedCost = formatInDollars(el._1.cost)
+        val formattedCost = formatter format el._1.cost
         val ns: NodeSeq = <li>{el._2} at cost of {formattedCost} for {el._1.quantity} extra units</li>
         ns
       }
@@ -61,7 +62,7 @@ object ProductInteraction extends Loggable {
         getLIs(currNodeSeq ++ getSingleLI(l.head), l.tail)
       }
       val severalLIs = getLIs(NodeSeq.Empty, confirmationMsgs)
-      val totalBill = formatInDollars(confirmationMsgs.map{x => x._1.quantity * x._1.cost}.sum)
+      val totalBill = formatter.format(confirmationMsgs.map{x => x._1.quantity * x._1.cost}.sum)
 
       SetHtml("transactionsConfirmationUser", Text(user)) &
       SetHtml("purchaseAmount", Text(totalBill)) &
