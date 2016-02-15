@@ -66,7 +66,7 @@ case class StoreAsLCBOJson (id: Int = 0,
       ("Your Distance: ", distanceInKMs) ::
       ("Latitude: ", latitude.toString) ::
       ("Longitude: ", longitude.toString) ::
-      Nil).filter({ p: (String, String) => p._2 != "null" && !p._2.isEmpty })
+      Nil).filter({ p: (String, String) => p._2 != "null" && p._2.nonEmpty })
 
 }
 
@@ -703,14 +703,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // lock free. For correctness, we use putIfAbsent to get some atomicity when we do complex read-write at once (complex linearizable operations).
   // For now, we call this lazily for first user having an interaction with a particular store and not before.
   def loadCache(storeId: Int) = {
+    case class ProductWithInventory(product: Product, storeProduct: StoreProduct)
 
     // Uses convenient Squeryl native Scala ORM for a simple 2-table join.
-    def GetStoreProductsFromDB: Map[Int, (Product, StoreProduct)] =
+    def GetStoreProductsFromDB: Map[Int, ProductWithInventory] =
       inTransaction {
         val prods = from(storeProducts, products)((sp, p) =>
           where(sp.storeid === storeId and sp.productid === p.lcbo_id  )
             select (p, sp) )
-        prods.map(pair => pair._1.lcbo_id.get -> pair).toMap
+        prods.map(pair => pair._1.lcbo_id.get -> ProductWithInventory(pair._1, pair._2)).toMap
       }
 
 
@@ -768,9 +769,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         else Map[Int, StoreProduct]()
       }
 
-    val dbProductsAndStoreProducts: Map[Int, (Product, StoreProduct)] = GetStoreProductsFromDB
-    val dbProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v._1)
-    val dbStoreProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v._2)
+    val dbProductsAndStoreProducts: Map[Int, ProductWithInventory] = GetStoreProductsFromDB
+    val dbProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v.product)
+    val dbStoreProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v.storeProduct)
 
     val allDbProductIds: Set[Int] = inTransaction {
       from(products)(p => select(p.lcbo_id.get)).toSet }
