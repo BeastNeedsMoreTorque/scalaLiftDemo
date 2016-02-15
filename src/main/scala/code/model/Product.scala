@@ -135,17 +135,17 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
     */
   def createProductElemVals: List[ProductAttribute] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
-    ( ProductAttribute("Name: ", name.get) ::
-      ProductAttribute("Primary Category: ", primary_category.get) ::
-      ProductAttribute("Secondary Category: ", secondary_category.get) ::
-      ProductAttribute("Varietal: ", varietal.get) ::
-      ProductAttribute ("Package: ", Package) ::
-      ProductAttribute ("Volume: ", volumeInLitre) ::
-      ProductAttribute ("Price: ", price) ::
-      ProductAttribute("Description: ", description.get) ::
-      ProductAttribute("Serving Suggestion: ", serving_suggestion.get) ::
-      ProductAttribute("Alcohol content: ", alcoholContent) ::
-      ProductAttribute ("Origin: ", origin.get) ::
+    ( ProductAttribute("Name:", name.get) ::
+      ProductAttribute("Primary Category:", primary_category.get) ::
+      ProductAttribute("Secondary Category:", secondary_category.get) ::
+      ProductAttribute("Varietal:", varietal.get) ::
+      ProductAttribute ("Package:", Package) ::
+      ProductAttribute ("Volume:", volumeInLitre) ::
+      ProductAttribute ("Price:", price) ::
+      ProductAttribute("Description:", description.get) ::
+      ProductAttribute("Serving Suggestion:", serving_suggestion.get) ::
+      ProductAttribute("Alcohol content:", alcoholContent) ::
+      ProductAttribute ("Origin:", origin.get) ::
       Nil).filter({ p: ProductAttribute => p.value != "null" && p.value.nonEmpty })
 
   def isDirty(p: ProductAsLCBOJson): Boolean = {
@@ -197,20 +197,21 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   }
 
   @tailrec
-  def updateProducts(myProducts: Iterable[Product]): Unit = {
-    val slice = myProducts.take(DBBatchSize)
-    products.update(slice)
-    val rest = myProducts.takeRight(myProducts.size - slice.size)
-    if (rest.nonEmpty) updateProducts( rest)
-  }
+  def updateProducts(myProducts: Iterable[Product]): Unit =
+    if (myProducts.nonEmpty) {
+      val (chunk, rest) = myProducts.splitAt(DBBatchSize)
+      products.update(chunk)
+      updateProducts(rest)
+    }
+
 
   @tailrec
-  def insertNewProducts( myProducts: Iterable[Product]): Unit = {
-    val slice = myProducts.take(DBBatchSize)
-    products.insert(slice)
-    val rest = myProducts.takeRight(myProducts.size - slice.size)
-    if (rest.nonEmpty) insertNewProducts(rest)
-  }
+  def insertNewProducts( myProducts: Iterable[Product]): Unit =
+    if (myProducts.nonEmpty) {
+      val (chunk, rest) = myProducts.splitAt(DBBatchSize)
+      products.insert(chunk)
+      insertNewProducts(rest)
+    }
 
   def create(p: ProductAsLCBOJson): Product = {
     // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...

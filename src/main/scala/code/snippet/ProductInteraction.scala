@@ -7,14 +7,11 @@ import net.liftweb.http.js.JE.Call
 import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.S
-import net.liftweb.json
 import net.liftweb.json.JsonParser.parse
 import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
-import net.liftweb.util.Props
 import net.liftweb.http.SHtml.{ajaxInvoke,ajaxSelect,jsonCall}
 
-import scala.annotation.tailrec
 import scala.xml._
 import scala.language.implicitConversions
 
@@ -28,163 +25,175 @@ import java.text.NumberFormat
   * Created by philippederome on 15-10-26.
   */
 object ProductInteraction extends Loggable {
+  case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
+  case class QuantityOfProduct(quantity: Int, product: Product)  // quantity available at the current store for a product (store is implied by context)
+  case class SelectedProduct(lcbo_id: Int, quantity: Int, cost: Double) // to capture user input via JS and JSON
+  case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
+
   private implicit val formats = net.liftweb.json.DefaultFormats
-
-  private val interactionsToImgMap: Map[String, String] = {
-    val interactionsToImgMapAsStr = Props.get("product.interactionsImageMap", "") // get it in JSON format
-    val jval: json.JValue = parse(interactionsToImgMapAsStr) // contains list of JField(String, JString(String))
-    val v = for (elem <- jval.children.toVector) yield elem.values // contains vector of (String, String)
-    v.map(_.asInstanceOf[(String, String)]).toMap  // could throw if contents that are configured are in wrong format (violating assumption of pairs (String,String)...
-  }
-
-  private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions(  List("recommend", "cancel"), "cancel", interactionsToImgMap)
 
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
   private val showProdDisplayJS =  JsShowId("prodDisplay")
   private val showConfirmationJS =  JsShowId("confirmationDiv")
   private val hideConfirmationJS =  JsHideId("confirmationDiv")
 
-  def setBorderJS(elt: String) = Call("toggleButton.frame", "prodInteractionContainer", {elt})
-
-  case class QuantityOfProduct(quantity: Int, product: Product)
-  case class SelectedProduct(lcbo_id: Int, quantity: Int, cost: Double)
   val formatter = NumberFormat.getCurrencyInstance()
 
-  def render = {
-    case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
-    def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]) = {
-      def getSingleLI(el: PurchasedProductConfirmation): NodeSeq = {
-        val formattedCost = formatter format el.selectedProduct.cost
-        val ns: NodeSeq = <li>{el.confirmation} including the cost of today's purchase at {formattedCost} for {el.selectedProduct.quantity} extra units</li>
-        ns
-      }
-      @tailrec
-      def getLIs(currNodeSeq: NodeSeq, l: Iterable[PurchasedProductConfirmation]): NodeSeq = {
-        if (l.isEmpty) return currNodeSeq
-        getLIs(currNodeSeq ++ getSingleLI(l.head), l.tail)
-      }
-      val severalLIs = getLIs(NodeSeq.Empty, confirmationMsgs)
-      val totalBill = formatter.format(confirmationMsgs.map{x => x.selectedProduct.cost}.sum)
-
-      SetHtml("transactionsConfirmationUser", Text(user)) &
-      SetHtml("purchaseAmount", Text(totalBill)) &
-      SetHtml("transactionsConfirmation", severalLIs) &
-      showConfirmationJS
-    }
-
-    def prodDisplayJS(qtyProds: Iterable[QuantityOfProduct]) = {
-      def getSingleDiv(el: QuantityOfProduct): NodeSeq = {
-        val quantity = el.quantity
-        val prod = el.product
-        val lcbo_id = prod.lcbo_id.toString
-        val name = prod.name.get
-        val attributesNS = <table>{for (x <- prod.createProductElemVals ++ List(ProductAttribute("Quantity: ", quantity.toString)) ) yield <tr><td class="prodAttrHead">{x.key}</td><td class="prodAttrContent">{x.value}</td></tr>}</table>
-
-        // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
-        val checkBoxNS = <label><input type="checkbox" class="prodSelectInput" onclick="prodSelection.updateItem(this);" value={lcbo_id}></input>{name}</label><br></br>
-        val quantityNS = <label>Item Quantity:<input type="text" class="prodQty prodSelectInput" name={lcbo_id}></input></label><br></br>
-        val costNS = <label>Cost:<input type="text" class="prodCost prodSelectInput" name={lcbo_id} value={prod.price} readonly="readonly"></input></label>
-        val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"></input>
-
-        val imgNS = <img src={prod.imageThumbUrl.get}/>
-        val ns: NodeSeq =  <div><div class="span-8">{attributesNS}</div><div class="span-8 last">{imgNS}<br></br>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div></div><hr></hr>
-        ns
-      }
-
-      @tailrec
-      def getDivs(currNodeSeq: NodeSeq, l: Iterable[QuantityOfProduct]): NodeSeq = {
-        if (l.isEmpty) return currNodeSeq
-        getDivs(currNodeSeq ++ getSingleDiv(l.head), l.tail)
-      }
-
-      val severalDivs = getDivs(NodeSeq.Empty, qtyProds)
-      SetHtml("prodContainer", severalDivs) & hideConfirmationJS & showProdDisplayJS
-    }
-
-    // Following 3 values are JavaScript objects to be executed when returning from Ajax call cb to browser to execute on browser
-    // for the 3 events corresponding to the 3 buttons (for normal cases when there are no errors). We need to execute strictly Scala callbacks
-    // here before invoking these JS callbacks. lazy val or def is required here because the value of Session variables changes as we handle events.
-    def cancelCbJS =  hideProdDisplayJS & hideConfirmationJS
-
-    def consumeCbJS = hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of product, or possibly a commentary on one
-
-    def recommend = {
-      def maySelect(): JsCmd =
-        if (theStoreId.is > 0 ) {
-          // validates expected numeric input TheStore (a http session attribute) and when valid,
-          // do real handling of accessing LCBO data
-          val qtyProdSeq = Store.recommend(theStoreId.is, theCategory.is, theRecommendCount.is) match {
-            // we want to distinguish error messages to user to provide better diagnostics.
-            case Full(pairs) => Full(pairs) // returns prod and quantity in inventory normally
-            case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
-            case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
-          }
-          qtyProdSeq.dmap { Noop }
-          { qtyProds =>
-            S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-            prodDisplayJS( qtyProds.map(x => QuantityOfProduct(x._1, x._2)))
-          }
-        }
-        else {
-          S.error(s"We need to establish your local store first, please wait for local geo to be available or enter a postal code")
-          Noop     // Error goes to site menu, but we could also send it to a DOM element if we were to specify an additional parameter
-        }
-
-      User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
-      { user => maySelect()} // normal processing
-    }
-
-    def consume(selectedProds: List[SelectedProduct]) = {
-      case class Feedback(userName: String, confirmation: String, error: String)
-      def mayConsumeItem(p: Product, quantity: Int): Feedback = {
-        UserProduct.consume(p, quantity) match {
-          case Full((userName, count)) =>
-            Feedback(userName, s"${p.name} $count unit(s) over the years", "")
-          case Failure(x, ex, _) =>
-            Feedback(userName="", confirmation="", error = s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
-          case Empty =>
-            Feedback(userName="", confirmation="", error = s"Unable to sell you product ${p.name}")
-        }
-      }
-
-      def mayConsume: JsCmd = {
-        val productPairs: List[(SelectedProduct, Option[Product])] = selectedProds.map(p => (p, Product.getProduct(p.lcbo_id)))
-        val feedback: List[(SelectedProduct, Feedback)] = for (pair <- productPairs;
-                            p <- pair._2;
-                            f <- Option(mayConsumeItem(p, pair._1.quantity))) yield(pair._1, f)
-        feedback.map {pair: (SelectedProduct, Feedback) => pair._2.error}.filter(_.nonEmpty).map(S.error) // show all errors when we attempted to go to DB for user products relationship
-        val confirmations = feedback.filter( _._2.confirmation.nonEmpty) // select those for which we have no error and explicit useful message
-        if (confirmations.nonEmpty)
-          transactionsConfirmationJS(confirmations.head._2.userName,
-                                     confirmations.map{pair =>
-                                       PurchasedProductConfirmation(pair._1, pair._2.confirmation) }) &
-            consumeCbJS // confirm and show only if there's something interesting
-        else {S.error("could not reconcile product id in cache!"); Noop}
-      }
-
-      if (selectedProds.nonEmpty) mayConsume // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
-      else { S.notice("consume", "Select some recommended products before attempting to consume"); Noop}
-    }
-
-    def cancel = {
-      S.error("")
-      cancelCbJS
-    }
-
-    def consumeProducts(j: JValue): JsCmd = {
-      val jsonOpt = j.extractOpt[String].map( parse)
-      val selectedProducts: Option[List[SelectedProduct]] = jsonOpt.map( json => {for (p <- json.children) yield p.extractOpt[SelectedProduct]}.flatten )
-      consume(selectedProducts.fold(List[SelectedProduct]())(identity))
-    }
-
-    val recommendCountValues = Map[String, Int](
+  // data store for a count of products select menu, could easily be generalized to be configured from properties
+  object RecommendCount {
+    val values = Map[String, Int](
       "1" -> 1,
       "5" -> 5,
       "10" -> 10,
       "20" -> 20
     )
-    val recommendCountDefault = Full("1")
-    val recommendCountOptions : List[(String,String)] = recommendCountValues.keys.map(p => (p,p)).toList
+    val default = Full("1")
+    val options: List[(String, String)] = values.keys.map(p => (p, p)).toList
+  }
+
+  def render = {
+    def setBorderJS(elementId: String) = Call("toggleButton.frame", "prodInteractionContainer", {elementId})
+
+    def recommend: JsCmd = {
+      def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd = {
+        def getDiv(qOfProd: QuantityOfProduct): NodeSeq = {
+          // layout description:
+          // attributes in center column (Blueprint class span-8, width 8 not to side) and to its right (Blueprint classes span-8 last) other data.
+          // Other data is top to bottom: image, then checkbox, quantity and cost input text fields right justified (CSS class prodSelectInput).
+          // We also add a hiddenCost, so that the cost per item is always available for our calculation (visible to user in attributes in any event, but harder for us to get at for computation)
+          val quantity = qOfProd.quantity
+          val prod = qOfProd.product
+          val quantityAttribute = ProductAttribute("Quantity:", quantity.toString)
+          val fullAttributesList = prod.createProductElemVals ++ List(quantityAttribute)
+          val attributesNS = <table>
+            { for (attr <- fullAttributesList )
+              yield <tr>
+                <td class="prodAttrHead">{attr.key}</td>
+                <td class="prodAttrContent">{attr.value}</td>
+              </tr>
+            }
+          </table>
+
+          val lcbo_id = prod.lcbo_id.toString
+          val name = prod.name.get
+          // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
+          val checkBoxNS = <label>
+            <input type="checkbox" class="prodSelectInput" onclick="prodSelection.updateItem(this);" value={lcbo_id}/>
+            {name}
+          </label><br/>
+          val quantityNS = <label>Item Quantity:
+            <input type="text" class="prodQty prodSelectInput"/>
+          </label><br/>
+          // read-only costNS, so user can see it clearly but cannot update it.
+          val costNS = <label>Cost:
+            <input type="text" class="prodCost prodSelectInput" value={prod.price} readonly="readonly"/>
+          </label>
+          val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"/>
+
+          val imgNS = <img src={prod.imageThumbUrl.get}/>
+          val ns: NodeSeq =  <div>
+            <div class="span-8">{attributesNS}</div>
+            <div class="span-8 last">{imgNS}<br></br>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div>
+          </div><hr/>
+          ns
+        }
+
+        // for each element of qOfProds, build a Div as NodeSeq and concatenate them as a NodeSeq for the several divs
+        val divs = qOfProds.map(getDiv).foldLeft(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => (a ++ b))
+        SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
+      }
+
+      def maySelect: JsCmd =
+        if (theStoreId.is > 0 ) {
+          // validate expected numeric input theStoreId (a http session attribute) then access LCBO data
+          val quantityProdSeq = Store.recommend(theStoreId.is, theCategory.is, theRecommendCount.is) match {
+            // we want to distinguish error messages to user to provide better diagnostics.
+            case Full(pairs) => Full(pairs) // returns prod and quantity in inventory normally
+            case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
+            case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
+          }
+          quantityProdSeq.dmap { Noop } // we gave notice of error already via JS, nothing else to do
+          { pairs => // normal case
+            S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
+            prodDisplayJS( pairs.map(pair => QuantityOfProduct(pair._1, pair._2)))
+          }
+        }
+        else {
+          S.error("We need to establish your local store first, please wait for local geo to become available")
+          Noop
+        }
+
+      User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
+      { user => maySelect} // normal processing
+    }
+
+    def consumeProducts(j: JValue): JsCmd = {
+      def consume(selectedProds: List[SelectedProduct]): JsCmd = {
+        def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
+          def getListItem(item: PurchasedProductConfirmation): NodeSeq = {
+            def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Int): String =
+              s"${confirmation} including the cost of today's purchase at ${formattedCost} for ${quantity} extra units"
+
+            val formattedCost = formatter format item.selectedProduct.cost
+            val liContent = purchaseConfirmationMessage(item.confirmation, formattedCost, item.selectedProduct.quantity)
+            val ns: NodeSeq = <li>{liContent}</li>
+            ns
+          }
+
+          val totalCost = confirmationMsgs.map{ _.selectedProduct.cost}.sum
+          val formattedTotalCost = formatter.format(totalCost)
+          val listItems = confirmationMsgs.map(getListItem).foldLeft(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => (a ++ b))
+
+          SetHtml("transactionsConfirmationUser", Text(user)) &
+          SetHtml("purchaseAmount", Text(formattedTotalCost)) &
+          SetHtml("transactionsConfirmation", listItems) &
+          showConfirmationJS
+        }
+
+        def mayConsume: JsCmd = {
+          def mayConsumeItem(p: Product, quantity: Int): Feedback = {
+            UserProduct.consume(p, quantity) match {
+              case Full((userName, count)) =>
+                Feedback(userName, success=true, s"${p.name} $count unit(s) over the years")
+              case Failure(x, ex, _) =>
+                Feedback(userName="", success=false, s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
+              case Empty =>
+                Feedback(userName="", success=false, s"Unable to sell you product ${p.name}")
+            }
+          }
+
+          // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
+          val feedback: List[(SelectedProduct, Feedback)] = for (sp <- selectedProds;
+                                                                 product <- Product.getProduct(sp.lcbo_id);
+                                                                 f <- Option(mayConsumeItem(product, sp.quantity))) yield(sp, f)
+          val partition = feedback.groupBy(_._2.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
+          partition.get(false).map( _.map{ _._2.message}.map(S.error)) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
+          val goodConfirmations = partition.get(true) // select those for which we have success and positive message
+          goodConfirmations.fold {
+            S.error("could not reconcile any selected product id in cache!") // they all failed!
+            Noop
+          } { goodList: List[(SelectedProduct, Feedback)] =>
+              val confirmationMessages =
+                goodList.map{pair =>
+                                 PurchasedProductConfirmation(pair._1, pair._2.message) } // get some particulars about cost and quantity in addition to message
+              transactionsConfirmationJS(goodList.head._2.userName, confirmationMessages) &
+              hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
+          }
+        }
+
+        if (selectedProds.nonEmpty) mayConsume // Normal case: we got notified that we have a product that can be consumed and user expressed interest in consuming.
+        else { S.notice("consume", "Select some recommended products before attempting to consume"); Noop}
+      }
+
+      val jsonOpt = j.extractOpt[String].map( parse)
+      val selectedProducts: Option[List[SelectedProduct]] = jsonOpt.map( json => {for (p <- json.children) yield p.extractOpt[SelectedProduct]}.flatten )
+      consume(selectedProducts.fold(List[SelectedProduct]())(identity))
+    }
+
+    def cancel: JsCmd = {
+      S.error("")
+      hideProdDisplayJS & hideConfirmationJS
+    }
 
     // call to setBorderJS after button activation simply highlights that button was pressed.
     "@consume [onclick]" #>
@@ -194,8 +203,7 @@ object ProductInteraction extends Loggable {
       ajaxInvoke({() => recommend & setBorderJS("recommend")}) &
     "@cancel [onclick]" #>
       ajaxInvoke({() => cancel & setBorderJS("cancel")}) &
-    "select" #> ajaxSelect(recommendCountOptions, recommendCountDefault,
+    "select" #> ajaxSelect(RecommendCount.options, RecommendCount.default,
       { selected: String => theRecommendCount.set(toInt(selected)); Noop })
-
   }
 }
