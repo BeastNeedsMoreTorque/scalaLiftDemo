@@ -167,7 +167,7 @@ object ProductInteraction extends Loggable {
         partition.getOrElse(false, Nil).map{ _._2.message}.map(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
         val goodConfirmations = partition.getOrElse(true, Nil) // select those for which we have success and positive message
         if (goodConfirmations.isEmpty) {
-          S.error("could not reconcile any selected product id in cache!") // they all failed!
+          S.error("Make sure you select a product if you want to consume") // they all failed!
           Noop
         }
         else {
