@@ -174,30 +174,73 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     mapList.getOrElse(state, Nil).flatMap{ f(_)}
 
   def init() = { // could help queries find(lcbo_id)
-    def synchronizeData(idx: Int, dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
-      // we'd like the is_dead ones as well to update state (but apparently you have to query for it explicitly!?!?)
-      val url = s"$LcboDomainURL/stores?"
-      tryo {
-        // gather stores on this page (url, idx) with classification as to whether they are new, dirty or clean
-        val initMap = Map[EntityRecordState, List[Store]](New -> Nil, Dirty -> Nil, Clean -> Nil)
-        val lcboStoresPerWorker = collectStoresOnAPage(dbStores, initMap, url, idx)
-        logger.trace(s"done loading to LCBO")
-
-        // 0.9 sec to do this work with 1 thread (going to DB one by one). With 2 threads and batch access to DB went down to 0.250 sec
-        // on about 400 records to update and 650 records total. When no change is required to DB, this would take 0.200 sec. (MacBook Air 2010)
-        // With more complex solution, whole thing takes 2.7 secs and about 170 ms on db side end processing (best case).
-        // identify the dirty and new stores for batch update and then retain all of them as the set identified by the worker (not visibly slower than when there is no change to DB)
-        inTransaction {
-          // for the activity on separate thread for synchronizeData
-          // batch update the database now.
-          updateStores(lcboStoresPerWorker(Dirty))
-          insertStores(lcboStoresPerWorker(New))
-        }
-        lcboStoresPerWorker.values.flatten.map(s => s.lcbo_id.get -> s)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
-      }
-    }
 
     def getStores(idx: Int, dbStores: Map[Int, Store]): Map[Int, Store] = {
+      def synchronizeData(idx: Int, dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
+        // collects stores individually from LCBO REST as PlainStoreAsLCBOJson on as many pages as required.
+        // we declare types fairly often in the following because it's not trivial to follow otherwise
+        @tailrec
+        def collectStoresOnAPage(dbStores: Map[Int, Store],
+                                 accumItems: Map[EntityRecordState, List[Store]],
+                                 urlRoot: String,
+                                 pageNo: Int): Map[EntityRecordState, List[Store]] = {
+          val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)
+          logger.info(uri)
+          val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
+          val jsonRoot = parse(pageContent) // fyi: throws ParseException
+          val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
+          // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
+          val pageStoreSeq = {for (p <- itemNodes) yield p.extractOpt[PlainStoreAsLCBOJson]}.flatten
+
+          // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
+          val storesByState: Map[EntityRecordState, List[PlainStoreAsLCBOJson]] = pageStoreSeq.groupBy {
+            s => (dbStores.get(s.id), s) match {
+              case (None, _)  => New
+              case (Some(store), lcboStore) if store.isDirty(lcboStore) => Dirty
+              case (_ , _) => Clean
+            }
+          }
+
+          val cleanStores = accumItems(Clean) ++ fetchItems(Clean, storesByState, s => s.getStore(dbStores))
+          val dirtyStores = accumItems(Dirty) ++ fetchItems(Dirty, storesByState, s => s.getStore(dbStores).map(copyAttributes(_, s) ))
+          val newStores = accumItems(New) ++ storesByState.getOrElse(New, Nil).map{ create }
+
+          // after preliminaries, get the map of stores indexed properly by state that we need having accumulated over the pages so far.
+          val revisedAccumItems = Map(New -> newStores, Dirty -> dirtyStores, Clean -> cleanStores)
+
+          val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
+
+          if (pageStoreSeq.isEmpty || isFinalPage) return revisedAccumItems  // no need to look at more pages
+
+          collectStoresOnAPage(
+            dbStores,
+            revisedAccumItems,
+            urlRoot,
+            pageNo + storeLoadWorkers) // union of this page with next page when we are asked for a full sample
+        }
+
+        // we'd like the is_dead ones as well to update state (but apparently you have to query for it explicitly!?!?)
+        val url = s"$LcboDomainURL/stores?"
+        tryo {
+          // gather stores on this page (url, idx) with classification as to whether they are new, dirty or clean
+          val initMap = Map[EntityRecordState, List[Store]](New -> Nil, Dirty -> Nil, Clean -> Nil)
+          val lcboStoresPerWorker = collectStoresOnAPage(dbStores, initMap, url, idx)
+          logger.trace(s"done loading to LCBO")
+
+          // 0.9 sec to do this work with 1 thread (going to DB one by one). With 2 threads and batch access to DB went down to 0.250 sec
+          // on about 400 records to update and 650 records total. When no change is required to DB, this would take 0.200 sec. (MacBook Air 2010)
+          // With more complex solution, whole thing takes 2.7 secs and about 170 ms on db side end processing (best case).
+          // identify the dirty and new stores for batch update and then retain all of them as the set identified by the worker (not visibly slower than when there is no change to DB)
+          inTransaction {
+            // for the activity on separate thread for synchronizeData
+            // batch update the database now.
+            updateStores(lcboStoresPerWorker(Dirty))
+            insertStores(lcboStoresPerWorker(New))
+          }
+          lcboStoresPerWorker.values.flatten.map(s => s.lcbo_id.get -> s)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
+        }
+      }
+
       if (synchLcbo) synchronizeData(idx, dbStores) match {
           case Full(m) => m
           case Failure(m, ex, _) => throw new Exception(s"Problem loading LCBO stores into cache (worker $idx) with message '$m' and exception error '$ex'")
@@ -336,50 +379,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     (parse(pageContent) \ "result").extract[PlainStoreAsLCBOJson] // more throws
   }
 
-
-  // collects stores individually from LCBO REST as PlainStoreAsLCBOJson on as many pages as required.
-  // we declare types fairly often in the following because it's not trivial to follow otherwise
-  @scala.annotation.tailrec
-  private final def collectStoresOnAPage(dbStores: Map[Int, Store],
-                                         accumItems: Map[EntityRecordState, List[Store]],
-                                         urlRoot: String,
-                                         pageNo: Int): Map[EntityRecordState, List[Store]] = {
-    val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)
-    logger.info(uri)
-    val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
-    val jsonRoot = parse(pageContent) // fyi: throws ParseException
-    val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
-    // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
-    val pageStoreSeq = {for (p <- itemNodes) yield p.extractOpt[PlainStoreAsLCBOJson]}.flatten
-
-    // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-    val storesByState: Map[EntityRecordState, List[PlainStoreAsLCBOJson]] = pageStoreSeq.groupBy {
-      s => (dbStores.get(s.id), s) match {
-        case (None, _)  => New
-        case (Some(store), lcboStore) if store.isDirty(lcboStore) => Dirty
-        case (_ , _) => Clean
-      }
+  def find( lcbo_id: Int): Box[Store] =  {
+    def findStore(lcbo_id: Int): Box[Store] = {
+      val url = s"$LcboDomainURL/stores/$lcbo_id"
+      logger.debug(s"findStore by id using $url")
+      tryo { fetchSynched(getSingleStore(url))}
     }
 
-    val cleanStores = accumItems(Clean) ++ fetchItems(Clean, storesByState, s => s.getStore(dbStores))
-    val dirtyStores = accumItems(Dirty) ++ fetchItems(Dirty, storesByState, s => s.getStore(dbStores).map(copyAttributes(_, s) ))
-    val newStores = accumItems(New) ++ storesByState.getOrElse(New, Nil).map{ create }
-
-    // after preliminaries, get the map of stores indexed properly by state that we need having accumulated over the pages so far.
-    val revisedAccumItems = Map(New -> newStores, Dirty -> dirtyStores, Clean -> cleanStores)
-
-    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
-
-    if (pageStoreSeq.isEmpty || isFinalPage) return revisedAccumItems  // no need to look at more pages
-
-    collectStoresOnAPage(
-      dbStores,
-      revisedAccumItems,
-      urlRoot,
-      pageNo + storeLoadWorkers) // union of this page with next page when we are asked for a full sample
-  }
-
-  def find( lcbo_id: Int): Box[Store] =  {
     if (storesCache.contains(lcbo_id)) Full(storesCache(lcbo_id))
     else findStore(lcbo_id) match {
       case Full(x) =>
@@ -392,12 +398,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         logger.error("unable to find closest store info")
         Empty
     }
-  }
-
-  private def findStore(lcbo_id: Int): Box[Store] = {
-    val url = s"$LcboDomainURL/stores/$lcbo_id"
-    logger.debug(s"findStore by id using $url")
-    tryo { fetchSynched(getSingleStore(url))}
   }
 
   def fetchSynched(s: PlainStoreAsLCBOJson): Store = {
@@ -436,6 +436,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
     * for pattern match LCBO uses lower case but for actual product category it's upper case, so to make comparisons, we will need to account for that
     * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
+    *
     * @param requiredSize upper bound on #items we need. Attempt to match it if enough supply is available.
     * @param store id  of Store at LCBO
     * @param category wine, spirits, and so on
@@ -449,10 +450,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def productMapByStoreCategory(requiredSize: Int, store: Long, category: String): Map[Int, Product] = {
+  private def productMapByStoreCategory(requiredSize: Int, storeId: Long, category: String): Map[Int, Product] = {
     if (requiredSize <= 0) Map()
     else {
-      val url = s"$LcboDomainURL/products?store_id=$store" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
+      val url = s"$LcboDomainURL/products?store_id=$storeId" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
       val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
         !p.is_discontinued
       } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
@@ -465,8 +466,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         pageNo = 1,
         pageDelta = 1,
         filter)
-      val productInventories: Iterable[Product] = items.values.take(requiredSize).flatten // we don't care about Clean/New/Dirty state here so flatten values.
-      productInventories.map(p => p.lcbo_id.get -> p)(breakOut)  // build a map for each product using lcbo_id as key.
+      val products = items.values.take(requiredSize).flatten // we don't care about Clean/New/Dirty state here so flatten values.
+      products.map(p => p.lcbo_id.get -> p)(breakOut)  // build a map for each product using lcbo_id as key.
     }
   }
 
@@ -515,6 +516,71 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                                  requiredSize: Int,
                                  store: Int,
                                  page: Int): Map[EntityRecordState, List[StoreProduct]] = {
+    @throws(classOf[net.liftweb.json.MappingException])
+    @throws(classOf[net.liftweb.json.JsonParser.ParseException])
+    @throws(classOf[java.io.IOException])
+    @throws(classOf[java.net.SocketTimeoutException])
+    @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
+    @tailrec
+    def collectStoreProductsOnAPage(dbStoreProducts: Map[Int, StoreProduct],
+                                                  accumItems: Map[EntityRecordState, List[StoreProduct]],
+                                                  urlRoot: String,
+                                                  requiredSize: Int,
+                                                  pageNo: Int,
+                                                  pageDelta: Int = 1,
+                                                  myFilter: InventoryAsLCBOJson => Boolean = { sp: InventoryAsLCBOJson => true }): Map[EntityRecordState, List[StoreProduct]] = {
+      def nextPage = pageNo + prodLoadWorkers
+      def fetchItems(state: EntityRecordState,
+                     mapList: Map[EntityRecordState, List[InventoryAsLCBOJson]],
+                     f: InventoryAsLCBOJson => Option[StoreProduct] ): List[StoreProduct] = {
+        mapList.getOrElse(state, Nil).flatMap { p => f(p) } // remove the Option in Option[Product]
+      }
+
+      if (requiredSize <= 0) return accumItems
+      // specify the URI for the LCBO api url for liquor selection
+      val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
+      logger.info(uri)
+      val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
+      val jsonRoot = parse(pageContent) // fyi: throws ParseException
+      val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
+      val items = (for (p <- itemNodes) yield p.extract[InventoryAsLCBOJson].removeNulls).filter(myFilter)  // LCBO sends us poisoned useless nulls that we need to filter for DB (filter them right away).
+      val outstandingSize = requiredSize - items.size
+
+      // Collects into our list of products the attributes we care about (extract[Product]). Then filter out unwanted data.
+      // fyi: throws Mapping exception.
+      //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
+      val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
+      val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
+
+      // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
+      val storeProductsByState: Map[EntityRecordState, List[InventoryAsLCBOJson]] = items.groupBy {
+        i => (dbStoreProducts.get(i.product_id), i) match {
+          case (None, _)  => New
+          case (Some(storeProduct), lcboInventory) if storeProduct.isDirty(lcboInventory) => Dirty
+          case (_ , _) => Clean
+        }
+      }
+
+      val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, storeProductsByState, {inv => inv.getProduct(dbStoreProducts)})
+      val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => inv.getProduct(dbStoreProducts).map({ _.copyAttributes( inv)})})
+      val newProducts = accumItems(New) ++ storeProductsByState.getOrElse(New, Nil).map{ sp => StoreProduct.create(sp) }
+      val revisedAccumItems = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
+
+      if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) return revisedAccumItems
+      // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (when we gap due to parallelism).
+      // Similarly having reached our required size,we can stop.
+
+      // tail recursion enforced.
+      collectStoreProductsOnAPage(
+        dbStoreProducts,
+        revisedAccumItems,
+        urlRoot,
+        outstandingSize,
+        nextPage,
+        pageDelta,
+        myFilter) // union of this page with next page when we are asked for a full sample
+    }
+
     if (requiredSize <= 0) Map()
     else {
       val url = s"$LcboDomainURL/inventories?store_id=$store"
@@ -536,6 +602,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   /**
     * LCBO client JSON query handler. So naturally, the code is specifically written with the structure of LCBO documents in mind, with tokens as is.
     * For Liftweb JSON extraction after parse,
+    *
     * @see https://github.com/lift/lift/tree/master/framework/lift-base/lift-json/
     *      don't go to more pages than user implicitly requests via requiredSize that should not be exceeded.
     *      Would Streams collection be handy for paging here? Depends on consumption usage perhaps.
@@ -618,78 +685,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       myFilter) // union of this page with next page when we are asked for a full sample
   }
 
-  @throws(classOf[net.liftweb.json.MappingException])
-  @throws(classOf[net.liftweb.json.JsonParser.ParseException])
-  @throws(classOf[java.io.IOException])
-  @throws(classOf[java.net.SocketTimeoutException])
-  @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-  @tailrec
-  private final def collectStoreProductsOnAPage(dbStoreProducts: Map[Int, StoreProduct],
-                                        accumItems: Map[EntityRecordState, List[StoreProduct]],
-                                        urlRoot: String,
-                                        requiredSize: Int,
-                                        pageNo: Int,
-                                        pageDelta: Int = 1,
-                                        myFilter: InventoryAsLCBOJson => Boolean = { sp: InventoryAsLCBOJson => true }): Map[EntityRecordState, List[StoreProduct]] = {
-    def nextPage = pageNo + prodLoadWorkers
-    def fetchItems(state: EntityRecordState,
-                   mapList: Map[EntityRecordState, List[InventoryAsLCBOJson]],
-                   f: InventoryAsLCBOJson => Option[StoreProduct] ): List[StoreProduct] = {
-      mapList.getOrElse(state, Nil).flatMap { p => f(p) } // remove the Option in Option[Product]
-    }
-
-    if (requiredSize <= 0) return accumItems
-    // specify the URI for the LCBO api url for liquor selection
-    val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
-    logger.info(uri)
-    val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
-    val jsonRoot = parse(pageContent) // fyi: throws ParseException
-    val itemNodes = (jsonRoot \ "result").children // Uses XPath-like querying to extract data from parsed object jsObj.
-    val items = (for (p <- itemNodes) yield p.extract[InventoryAsLCBOJson].removeNulls).filter(myFilter)  // LCBO sends us poisoned useless nulls that we need to filter for DB (filter them right away).
-    val outstandingSize = requiredSize - items.size
-
-    // Collects into our list of products the attributes we care about (extract[Product]). Then filter out unwanted data.
-    // fyi: throws Mapping exception.
-    //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
-    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
-    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
-
-    // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-    val storeProductsByState: Map[EntityRecordState, List[InventoryAsLCBOJson]] = items.groupBy {
-      i => (dbStoreProducts.get(i.product_id), i) match {
-        case (None, _)  => New
-        case (Some(storeProduct), lcboInventory) if storeProduct.isDirty(lcboInventory) => Dirty
-        case (_ , _) => Clean
-      }
-    }
-
-    val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, storeProductsByState, {inv => inv.getProduct(dbStoreProducts)})
-    val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => inv.getProduct(dbStoreProducts).map({ _.copyAttributes( inv)})})
-    val newProducts = accumItems(New) ++ storeProductsByState.getOrElse(New, Nil).map{ sp => StoreProduct.create(sp) }
-    val revisedAccumItems = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
-
-    if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) return revisedAccumItems
-    // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (when we gap due to parallelism).
-    // Similarly having reached our required size,we can stop.
-
-    // tail recursion enforced.
-    collectStoreProductsOnAPage(
-      dbStoreProducts,
-      revisedAccumItems,
-      urlRoot,
-      outstandingSize,
-      nextPage,
-      pageDelta,
-      myFilter) // union of this page with next page when we are asked for a full sample
-  }
-
-  def loadAll(dbProducts: Map[Int, Product], requestSize: Int, storeId: Int, page: Int): Box[Map[EntityRecordState, List[Product]]] =
-    tryo { productListByStore(dbProducts, requestSize, storeId, page) }
-
-  def loadAllStoreProducts(dbStoreProducts: Map[Int, StoreProduct], requestSize: Int, storeId: Int, page: Int): Box[Map[EntityRecordState, List[StoreProduct]]] =
-    tryo { storeProductListByStore(dbStoreProducts, requestSize, storeId, page) }
-
-
   // may have side effect to update database with more up to date from LCBO's content (if different)
   // lock free. For correctness, we use putIfAbsent to get some atomicity when we do complex read-write at once (complex linearizable operations).
   // For now, we call this lazily for first user having an interaction with a particular store and not before.
@@ -705,18 +700,24 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         prods.map({ case (p, sp) => p.lcbo_id.get -> ProductWithInventory(p, sp)})(breakOut)
       }
 
+    def getProductsOfStartPage(page: Int, dbProducts: Map[Int, Product], allDbProductIds: Set[Int]): Map[Int, Product] = {
+      def loadAll(dbProducts: Map[Int, Product], requestSize: Int, storeId: Int, page: Int): Box[Map[EntityRecordState, List[Product]]] =
+        tryo {
+          productListByStore(dbProducts, requestSize, storeId, page)
+        }
 
-    def getProductsOfStartPage(page: Int, dbProducts: Map[Int, Product], allDbProductIds: Set[Int]): Map[Int, Product] =
       inTransaction {
         if (synchLcbo) {
           loadAll(dbProducts, productCacheSize, storeId, page) match {
-            case Full(m) =>  // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-              for ((k, v) <- m) { // v List[Product] containing product
-                Some(k) collect { // Clean is intentionally ignored
+            case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
+              for ((k, v) <- m) {
+                // v List[Product] containing product
+                Some(k) collect {
+                  // Clean is intentionally ignored
                   case New =>
-                    insertProducts(v.filter({p => !allDbProductIds.contains(p.lcbo_id.get)} )) // insert to DB those we didn't get in our query to obtain allDbProducts
+                    insertProducts(v.filter({ p => !allDbProductIds.contains(p.lcbo_id.get) })) // insert to DB those we didn't get in our query to obtain allDbProducts
                   case Dirty =>
-                    updateProducts(v)  // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
+                    updateProducts(v) // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
                 }
               }
               // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
@@ -732,14 +733,20 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         else if (page == 1) dbProducts // just load from DB without going to LCBO. And if config is weird to use multiple threads, do it only on first one.
         else Map[Int, Product]()
       }
+    }
 
-    def getStoreProductsOfStartPage(page: Int, dbStoreProducts: Map[Int, StoreProduct], allDbProductIds: Set[Int]): Map[Int, StoreProduct] =
+    def getStoreProductsOfStartPage(page: Int, dbStoreProducts: Map[Int, StoreProduct], allDbProductIds: Set[Int]): Map[Int, StoreProduct] = {
+      def loadAllStoreProducts(dbStoreProducts: Map[Int, StoreProduct], requestSize: Int, storeId: Int, page: Int): Box[Map[EntityRecordState, List[StoreProduct]]] =
+        tryo { storeProductListByStore(dbStoreProducts, requestSize, storeId, page) }
+
       inTransaction {
         if (synchLcbo) {
           loadAllStoreProducts(dbStoreProducts, productCacheSize, storeId, page) match {
-            case Full(m) =>  // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-              for ((k, v) <- m) { // v List[StoreProduct] containing product
-                Some(k) collect { // Clean is intentionally ignored
+            case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
+              for ((k, v) <- m) {
+                // v List[StoreProduct] containing product
+                Some(k) collect {
+                  // Clean is intentionally ignored
                   case New =>
                     StoreProduct.insertStoreProducts(v) // now we can insert relationship of store-product with an inventory of 10
                   case Dirty =>
@@ -759,6 +766,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         else if (page == 1) dbStoreProducts // just load from DB without going to LCBO. And if config is weird to use multiple threads, do it only on first one.
         else Map()
       }
+    }
 
     val dbProductsAndStoreProducts: Map[Int, ProductWithInventory] = GetStoreProductsFromDB
     val dbProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v.product)
@@ -781,10 +789,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         case t => logger.error("loadCache, an error for inventories occurred because: " + t.getMessage)
       }
     }
+
     def fetchProducts(initialPages: List[Int]) = {
-
       val allTheProductsByCategory = Future.traverse(initialPages)(productsByWorker)
-
       // we assume all along and depend strongly on that, that we never remove from cache. Updates that are strictly monotonic are easier to get right.
       allTheProductsByCategory onSuccess {
         case maps: Iterable[Map[Int, Product]] =>
