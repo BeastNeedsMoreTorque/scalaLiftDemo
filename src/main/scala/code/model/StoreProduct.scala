@@ -63,7 +63,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   private val DBBatchSize = Props.getInt("storeProduct.DBBatchSize", 1)
   private implicit val formats = net.liftweb.json.DefaultFormats
 
-  // thread-safe lock free objects
+  // thread-safe lock free object
   private val storeProductsCache: concurrent.Map[(Int, Int), StoreProduct] = TrieMap()
 
   def update(storeId: Int, storeMap: Map[Int, StoreProduct]) =

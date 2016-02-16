@@ -5,7 +5,7 @@ import java.io.IOException
 import code.model.Product._
 
 import scala.annotation.tailrec
-import scala.collection.{Iterable, Set, Map, concurrent}
+import scala.collection.{Iterable, Set, Map, concurrent,breakOut}
 import scala.language.implicitConversions
 import scala.util.Random
 import scala.xml.Node
@@ -66,7 +66,7 @@ case class StoreAsLCBOJson (id: Int = 0,
       ("Your Distance: ", distanceInKMs) ::
       ("Latitude: ", latitude.toString) ::
       ("Longitude: ", longitude.toString) ::
-      Nil).filter({ case (label,q) => label != "null" && label.nonEmpty })
+      Nil).filter({ case (label, value) => label != "null" && label.nonEmpty })
 
 }
 
@@ -194,7 +194,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           updateStores(lcboStoresPerWorker(Dirty))
           insertStores(lcboStoresPerWorker(New))
         }
-        lcboStoresPerWorker.values.flatten.map(s => s.lcbo_id.get -> s).toMap // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
+        lcboStoresPerWorker.values.flatten.map(s => s.lcbo_id.get -> s)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
       }
     }
 
@@ -467,7 +467,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         pageDelta = 1,
         filter)
       val productInventories: Iterable[Product] = items.values.take(requiredSize).flatten // we don't care about Clean/New/Dirty state here so flatten values.
-      productInventories.map(p => p.lcbo_id.get -> p).toMap  // build a map for each product using lcbo_id as key.
+      productInventories.map(p => p.lcbo_id.get -> p)(breakOut)  // build a map for each product using lcbo_id as key.
     }
   }
 
@@ -703,7 +703,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val prods = from(storeProducts, products)((sp, p) =>
           where(sp.storeid === storeId and sp.productid === p.lcbo_id  )
             select (p, sp) )
-        prods.map({ case (p, sp) => p.lcbo_id.get -> ProductWithInventory(p, sp)}).toMap
+        prods.map({ case (p, sp) => p.lcbo_id.get -> ProductWithInventory(p, sp)})(breakOut)
       }
 
 
@@ -721,7 +721,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                 }
               }
               // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
-              m.values.flatten.map(p => p.lcbo_id.get -> p).toMap // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
+              m.values.flatten.map(p => p.lcbo_id.get -> p)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
             case Failure(m, ex, _) =>
               logger.error(s"Problem loading products into cache with message $m and exception error $ex")
               Map[Int, Product]()
@@ -748,7 +748,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                 }
               }
               // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
-              m.values.flatten.map(sp => sp.productid.get -> sp).toMap // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
+              m.values.flatten.map(sp => sp.productid.get -> sp)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
             case Failure(m, ex, _) =>
               logger.error(s"Problem loading products into cache with message $m and exception error $ex")
               Map[Int, StoreProduct]()
@@ -758,7 +758,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           }
         }
         else if (page == 1) dbStoreProducts // just load from DB without going to LCBO. And if config is weird to use multiple threads, do it only on first one.
-        else Map[Int, StoreProduct]()
+        else Map()
       }
 
     val dbProductsAndStoreProducts: Map[Int, ProductWithInventory] = GetStoreProductsFromDB
