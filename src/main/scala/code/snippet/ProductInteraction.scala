@@ -60,7 +60,7 @@ object ProductInteraction extends Loggable {
           // We also add a hiddenCost, so that the cost per item is always available for our calculation (visible to user in attributes in any event, but harder for us to get at for computation)
           val quantity = qOfProd.quantity
           val prod = qOfProd.product
-          val quantityAttribute = ProductAttribute("Quantity:", quantity.toString)
+          val quantityAttribute = code.model.Attribute("Quantity:", quantity.toString)
           val fullAttributesList = prod.createProductElemVals ++ List(quantityAttribute)
           val attributesNS = <table>
             { for (attr <- fullAttributesList )
@@ -164,28 +164,27 @@ object ProductInteraction extends Loggable {
                                                                product <- Product.getProduct(sp.lcbo_id);
                                                                f <- mayConsumeItem(product, sp.quantity)) yield(sp, f)
         val partition = feedback.groupBy(_._2.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
-        partition.get(false).map( _.map{ _._2.message}.map(S.error)) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
-        val goodConfirmations = partition.get(true) // select those for which we have success and positive message
-        goodConfirmations.fold {
+        partition.getOrElse(false, Nil).map{ _._2.message}.map(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
+        val goodConfirmations = partition.getOrElse(true, Nil) // select those for which we have success and positive message
+        if (goodConfirmations.isEmpty) {
           S.error("could not reconcile any selected product id in cache!") // they all failed!
           Noop
-        } { goodList: List[(SelectedProduct, Feedback)] =>
-            val confirmationMessages =
-              goodList.map{case(selectedProd, feedBck) =>
-                               PurchasedProductConfirmation(selectedProd, feedBck.message) } // get some particulars about cost and quantity in addition to message
-            transactionsConfirmationJS(goodList.head._2.userName, confirmationMessages) &
-            hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
+        }
+        else {
+          val confirmationMessages = goodConfirmations.map{case(selectedProd, feedBck) =>
+                                                            PurchasedProductConfirmation(selectedProd, feedBck.message) } // get some particulars about cost and quantity in addition to message
+          val userName = goodConfirmations.head._2.userName
+          transactionsConfirmationJS(userName, confirmationMessages) &
+          hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
         }
       }
 
       val jsonOpt = selection.extractOpt[String].map( parse)
       val selectedProducts = jsonOpt.map( json => {for (p <- json.children) yield p.extractOpt[SelectedProduct]}.flatten )
-      selectedProducts.fold{
+      selectedProducts.fold {
         S.warning("Select some recommended products before attempting to consume")
         Noop
-      }{
-        mayConsume
-      }
+      } { mayConsume }
     }
 
     def cancel: JsCmd = {

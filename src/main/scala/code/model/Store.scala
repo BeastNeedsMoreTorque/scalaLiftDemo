@@ -2,7 +2,6 @@ package code.model
 
 import java.io.IOException
 
-import code.model.Product._
 
 import scala.annotation.tailrec
 import scala.collection.{Iterable, Set, Map, concurrent,breakOut}
@@ -26,6 +25,7 @@ import net.liftweb.util.{DefaultConnectionIdentifier, Props}
 
 import org.squeryl.annotations._
 
+import code.model.Product._
 import code.Rest.pagerRestClient
 import MainSchema._
 import code.snippet.SessionCache.theStoreId
@@ -59,14 +59,14 @@ case class StoreAsLCBOJson (id: Int = 0,
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
-  def createProductElemVals: List[(String, String)] =
-    (("Name: ", name) ::
-      ("Primary Address: ", address_line_1) ::
-      ("City: ", city) ::
-      ("Your Distance: ", distanceInKMs) ::
-      ("Latitude: ", latitude.toString) ::
-      ("Longitude: ", longitude.toString) ::
-      Nil).filter({ case (label, value) => label != "null" && label.nonEmpty })
+  def createProductElemVals: List[Attribute] =
+    (Attribute("Name: ", name) ::
+     Attribute ("Primary Address: ", address_line_1) ::
+     Attribute("City: ", city) ::
+     Attribute("Your Distance: ", distanceInKMs) ::
+     Attribute("Latitude: ", latitude.toString) ::
+     Attribute("Longitude: ", longitude.toString) ::
+     Nil).filter{ attr: Attribute =>  attr.value != "null" && attr.value.nonEmpty }
 
 }
 
@@ -80,7 +80,6 @@ object StoreAsLCBOJson {
     */
   implicit def toXml(st: StoreAsLCBOJson): Node =
     <store>{Xml.toXml(st)}</store>
-
 
   /**
     * Convert the store to JSON format.  This is
@@ -211,7 +210,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     inTransaction {  // for the initial select
       import scala.util.{Success, Failure}
-      val dbStores = stores.map(s => s.lcbo_id.get -> s)(collection.breakOut): Map[Int, Store] // queries full store table and throw it into map
+      val dbStores: Map[Int, Store] = stores.map(s => s.lcbo_id.get -> s)(breakOut) // queries full store table and throw it into map
       for (i <- 1 to storeLoadWorkers) {
         val fut = Future { getStores(i, dbStores) } // do this asynchronously to be responsive asap (default 1 worker).
         fut onComplete {
@@ -236,30 +235,30 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def recommend(storeId: Int, category: String, requestSize: Int): Box[Iterable[(Int, Product)]] = {
     // note: cacheSuccess (top level code) grabs a lock
     def cacheSuccess(storeId: Int, category: String): Option[Iterable[(Int, Product)]] = {
+      // note: we never delete from cache, so we don't worry about data disappearing in a potential race condition
       if (storeCategoriesProductsCache.contains((storeId, category)) && storeCategoriesProductsCache((storeId, category)).nonEmpty) {
-        val prodIds = storeCategoriesProductsCache((storeId, category))
-        val randomIndex = Random.nextInt(math.max(1, prodIds.size))
-        val prodSelection = prodIds.take(randomIndex) // by virtue of test, there should be some (assumes we never remove from cache to reduce set, otherwise we'd need better locking here).
+        val prodKeys = storeCategoriesProductsCache((storeId, category))
+        val randomIndex = Random.nextInt(math.max(requestSize + 1, prodKeys.size))
         val filteredSelection =
-          for (id <- prodSelection;
+          for (id <- prodKeys.take(randomIndex); // by virtue of function start's test, there should be some
                p <- Product.getProduct(id);
                inv <- StoreProduct.getStoreProduct(storeId, id);
-               qty <- Option(inv.quantity.get) if qty > 0 ) yield  (qty, p)
+               qty <- Option(inv.quantity.get) if qty > 0 ) yield (qty, p)
         Option(filteredSelection.takeRight(requestSize))
       }
       else None
     }
 
-    tryo {
+    tryo { // we could get errors going to LCBO, this tryo captures those.
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
-        val randomIndex = Random.nextInt(math.max(1, MaxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-        val prods = productMapByStoreCategory(randomIndex + requestSize, storeId, category) // index is 0-based but requiredSize is 1-based so add requestSize,
+        val randomIndex = Random.nextInt(math.max(requestSize + 1, MaxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
+        val prods = productMapByStoreCategory(randomIndex, storeId, category) // index is 0-based but requiredSize is 1-based so add requestSize,
         Product.update(prods) // important! If we're just starting webapp, cache could still be empty and we'll need to be able to look this up!
         val filteredSelection =
           for (id <- prods.keys;
                p <- Option(prods(id));
-               inv <- StoreProduct.getStoreProduct(storeId, id); // optimistic cache lookup, predicated on aggressive cache load for store
+               inv <- StoreProduct.getStoreProduct(storeId, id); // optimistic cache lookup, predicated on aggressive cache load for store (from JS doing geolocation)
                qty <- Option(inv.quantity.get) if qty > 0 ) yield  (qty, p)
         filteredSelection.takeRight(requestSize)
       }
@@ -292,8 +291,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         additionalParam("lon", lng)
       tryo {
         val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url)
-        b.map(s => loadCache(s.id)) // preemptive cache load for a store user should be interested in
-        b.openOrThrowException(s"No store found near ($lat, $lng)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo.
+        b.map{ s => loadCache(s.id) } // preemptive cache load for a store user should be interested in
+        b.openOrThrowException(s"No store found near ($lat, $lng)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo and transformed to Failure.
       }
     }
 
@@ -819,7 +818,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
       val initialParallelPages = (1 to prodLoadWorkers).toList  // e.g. (1,2,3,4) when using 4 threads, used to aggregate the results of each thread.
       fetchInventories(initialParallelPages, dbStoreProducts, allDbProductIds)
-
     }
   }
 }

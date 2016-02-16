@@ -18,6 +18,8 @@ import org.squeryl.annotations._
 import MainSchema._
 import code.Rest.pagerRestClient
 
+case class Attribute(key: String, value: String)
+
 // helper case class to extract from JSON as REST client to LCBO.
 case class ProductAsLCBOJson(id: Int,
                              is_discontinued: Boolean,
@@ -60,7 +62,6 @@ case class ProductAsLCBOJson(id: Int,
 
 }
 
-case class ProductAttribute(key: String, value: String)
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -132,20 +133,20 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
-  def createProductElemVals: List[ProductAttribute] =
+  def createProductElemVals: List[Attribute] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
-    ( ProductAttribute("Name:", name.get) ::
-      ProductAttribute("Primary Category:", primary_category.get) ::
-      ProductAttribute("Secondary Category:", secondary_category.get) ::
-      ProductAttribute("Varietal:", varietal.get) ::
-      ProductAttribute ("Package:", Package) ::
-      ProductAttribute ("Volume:", volumeInLitre) ::
-      ProductAttribute ("Price:", price) ::
-      ProductAttribute("Description:", description.get) ::
-      ProductAttribute("Serving Suggestion:", serving_suggestion.get) ::
-      ProductAttribute("Alcohol content:", alcoholContent) ::
-      ProductAttribute ("Origin:", origin.get) ::
-      Nil).filter({ p: ProductAttribute => p.value != "null" && p.value.nonEmpty })
+    ( Attribute("Name:", name.get) ::
+      Attribute("Primary Category:", primary_category.get) ::
+      Attribute("Secondary Category:", secondary_category.get) ::
+      Attribute("Varietal:", varietal.get) ::
+      Attribute ("Package:", Package) ::
+      Attribute ("Volume:", volumeInLitre) ::
+      Attribute ("Price:", price) ::
+      Attribute("Description:", description.get) ::
+      Attribute("Serving Suggestion:", serving_suggestion.get) ::
+      Attribute("Alcohol content:", alcoholContent) ::
+      Attribute ("Origin:", origin.get) ::
+      Nil).filter{ attr: Attribute => attr.value != "null" && attr.value.nonEmpty }
 
   def isDirty(p: ProductAsLCBOJson): Boolean = {
     price_in_cents.get != p.price_in_cents ||
