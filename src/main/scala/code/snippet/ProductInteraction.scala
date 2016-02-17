@@ -96,7 +96,7 @@ object ProductInteraction extends Loggable {
         }
 
         // for each element of qOfProds, build a Div as NodeSeq and concatenate them as a NodeSeq for the several divs
-        val divs = qOfProds.map(getDiv).foldLeft(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => (a ++ b))
+        val divs = qOfProds.map(getDiv).fold(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => a ++ b)
         SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
       }
 
@@ -138,7 +138,7 @@ object ProductInteraction extends Loggable {
 
         val totalCost = confirmationMsgs.map{ _.selectedProduct.cost}.sum
         val formattedTotalCost = formatter.format(totalCost)
-        val listItems = confirmationMsgs.map(getListItem).foldLeft(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => (a ++ b))
+        val listItems = confirmationMsgs.map(getListItem).fold(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => (a ++ b))
 
         SetHtml("transactionsConfirmationUser", Text(user)) &
         SetHtml("purchaseAmount", Text(formattedTotalCost)) &
