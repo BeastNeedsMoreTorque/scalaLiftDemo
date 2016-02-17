@@ -75,11 +75,11 @@ object ProductInteraction extends Loggable {
           val name = prod.name.get
           // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
           val checkBoxNS = <label>
-            <input type="checkbox" class="prodSelectInput" onclick="prodSelection.updateItem(this);" value={lcbo_id}/>
+            <input type="checkbox" class="prodSelectInput" value={lcbo_id}/>
             {name}
           </label><br/>
           val quantityNS = <label>Item Quantity:
-            <input type="text" class="prodQty prodSelectInput"/>
+            <input type="text" class="prodQty prodSelectInput" onchange="prodSelection.updateQtyItem(this);" value="1"/>
           </label><br/>
           // read-only costNS, so user can see it clearly but cannot update it.
           val costNS = <label>Cost:
@@ -193,15 +193,16 @@ object ProductInteraction extends Loggable {
     }
     val actionButtonsContainer = "prodInteractionContainer"
 
+    theRecommendCount.set(toInt(RecommendCount.default))
     // call to setBorderJS after button activation simply highlights that button was pressed.
     "@consume [onclick]" #>
       jsonCall( JE.Call("prodSelection.currentProds"),
                       { j: JValue => consumeProducts(j) & JSUtilities.setBorderJS(actionButtonsContainer, "consume")}) & // fetch in JSON with JS Call the lcbo product IDs and then deal with them
-    "@recommend [onclick]" #>
-      ajaxInvoke({() => recommend & JSUtilities.setBorderJS(actionButtonsContainer, "recommend")}) &
     "@cancel [onclick]" #>
       ajaxInvoke({() => cancel & JSUtilities.setBorderJS(actionButtonsContainer, "cancel")}) &
     "select" #> ajaxSelect(RecommendCount.options, RecommendCount.default,
-      { selected: String => theRecommendCount.set(toInt(selected)); Noop })
+      { selected: String => theRecommendCount.set(toInt(selected)); Noop }) andThen // always before recommend so it takes effect.
+    "@recommend [onclick]" #>
+      ajaxInvoke({() => recommend & JSUtilities.setBorderJS(actionButtonsContainer, "recommend")})
   }
 }
