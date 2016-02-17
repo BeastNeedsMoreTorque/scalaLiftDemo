@@ -39,7 +39,7 @@ store.DBBatchSize=250
 store.load.workers=2
 store.PositiveInventoryIterations=10
 
-storeProduct.DBBatchSize=200
+storeProduct.DBBatchSize=500
 
 
 
