@@ -276,34 +276,32 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     * @return
     */
   def recommend(storeId: Int, category: String, requestSize: Int): Box[Iterable[(Int, Product)]] = {
+    def randomSampler(prodKeys: Vector[Int]) = {
+      val r = scala.util.Random
+      val sampleSize = prodKeys.size -1
+      val randIndices = {for (i <- 1 to 3 * requestSize) yield r.nextInt(sampleSize)}.toSet
+      // generate triple the keys and hope it's enough to have nearly no 0 inventory as a result (and few random collisions on same indices)
+      for (id <- randIndices;
+           lcbo_id <- Option(prodKeys(id));
+           p <- Product.getProduct(lcbo_id);
+           inv <- StoreProduct.getStoreProduct(storeId, lcbo_id);
+           qty <- Option(inv.quantity.get) if qty > 0 ) yield (qty, p)
+    }
+
     // note: cacheSuccess (top level code) grabs a lock
     def cacheSuccess(storeId: Int, category: String): Option[Iterable[(Int, Product)]] = {
       // note: we never delete from cache, so we don't worry about data disappearing in a potential race condition
-      if (storeCategoriesProductsCache.contains((storeId, category)) && storeCategoriesProductsCache((storeId, category)).nonEmpty) {
-        val prodKeys = storeCategoriesProductsCache((storeId, category))
-        val randomIndex = Random.nextInt(math.max(requestSize + 1, prodKeys.size))
-        val filteredSelection =
-          for (id <- prodKeys.take(randomIndex); // by virtue of function start's test, there should be some
-               p <- Product.getProduct(id);
-               inv <- StoreProduct.getStoreProduct(storeId, id);
-               qty <- Option(inv.quantity.get) if qty > 0 ) yield (qty, p)
-        Option(filteredSelection.takeRight(requestSize))
-      }
+      if (storeCategoriesProductsCache.contains((storeId, category)) && storeCategoriesProductsCache((storeId, category)).nonEmpty)
+        Option(randomSampler(storeCategoriesProductsCache((storeId, category)).toVector))
       else None
     }
 
     tryo { // we could get errors going to LCBO, this tryo captures those.
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
-        val randomIndex = Random.nextInt(math.max(requestSize + 1, MaxSampleSize)) // max constraint is defensive for poor client usage (negative numbers).
-        val prods = productMapByStoreCategory(randomIndex, storeId, category) // index is 0-based but requiredSize is 1-based so add requestSize,
-        Product.update(prods) // important! If we're just starting webapp, cache could still be empty and we'll need to be able to look this up!
-        val filteredSelection =
-          for (id <- prods.keys;
-               p <- Option(prods(id));
-               inv <- StoreProduct.getStoreProduct(storeId, id); // optimistic cache lookup, predicated on aggressive cache load for store (from JS doing geolocation)
-               qty <- Option(inv.quantity.get) if qty > 0 ) yield  (qty, p)
-        filteredSelection.takeRight(requestSize)
+        val prods = productMapByStoreCategory(MaxSampleSize, storeId, category) // take a hit of one go to LCBO, no more.
+        Product.update(prods) // important! If we're just starting web app, cache could still be empty and we'll need to be able to look this up!
+        randomSampler(prods.keys.toVector)
       }
     }
   }
