@@ -168,6 +168,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // would play a role if user selects a store from a map. A bit of an exercise for caching and threading for now.
   private val storesCache: concurrent.Map[Int, Store] = TrieMap[Int, Store]()
 
+  @volatile
+  var dummy: Any = _
+  def timed[T](body: =>T): Double = {
+    val start = System.nanoTime
+    dummy = body
+    val end = System.nanoTime
+    ((end - start) / 1000) / 1000.0
+  }
+
   def fetchItems(state: EntityRecordState,
                  mapList: Map[EntityRecordState, List[PlainStoreAsLCBOJson]],
                  f: PlainStoreAsLCBOJson => Option[Store] ): List[Store] =
@@ -278,9 +287,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def recommend(storeId: Int, category: String, requestSize: Int): Box[Iterable[(Int, Product)]] = {
     def randomSampler(prodKeys: Vector[Int]) = {
       val r = scala.util.Random
-      val sampleSize = prodKeys.size -1
-      val randIndices = {for (i <- 1 to 3 * requestSize) yield r.nextInt(sampleSize)}.toSet
-      // generate triple the keys and hope it's enough to have nearly no 0 inventory as a result (and few random collisions on same indices)
+      val randIndices = Random.shuffle((1 to 3 * requestSize).toSet)
+      // generate triple the keys and hope it's enough to have nearly no 0 inventory as a result
       for (id <- randIndices;
            lcbo_id <- Option(prodKeys(id));
            p <- Product.getProduct(lcbo_id);
