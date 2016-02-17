@@ -12,24 +12,22 @@ var prodSelection = (function() {
   };
 
   return {
-    updateItem: function(data) {
+    updateQtyItem: function(data) {
       var siblings = $(data).parent().siblings(); // need to go around label.
 
       var fixedCostEl = $(siblings).parent().find("input.hiddenProdCost");
       var cost = parseCurrency($(fixedCostEl).val());
-
-      var quantityEl = $(siblings).find("input.prodQty");
-      var qty = parseInt($(quantityEl).val()) || 0;
-
-      if (qty > 0 && data.checked) {
-        cost = cost * qty;
+      var qty = parseInt(data.value) || 0;
+      if (qty < 1) {
+        qty = 1;
+        $(data).val(1);
       }
+
       var effectiveCostEl = $(siblings).find("input.prodCost");
-      $(effectiveCostEl).val(formatAsCurrency(cost));
+      $(effectiveCostEl).val(formatAsCurrency(cost * qty));
     },
 
     currentProds: function(data) {
-      var selectedProdIds = [];
       var selectedItems = [];
       $("div.prodContainer").find("input:checked").each(function() {
         var lcbo_id = parseInt(this.value) || 0;
@@ -48,7 +46,6 @@ var prodSelection = (function() {
           cost: cost
         };
         selectedItems.push(data);
-        selectedProdIds.push(lcbo_id); // this is the lcbo id of the product
       });
       return JSON.stringify(selectedItems);
     }
