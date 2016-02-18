@@ -171,6 +171,7 @@ object ProductInteraction extends Loggable {
           Noop
         }
         else {
+          if (goodConfirmations.size == feedback.size) S.error("") // no error, erase old errors no longer applicable.
           val confirmationMessages = goodConfirmations.map{case(selectedProd, feedBck) =>
                                                             PurchasedProductConfirmation(selectedProd, feedBck.message) } // get some particulars about cost and quantity in addition to message
           val userName = goodConfirmations.head._2.userName
