@@ -286,14 +286,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     */
   def recommend(storeId: Int, category: String, requestSize: Int): Box[Iterable[(Int, Product)]] = {
     def randomSampler(prodKeys: Vector[Int]) = {
-      val r = scala.util.Random
-      val randIndices = Random.shuffle((1 to 3 * requestSize).toSet)
-      // generate triple the keys and hope it's enough to have nearly no 0 inventory as a result
-      for (id <- randIndices;
+      val randIndices = Random.shuffle((1 to 2 * requestSize).toSet)
+      // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
+      val set =
+        for ( id <- randIndices;
            lcbo_id <- Option(prodKeys(id));
            p <- Product.getProduct(lcbo_id);
            inv <- StoreProduct.getStoreProduct(storeId, lcbo_id);
            qty <- Option(inv.quantity.get) if qty > 0 ) yield (qty, p)
+      set.take(requestSize)
     }
 
     // note: cacheSuccess (top level code) grabs a lock
