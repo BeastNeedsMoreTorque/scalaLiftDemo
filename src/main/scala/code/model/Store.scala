@@ -309,8 +309,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
         val prods = productMapByStoreCategory(MaxSampleSize, storeId, category) // take a hit of one go to LCBO, no more.
-        Product.update(prods) // important! If we're just starting web app, cache could still be empty and we'll need to be able to look this up!
-        randomSampler(prods.keys.toVector)
+        val randIndices = Random.shuffle(0 to Math.min(2 * requestSize, prods.size) - 1).toSet
+        // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
+        val set =
+          for (id <- randIndices;
+               p <- Option(prods(id));
+               lcbo_id <- Option(p.lcbo_id);
+               inv <- StoreProduct.getStoreProduct(storeId, lcbo_id.get);
+               qty <- Option(inv.quantity.get) if qty > 0) yield (qty, p)
+        set.take(requestSize)
       }
     }
   }
@@ -457,24 +464,22 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def productMapByStoreCategory(requiredSize: Int, storeId: Long, category: String): Map[Int, Product] = {
-    if (requiredSize <= 0) Map()
+  private def productMapByStoreCategory(requiredSize: Int, storeId: Long, category: String): Vector[Product] = {
+    if (requiredSize <= 0) Vector()
     else {
       val url = s"$LcboDomainURL/products?store_id=$storeId" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
       val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
         !p.is_discontinued
       } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
-      val initMap = Map[EntityRecordState, List[Product]](New -> Nil, Clean -> Nil, Dirty -> Nil)
       val items = collectItemsOnAPage(
-        Map[Int, Product](),  // suppress reconciliation with database, just trust LCBO now.
-        initMap,
+        Map[Int, Product](),  // suppress reconciliation with database, just trust LCBO now. Passing this empty cache to reconcile with will yield products classified as New.
+        Map[EntityRecordState, List[Product]](New -> Nil, Dirty -> Nil, Clean -> Nil),
         url,
         requiredSize,
         pageNo = 1,
         pageDelta = 1,
         filter)
-      val products = items.values.take(requiredSize).flatten // we don't care about Clean/New/Dirty state here so flatten values.
-      products.map(p => p.lcbo_id.get -> p)(breakOut)  // build a map for each product using lcbo_id as key.
+      items.values.take(requiredSize).flatten.toVector // we don't care about Clean/New/Dirty state here so flatten values.
     }
   }
 
