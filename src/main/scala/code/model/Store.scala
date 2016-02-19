@@ -160,6 +160,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
   private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
   private val storeLoadWorkers = Props.getInt("store.load.workers", 1)
+  private val yieldQuantum = Props.getInt("store.yieldQuantum", 1000)
+
   private val synchLcbo = Props.getBool("store.synchLcbo", true)
 
   private val storeCategoriesProductsCache: concurrent.Map[(Int, String), Set[Int]] = TrieMap() // give set of available productIds by store+category
@@ -190,7 +192,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
             select p.lcbo_id.get )}.toSet
       }
     def asyncLoadStores(storeIds: Iterable[Int]): Unit = {
-      val fut = Future { storeIds.map{s => loadCache(s, true); Thread.sleep(500)} } // pause inside so not to be too aggressive and yield.
+      val fut = Future { storeIds.map{s => loadCache(s, true); Thread.sleep(yieldQuantum)} } // pause inside so not to be too aggressive and yield.
       fut onComplete {
         case scala.util.Success(m) =>
           logger.trace(s"asyncLoadStores completed with success")
@@ -231,7 +233,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           val newStores = accumItems(New) ++ storesByState.getOrElse(New, Nil).map{ create }
 
           // after preliminaries, get the map of stores indexed properly by state that we need having accumulated over the pages so far.
-          val revisedAccumItems = Map(New -> newStores, Dirty -> dirtyStores, Clean -> cleanStores)
+          val revisedAccumItems: Map[EntityRecordState, Vector[Store]] = Map(New -> newStores, Dirty -> dirtyStores, Clean -> cleanStores)
 
           val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
 
@@ -595,7 +597,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, storeProductsByState, {inv => inv.getProduct(dbStoreProducts)})
       val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => inv.getProduct(dbStoreProducts).map({ _.copyAttributes( inv)})})
       val newProducts = accumItems(New) ++ storeProductsByState.getOrElse(New, Nil).map{ sp => StoreProduct.create(sp) }
-      val revisedAccumItems = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
+      val revisedAccumItems: Map[EntityRecordState, Vector[StoreProduct]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
 
       if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) return revisedAccumItems
       // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (when we gap due to parallelism).
@@ -699,7 +701,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, productsByState, {p => p.getProduct(dbProducts)})
     val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, productsByState, {p => p.getProduct(dbProducts).map({ _.copyAttributes( p)})})
     val newProducts = accumItems(New) ++ productsByState.getOrElse(New, Nil).map{ p => Product.create(p) }
-    val revisedAccumItems = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
+    val revisedAccumItems: Map[EntityRecordState, Vector[Product]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
 
     if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) return revisedAccumItems
     // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (when we gap due to parallelism).
