@@ -7,7 +7,7 @@ resolvers ++= Seq("snapshots"     at "https://oss.sonatype.org/content/repositor
                   "releases"      at "https://oss.sonatype.org/content/repositories/releases"
                  )
 unmanagedResourceDirectories in Test <+= baseDirectory { _ / "src/main/webapp" }
-scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked", "-Dusejavacp=true")
+scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked", "-Xfatal-warnings", "-Dusejavacp=true")
 
 // log4j/slf4j is not standard for liftweb so we use ch.qos.logback (https://www.assembla.com/wiki/show/liftweb/Logging)
 // We use postgresql in place of simple DB    "com.h2database"    % "h2"                  % "1.3.167"
