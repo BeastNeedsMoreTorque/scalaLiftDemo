@@ -183,6 +183,22 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     storesByState.getOrElse(state, Vector()).flatMap{ f(_)}
 
   def init() = { // could help queries find(lcbo_id)
+    lazy val GetVisitedStoresFromDB: Set[Int] =
+      inTransaction {
+          {from(storeProducts, products)((sp, p) =>
+          where(sp.productid === p.lcbo_id  )
+            select p.lcbo_id.get )}.toSet
+      }
+    def asyncLoadStores(storeIds: Iterable[Int]): Unit = {
+      val fut = Future { storeIds.map{s => loadCache(s, true); Thread.sleep(500)} } // pause inside so not to be too aggressive and yield.
+      fut onComplete {
+        case scala.util.Success(m) =>
+          logger.trace(s"asyncLoadStores completed with success")
+        // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
+        // We could define a finer policy as to when we want to use a default set from database even when we attempt to go to LCBO.
+        case scala.util.Failure(t) => logger.error(s"Store.init ${t.getMessage} " )
+      }
+    }
 
     def getStores(idx: Int, dbStores: Map[Int, Store]): Map[Int, Store] = {
       def synchronizeData(idx: Int, dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
@@ -263,10 +279,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     inTransaction {  // for the initial select
       import scala.util.{Success, Failure}
       val dbStores: Map[Int, Store] = stores.map(s => s.lcbo_id.get -> s)(breakOut) // queries full store table and throw it into map
+      def isPopular(storeId: Int): Boolean = GetVisitedStoresFromDB contains storeId
       for (i <- 1 to storeLoadWorkers) {
         val fut = Future { getStores(i, dbStores) } // do this asynchronously to be responsive asap (default 1 worker).
         fut onComplete {
           case Success(m) => storesCache ++= m
+         //   asyncLoadStores(m.keys.filter(isPopular))
             logger.trace(s"Store.init worker completed with success")
           case Failure(t) => logger.error(s"Store.init ${t.getMessage} " )
           // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
@@ -286,15 +304,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     */
   def recommend(storeId: Int, category: String, requestSize: Int): Box[Iterable[(Int, Product)]] = {
     def randomSampler(prodKeys: Vector[Int]) = {
-      val randIndices = Random.shuffle((1 to 2 * requestSize).toSet)
+      val lcboids = Random.shuffle(prodKeys)
       // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
-      val set =
-        for ( id <- randIndices;
-           lcbo_id <- Option(prodKeys(id));
+      val iter =
+        for (
+           lcbo_id <- lcboids;
            p <- Product.getProduct(lcbo_id);
            inv <- StoreProduct.getStoreProduct(storeId, lcbo_id);
            qty <- Option(inv.quantity.get) if qty > 0 ) yield (qty, p)
-      set.take(requestSize)
+      iter.take(requestSize)
     }
 
     // note: cacheSuccess (top level code) grabs a lock
@@ -307,15 +325,16 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     tryo { // we could get errors going to LCBO, this tryo captures those.
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
+        logger.warn(s"recommend cache miss for $storeId")
         loadCache(storeId) // get the full store inventory in background for future requests and then respond to immediate request.
-        val prods = productMapByStoreCategory(MaxSampleSize, storeId, category) // take a hit of one go to LCBO, no more.
-        val randIndices = Random.shuffle(0 to Math.min(2 * requestSize, prods.size) - 1).toSet
+        val prods = productsByStoreCategory(MaxSampleSize, storeId, category) // take a hit of one go to LCBO, no more.
+        val indices = Random.shuffle[Int, IndexedSeq](0 until prods.size )
         // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
         val set =
-          for (id <- randIndices;
-               p <- Option(prods(id));
-               lcbo_id <- Option(p.lcbo_id);
-               inv <- StoreProduct.getStoreProduct(storeId, lcbo_id.get);
+          for (idx <- indices;
+               p <- Option(prods(idx));
+               lcbo_id <- Option(p.lcbo_id.get);
+               inv <- StoreProduct.getStoreProduct(storeId, lcbo_id);
                qty <- Option(inv.quantity.get) if qty > 0) yield (qty, p)
         set.take(requestSize)
       }
@@ -348,7 +367,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         additionalParam("lon", lng)
       tryo {
         val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url)
-        b.map{ s => loadCache(s.id) } // preemptive cache load for a store user should be interested in
+        b.map(s => loadCache(s.id))
         b.openOrThrowException(s"No store found near ($lat, $lng)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo and transformed to Failure.
       }
     }
@@ -464,7 +483,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def productMapByStoreCategory(requiredSize: Int, storeId: Long, category: String): Vector[Product] = {
+  private def productsByStoreCategory(requiredSize: Int, storeId: Long, category: String): Vector[Product] = {
     if (requiredSize <= 0) Vector()
     else {
       val url = s"$LcboDomainURL/products?store_id=$storeId" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
@@ -700,7 +719,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // may have side effect to update database with more up to date from LCBO's content (if different)
   // lock free. For correctness, we use putIfAbsent to get some atomicity when we do complex read-write at once (complex linearizable operations).
   // For now, we call this lazily for first user having an interaction with a particular store and not before.
-  def loadCache(storeId: Int) = {
+  def loadCache(storeId: Int, withDB: Boolean = false) = {
     case class ProductWithInventory(product: Product, storeProduct: StoreProduct)
 
     // Uses convenient Squeryl native Scala ORM for a simple 2-table join.
@@ -722,7 +741,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         if (synchLcbo) {
           loadAll(dbProducts, productCacheSize, storeId, page) match {
             case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-              for ((k, v) <- m) {
+              if (withDB) for ((k, v) <- m) { // we don't want to have two clients taking responsibility to update database for synchronization
                 // v Vector[Product] containing product
                 Some(k) collect {
                   // Clean is intentionally ignored
@@ -816,7 +835,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
             }
           }
           Product.update(fullMap.toMap)
-          logger.trace(s"product (store,categories) keys ${storeCategoriesProductsCache.keys}")
       }
 
       allTheProductsByCategory onFailure {
