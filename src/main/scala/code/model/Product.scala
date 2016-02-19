@@ -133,7 +133,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
-  def createProductElemVals: List[Attribute] =
+  def createProductElemVals: Vector[Attribute] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
     ( Attribute("Name:", name.get) ::
       Attribute("Primary Category:", primary_category.get) ::
@@ -146,7 +146,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
       Attribute("Serving Suggestion:", serving_suggestion.get) ::
       Attribute("Alcohol content:", alcoholContent) ::
       Attribute ("Origin:", origin.get) ::
-      Nil).filter{ attr: Attribute => attr.value != "null" && attr.value.nonEmpty }
+      Nil).filter{ attr: Attribute => attr.value != "null" && attr.value.nonEmpty }.toVector
 
   def isDirty(p: ProductAsLCBOJson): Boolean = {
     price_in_cents.get != p.price_in_cents ||
