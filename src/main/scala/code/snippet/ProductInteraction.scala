@@ -61,9 +61,9 @@ object ProductInteraction extends Loggable {
           val quantity = qOfProd.quantity
           val prod = qOfProd.product
           val quantityAttribute = code.model.Attribute("Quantity:", quantity.toString)
-          val fullAttributesList = prod.createProductElemVals ++ List(quantityAttribute)
+          val fullAttributes = prod.createProductElemVals ++ Vector(quantityAttribute)
           val attributesNS = <table>
-            { for (attr <- fullAttributesList )
+            { for (attr <- fullAttributes )
               yield <tr>
                 <td class="prodAttrHead">{attr.key}</td>
                 <td class="prodAttrContent">{attr.value}</td>
@@ -126,7 +126,7 @@ object ProductInteraction extends Loggable {
 
     def consumeProducts(selection: JValue): JsCmd = {
       def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
-        def getListItem(item: PurchasedProductConfirmation): NodeSeq = {
+        def getItem(item: PurchasedProductConfirmation): NodeSeq = {
           def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Int): String =
             s"${confirmation} including the cost of today's purchase at ${formattedCost} for ${quantity} extra units"
 
@@ -138,7 +138,7 @@ object ProductInteraction extends Loggable {
 
         val totalCost = confirmationMsgs.map{ _.selectedProduct.cost}.sum
         val formattedTotalCost = formatter.format(totalCost)
-        val listItems = confirmationMsgs.map(getListItem).fold(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => (a ++ b))
+        val listItems = confirmationMsgs.map(getItem).fold(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => (a ++ b))
 
         SetHtml("transactionsConfirmationUser", Text(user)) &
         SetHtml("purchaseAmount", Text(formattedTotalCost)) &
@@ -146,7 +146,7 @@ object ProductInteraction extends Loggable {
         showConfirmationJS
       }
 
-      def mayConsume(selectedProds: List[SelectedProduct]): JsCmd = {
+      def mayConsume(selectedProds: Vector[SelectedProduct]): JsCmd = {
         def mayConsumeItem(p: Product, quantity: Int): Option[Feedback] = {
           val x = UserProduct.consume(p, quantity) match {
             case Full((userName, count)) =>
@@ -160,7 +160,7 @@ object ProductInteraction extends Loggable {
         }
 
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
-        val feedback: List[(SelectedProduct, Feedback)] = for (sp <- selectedProds;
+        val feedback: Vector[(SelectedProduct, Feedback)] = for (sp <- selectedProds;
                                                                product <- Product.getProduct(sp.lcbo_id);
                                                                f <- mayConsumeItem(product, sp.quantity)) yield(sp, f)
         val partition = feedback.groupBy(_._2.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
@@ -181,7 +181,7 @@ object ProductInteraction extends Loggable {
       }
 
       val jsonOpt = selection.extractOpt[String].map( parse)
-      val selectedProducts = jsonOpt.map( json => {for (p <- json.children) yield p.extractOpt[SelectedProduct]}.flatten )
+      val selectedProducts = jsonOpt.map( json => {for (p <- json.children.toVector) yield p.extractOpt[SelectedProduct]}.flatten )
       selectedProducts.fold {
         S.warning("Select some recommended products before attempting to consume")
         Noop
