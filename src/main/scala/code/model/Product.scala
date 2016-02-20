@@ -184,7 +184,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Int, Product] = TrieMap()
 
-  def update(storeMap: Map[Int, Product]) = productsCache ++= storeMap
+  def update(prodMap: Map[Int, Product]) = productsCache ++= prodMap
 
   def getProduct(prodId: Int): Option[Product] = productsCache get prodId
 

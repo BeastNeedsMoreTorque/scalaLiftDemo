@@ -164,6 +164,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
   private val synchLcbo = Props.getBool("store.synchLcbo", true)
 
+  case class ProductWithInventory(product: Product, storeProduct: StoreProduct)
+
   private val storeCategoriesProductsCache: concurrent.Map[(Int, String), Set[Int]] = TrieMap() // give set of available productIds by store+category
   private val storeProductsLoaded: concurrent.Map[Int, Unit] = TrieMap() // effectively a thread-safe lock-free set, which helps control access to storeCategoriesProductsCache.
 
@@ -185,12 +187,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     storesByState.getOrElse(state, Vector()).flatMap{ f(_)}
 
   def init() = { // could help queries find(lcbo_id)
-    lazy val GetVisitedStoresFromDB: Set[Int] =
-      inTransaction {
-          {from(storeProducts, products)((sp, p) =>
-          where(sp.productid === p.lcbo_id  )
-            select p.lcbo_id.get )}.toSet
-      }
+
+
     def asyncLoadStores(storeIds: Iterable[Int]): Unit = {
       val fut = Future { storeIds.map{s => loadCache(s, true); Thread.sleep(yieldQuantum)} } // pause inside so not to be too aggressive and yield.
       fut onComplete {
@@ -278,15 +276,51 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     logger.trace(s"Store.init")
 
-    inTransaction {  // for the initial select
+    val allStoreProductsFromDB: Map[Int, Iterable[ProductWithInventory]] =
+      inTransaction { // orderby and toVector are essential for decent performance
+        import scala.language.postfixOps
+        val pairs = from(storeProducts, products)((sp, p) =>
+          where(sp.productid === p.lcbo_id  )
+            select (sp, p)
+            orderBy(sp.storeid asc))
+          .toVector
+        logger.trace("query done")
+        val tmp = pairs.groupBy(_._1.storeid.get)
+        logger.trace("grouping done")
+        tmp.map({case (storeId, iter) => storeId -> iter.map(pair => ProductWithInventory(pair._2, pair._1))})
+      }
+
+    val dbProducts: Map[Int, Product] = {for ( v <- allStoreProductsFromDB.values.flatten;
+                                               p <- Option(v.product);
+                                               lcbo_id <- Option(p.lcbo_id.get))  yield lcbo_id -> p}.toMap[Int, Product]
+    val storesSet = allStoreProductsFromDB.keys.toSet
+    Product.update(dbProducts)
+    for ((store, it) <- allStoreProductsFromDB;
+         inv <- it;
+         prod <- Option(inv.product);
+         sp <- Option(inv.storeProduct);
+         lcbo_id <- Option(prod.lcbo_id.get))
+    { StoreProduct.update(store, Map(lcbo_id -> sp)) }
+
+    for ( (storeId, it) <- allStoreProductsFromDB;
+          inv <- it;
+          prod <- Option(inv.product);
+          id <- Option(prod.lcbo_id.get))
+    {
+      val storeCatKey = (storeId, prod.primary_category.get)
+      storeCategoriesProductsCache.putIfAbsent(storeCatKey, Set())
+      storeCategoriesProductsCache(storeCatKey) +=  id
+    }
+
+    inTransaction {  // for the initial stores select
       import scala.util.{Success, Failure}
       val dbStores: Map[Int, Store] = stores.map(s => s.lcbo_id.get -> s)(breakOut) // queries full store table and throw it into map
-      def isPopular(storeId: Int): Boolean = GetVisitedStoresFromDB contains storeId
+      def isPopular(storeId: Int): Boolean = storesSet.contains(storeId)
       for (i <- 1 to storeLoadWorkers) {
         val fut = Future { getStores(i, dbStores) } // do this asynchronously to be responsive asap (default 1 worker).
         fut onComplete {
           case Success(m) => storesCache ++= m
-         //   asyncLoadStores(m.keys.filter(isPopular))
+            asyncLoadStores(m.keys.filter(isPopular))
             logger.trace(s"Store.init worker completed with success")
           case Failure(t) => logger.error(s"Store.init ${t.getMessage} " )
           // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
@@ -294,6 +328,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         }
       }
     }
+    logger.trace("init end")
   }
 
   /**
@@ -369,7 +404,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         additionalParam("lon", lng)
       tryo {
         val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url)
-        b.map(s => loadCache(s.id))
         b.openOrThrowException(s"No store found near ($lat, $lng)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo and transformed to Failure.
       }
     }
@@ -722,16 +756,16 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // lock free. For correctness, we use putIfAbsent to get some atomicity when we do complex read-write at once (complex linearizable operations).
   // For now, we call this lazily for first user having an interaction with a particular store and not before.
   def loadCache(storeId: Int, withDB: Boolean = false) = {
-    case class ProductWithInventory(product: Product, storeProduct: StoreProduct)
+
 
     // Uses convenient Squeryl native Scala ORM for a simple 2-table join.
     def GetStoreProductsFromDB: Map[Int, ProductWithInventory] =
-      inTransaction {
-        val prods = from(storeProducts, products)((sp, p) =>
-          where(sp.storeid === storeId and sp.productid === p.lcbo_id  )
-            select (p, sp) )
-        prods.map({ case (p, sp) => p.lcbo_id.get -> ProductWithInventory(p, sp)})(breakOut)
-      }
+    inTransaction {
+      val prods = from(storeProducts, products)((sp, p) =>
+        where(sp.storeid === storeId and sp.productid === p.lcbo_id  )
+          select (p, sp) )
+      prods.map({ case (p, sp) => p.lcbo_id.get -> ProductWithInventory(p, sp)})(breakOut)
+    }
 
     def getProductsOfStartPage(page: Int, dbProducts: Map[Int, Product], allDbProductIds: Set[Int]): Map[Int, Product] = {
       def loadAll(dbProducts: Map[Int, Product], requestSize: Int, storeId: Int, page: Int): Box[Map[EntityRecordState, Vector[Product]]] =

@@ -39,6 +39,8 @@ object MainSchema extends Schema {
 
   on(storeProducts) { sp =>
     declare(sp.productid defineAs indexed("product_idx"))
+    declare(sp.storeid defineAs indexed("store_idx"))
+
   }
 
   on(products) { p =>
