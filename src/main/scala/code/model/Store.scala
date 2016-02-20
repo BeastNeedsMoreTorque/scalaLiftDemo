@@ -276,23 +276,22 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     logger.trace(s"Store.init")
 
-    val allStoreProductsFromDB: Map[Int, Iterable[ProductWithInventory]] =
-      inTransaction { // orderby and toVector are essential for decent performance
+    val allStoreProductsFromDB: Map[Int, IndexedSeq[ProductWithInventory]] =
+      inTransaction { // toVector is essential for decent performance
         import scala.language.postfixOps
         val pairs = from(storeProducts, products)((sp, p) =>
           where(sp.productid === p.lcbo_id  )
-            select (sp, p)
-            orderBy(sp.storeid asc))
+            select (sp, p))
           .toVector
-        logger.trace("query done")
-        val tmp = pairs.groupBy(_._1.storeid.get)
-        logger.trace("grouping done")
-        tmp.map({case (storeId, iter) => storeId -> iter.map(pair => ProductWithInventory(pair._2, pair._1))})
+            logger.trace("Store.init query done")
+        pairs.groupBy(_._1.storeid.get).map{
+          case (storeId, vecOfPairs) => storeId -> vecOfPairs.map(pair => ProductWithInventory(pair._2, pair._1))
+        }
       }
 
     val dbProducts: Map[Int, Product] = {for ( v <- allStoreProductsFromDB.values.flatten;
                                                p <- Option(v.product);
-                                               lcbo_id <- Option(p.lcbo_id.get))  yield lcbo_id -> p}.toMap[Int, Product]
+                                               lcbo_id <- Option(p.lcbo_id.get)) yield lcbo_id -> p}.toMap[Int, Product]
     val storesSet = allStoreProductsFromDB.keys.toSet
     Product.update(dbProducts)
     for ((store, it) <- allStoreProductsFromDB;
@@ -302,14 +301,18 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
          lcbo_id <- Option(prod.lcbo_id.get))
     { StoreProduct.update(store, Map(lcbo_id -> sp)) }
 
-    for ( (storeId, it) <- allStoreProductsFromDB;
-          inv <- it;
-          prod <- Option(inv.product);
-          id <- Option(prod.lcbo_id.get))
-    {
-      val storeCatKey = (storeId, prod.primary_category.get)
-      storeCategoriesProductsCache.putIfAbsent(storeCatKey, Set())
-      storeCategoriesProductsCache(storeCatKey) +=  id
+    // declaration is to verify we already support indexing so we can group by efficiently
+    val productsByStore: Map[Int, IndexedSeq[Product]] = allStoreProductsFromDB.map{case (storeId, iter) => (storeId, iter.map(_.product))}
+    productsByStore.map{
+      case (storeId, seqOfProducts) => {
+        val productsByCategory = seqOfProducts.groupBy(_.primary_category.get) // partition the products of a store by category (make sure to get a vector first)
+        productsByCategory.map{ case (category, productsIter) =>
+          // we're first setter of the cache, so we don't need to append if already in cache.
+          val newProductIds = productsIter.map(_.lcbo_id.get).toSet
+          if (storeCategoriesProductsCache.putIfAbsent((storeId, category), newProductIds).isDefined)   // restrict the products to simply productId (lcbo_id) and put  in cache lock-free
+            storeCategoriesProductsCache((storeId, category)) ++= newProductIds
+        }
+      }
     }
 
     inTransaction {  // for the initial stores select
@@ -857,20 +860,24 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    def fetchProducts(initialPages: Vector[Int]) = {
+    def fetchProducts(initialPages: IndexedSeq[Int]) = {
       val allTheProductsByCategory = Future.traverse(initialPages)(productsByWorker)
       // we assume all along and depend strongly on that, that we never remove from cache. Updates that are strictly monotonic are easier to get right.
       allTheProductsByCategory onSuccess {
         case maps: Iterable[Map[Int, Product]] =>
-          val fullMap = maps.flatten
-          for ((id, p) <- fullMap) {
-            val storeCatKey = (storeId, p.primary_category.get)
-            if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, Set(id)).isDefined  ) {
-              // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
-              storeCategoriesProductsCache(storeCatKey) +=  id
-            }
+          val keyedProductsForStore: IndexedSeq[(Int, Product)] = maps.flatten
+          val justTheProducts = keyedProductsForStore.map(_._2) // get rid of key we don't really need as it's also in Product
+          val productsByCategory = justTheProducts.groupBy(_.primary_category.get) // groupBy is a dandy!
+          productsByCategory.map {
+            case (category, fetchedProducts) =>
+              val storeCatKey = (storeId, category) // construct the key we need, i.e. grab the storeId
+              val newProductIdsSet = fetchedProducts.map(_.lcbo_id.get).toSet // project the products to only the productId
+              if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, newProductIdsSet).isDefined) {
+                // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
+                storeCategoriesProductsCache(storeCatKey) ++= newProductIdsSet
+              }
           }
-          Product.update(fullMap.toMap)
+          Product.update(keyedProductsForStore.toMap) // refresh product cache
       }
 
       allTheProductsByCategory onFailure {
