@@ -160,7 +160,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
   private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
   private val storeLoadWorkers = Props.getInt("store.load.workers", 1)
-  private val storeLoadAll = Props.getBool("store.loadAll", false)
+  private val storeLoadAll = Props.getBool("store.loadAll", false) // not ready (mem, JVM issues)
 
   private val storeCategoriesProductsCache: concurrent.Map[(Int, String), Set[Int]] = TrieMap() // give set of available productIds by store+category
   private val storeProductsLoaded: concurrent.Map[Int, Unit] = TrieMap() // effectively a thread-safe lock-free set, which helps control access to storeCategoriesProductsCache.
@@ -300,7 +300,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val dbStores: Map[Int, Store] = stores.map(s => s.lcbo_id.get -> s)(breakOut) // queries full store table and throw it into map
       def isPopular(storeId: Int): Boolean = {
         // opportunity to generalize to analytics, for now binary simple decision
-        storeLoadAll || StoreProduct.storeIdsWithCachedProducts.contains(storeId)
+         StoreProduct.storeIdsWithCachedProducts.contains(storeId)
       }
       for (i <- 1 to storeLoadWorkers) {
         val fut = Future { getStores(i, dbStores) } // do this asynchronously to be responsive asap.
@@ -793,7 +793,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                 Some(k) collect {
                   // Clean is intentionally ignored
                   case New =>
-                    StoreProduct.insertStoreProducts(v) // now we can insert relationship of store-product with an inventory of 10
+                    StoreProduct.insertStoreProducts(v)
                   case Dirty =>
                     StoreProduct.updateStoreProducts(v)
                 }

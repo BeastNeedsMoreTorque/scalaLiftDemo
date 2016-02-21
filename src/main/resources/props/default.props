@@ -36,7 +36,11 @@ store.lcboMinPerPage=10
 store.DBBatchSize=250
 store.load.workers=1
 store.PositiveInventoryIterations=10
-store.loadAll=false
+
+#may take a very long time if true, possibly 3-4 hours, possily 150 stores per hour on slow system (20-30 seconds per store),
+# in fact, got error GC overhead limit exceeded and exception error Full(java.lang.OutOfMemoryError: GC overhead limit exceeded)
+# Let's see if setting JVM memory options higher will do it.
+#store.loadAll=false
 
 storeProduct.DBBatchSize=500
 
