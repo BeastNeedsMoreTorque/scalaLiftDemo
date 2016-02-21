@@ -128,11 +128,13 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       productid(inv.product_id).
       quantity(inv.quantity)
 
+  // @see http://squeryl.org/occ.html
   def updateStoreProducts(myStoreProducts: Iterable[StoreProduct]) = {
     myStoreProducts.grouped(DBBatchSize).
       foreach { x =>
         inTransaction {
-          storeProducts.update(x)
+          storeProducts.forceUpdate(x)
+          // @see http://squeryl.org/occ.html (two threads might fight for same update and if one is stale, that could be trouble with the regular update
         }
         storeProductsCache ++= x.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
       }
