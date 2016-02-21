@@ -27,7 +27,7 @@ product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
 product.Category=wine
 product.synchLcbo=true
 product.load.workers=1
-product.DBBatchSize=20
+product.DBBatchSize=500
 
 product.cacheSize=20000
 

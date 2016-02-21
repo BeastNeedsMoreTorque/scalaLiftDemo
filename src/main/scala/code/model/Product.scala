@@ -1,6 +1,7 @@
 package code.model
 
 import java.text.NumberFormat
+import java.sql.SQLException
 
 import scala.collection.concurrent.TrieMap
 import scala.collection._
@@ -182,27 +183,98 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
 
   // thread-safe lock free objects
-  private val productsCache: concurrent.Map[Int, Product] = TrieMap()
+  private val productsCache: concurrent.Map[Int, Product] = TrieMap() // only update once confirmed in DB!
 
-  def update(prodMap: Map[Int, Product]) = productsCache ++= prodMap
+  def init(): Unit = inTransaction {
+    val prods = from(products)(p =>
+      select(p))
+    productsCache ++= prods.map { p => p.lcbo_id.get -> p }.toMap
+  }
+
+  def getProductIds: Set[Int] = inTransaction {
+    val ids = from(products)(p =>
+      select(p.lcbo_id))
+    ids.map(_.get).toSet
+  }
+
+  def update(prodMap: Map[Int, Product]) = {
+    val newProds = prodMap.values.filter{ p: Product => !productsCache.keySet.contains(p.lcbo_id.get) }
+    val existingProds = prodMap.values.filter{ p: Product => productsCache.keySet.contains(p.lcbo_id.get) }
+    updateProducts(existingProds.toSet)
+    insertProducts(newProds)
+  }
 
   def getProduct(prodId: Int): Option[Product] = productsCache get prodId
+
+  def cachedProductIds: Set[Int] = productsCache.keySet
 
   def fetchSynched(p: ProductAsLCBOJson) = {
     DB.use(DefaultConnectionIdentifier) { connection =>
       val o = products.where(_.lcbo_id === p.id).forUpdate.headOption // Load from DB if available, else create it Squeryl very friendly DSL syntax!
-      o.fold { val q = create(p); q.save; q }
-      { q => q.synchUp(p); q }
+      o.fold {
+        val q = create(p); q.save; q
+      } { q => q.synchUp(p); q }
     }
   }
 
-  def updateProducts(myProducts: Iterable[Product]) =
+  // @see http://squeryl.org/occ.html
+  def updateProducts(myProducts: Iterable[Product]): Unit = synchronized {
+    inTransaction {
       myProducts.grouped(DBBatchSize).
-        foreach{ products.update }
+        foreach { x =>
+          try {
+            products.forceUpdate(x)   // @see http://squeryl.org/occ.html.
+            // regular call as update throws.
+            // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
+            // However, there are other situations where we might well care.
+          } catch {
+            case se: SQLException =>
+              logger.error("SQLException ")
+              logger.error("Code: " + se.getErrorCode())
+              logger.error("SqlState: " + se.getSQLState())
+              logger.error("Error Message: " + se.getMessage())
+              logger.error("NextException:" + se.getNextException())
+            case e: Exception =>
+              logger.error("General exception caught: " + e+ " " + x)
+          }
+            // update in memory for next caller who should be blocked
+            productsCache ++= x.map { p => p.lcbo_id.get -> p }.toMap
 
-  def insertProducts( myProducts: Iterable[Product]) =
-      myProducts.grouped(DBBatchSize).
-        foreach{ products.insert }
+        }
+    }
+  }
+
+
+  def insertProducts( myProducts: Iterable[Product]): Unit = {
+    // Do special handling to filter out duplicate keys, which would throw.
+    def insertBatch(myProducts: Iterable[Product]): Unit = synchronized { // synchronize on object Product as clients are from different threads
+      // first evaluate against cache (assumed in synch with DB) what's genuinely new.
+      // Then, annoying filter to ensure uniqueness by lcbo_id, take the head of each set sharing same lcbo_id and then collect the values
+      val entries = cachedProductIds // evaluate once
+      val filteredProds = myProducts.filter { p => !entries.contains(p.lcbo_id.get) }.toVector.
+        groupBy{ p => p.lcbo_id.get}.map{ case (k,v) => v.head}
+        // insert them
+      try { // the DB could fail for PK or whatever other reason.
+        products.insert(filteredProds)
+        // update in memory for next caller who should be blocked
+        productsCache ++= filteredProds.map { p => p.lcbo_id.get -> p }.toMap
+      } catch {
+        case se: SQLException =>
+          logger.error("SQLException ")
+          logger.error("Code: " + se.getErrorCode())
+          logger.error("SqlState: " + se.getSQLState())
+          logger.error("Error Message: " + se.getMessage())
+          logger.error("NextException:" + se.getNextException())
+        case e: Exception =>
+          logger.error("General exception caught: " + e)
+      }
+
+    }
+    inTransaction {
+      // break it down and then serialize the work.
+      myProducts.grouped(DBBatchSize).foreach { insertBatch }
+    }
+  }
 
 
   def create(p: ProductAsLCBOJson): Product = {
