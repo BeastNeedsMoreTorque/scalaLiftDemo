@@ -34,16 +34,26 @@ object MainSchema extends Schema {
     via((p,s) => p.id === s.productid)
 
   on(userProducts) { up =>
-    declare(up.productid defineAs indexed("product_idx"))
+    declare(
+      up.productid defineAs indexed("userproduct_product"),
+      up.user_c defineAs indexed("userproduct_user_c"),
+      columns(up.user_c, up.productid ) are(unique,indexed("user_prod_idx")))
+      // Foreign-key constraints:
+      // "userproductFK1" FOREIGN KEY (productid) REFERENCES product(id)
   }
 
   on(storeProducts) { sp =>
-    declare(sp.productid defineAs indexed("product_idx"))
-    declare(sp.storeid defineAs indexed("store_idx"))
+    declare(
+      sp.productid defineAs indexed("product_idx"),
+      sp.storeid defineAs indexed("store_idx"),
+      columns(sp.storeid, sp.productid) are(unique, indexed("storeproduct_idx")))
+    //  alter table storeproduct add constraint storeproductFK1 foreign key (productid) references product (lcbo_id) match full;
 
   }
 
   on(products) { p =>
-    declare(p.primary_category defineAs indexed("pr_category_id_idx"))
+    declare(
+      p.lcbo_id defineAs (unique,indexed("lcbo_id_idx")),
+      p.primary_category defineAs indexed("pr_category_id_idx"))
   }
 }
