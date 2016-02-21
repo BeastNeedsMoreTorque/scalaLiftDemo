@@ -340,7 +340,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     tryo { // we could get errors going to LCBO, this tryo captures those.
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         logger.warn(s"recommend cache miss for $storeId")
-        loadCache(storeId) // get the full store inventory in background after products for future requests and then respond to immediate request.
+        Future { loadCache(storeId) } // get the full store inventory in background after products for future requests and then respond to immediate request.
         val prods = productsByStoreCategory(MaxSampleSize, storeId, category) // take a hit of one go to LCBO, no more.
         val indices = Random.shuffle[Int, IndexedSeq](0 until prods.size )
         // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
@@ -387,7 +387,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         additionalParam("lon", lng)
       tryo {
         val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url)
-        b.map { s => loadCache(s.id) } // to help prevent cache misses on new store and thus show non-zero inventory.
+        b.map { s => Future { loadCache(s.id)} } // to help prevent cache misses on new store and thus show non-zero inventory.
         b.openOrThrowException(s"No store found near ($lat, $lng)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo and transformed to Failure.
       }
     }
@@ -741,14 +741,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // For now, we call this lazily for first user having an interaction with a particular store and not before.
   def loadCache(storeId: Int, withDB: Boolean = false) = {
 
-    def getProductsOfStartPage(page: Int, dbProducts: Map[Int, Product], allDbProductIds: Set[Int]): Map[Int, Product] = {
+    def getProductsOfStartPage(dbProducts: Map[Int, Product], allDbProductIds: Set[Int]): Iterable[Product] = {
       def loadAll(dbProducts: Map[Int, Product], requestSize: Int, storeId: Int, page: Int): Box[Map[EntityRecordState, IndexedSeq[Product]]] =
         tryo {
           getProductsByStore(dbProducts, requestSize, storeId, page)
         }
 
       inTransaction {
-        loadAll(dbProducts, productCacheSize, storeId, page) match {
+        loadAll(dbProducts, productCacheSize, storeId, 1) match {
           case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
             if (withDB) for ((k, v) <- m) {
               // we don't want to have two clients taking responsibility to update database for synchronization
@@ -762,23 +762,23 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
               }
             }
             // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
-            m.values.flatten.map(p => p.lcbo_id.get -> p)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
+            m.values.flatten // flatten the 3 lists
           case Failure(m, ex, _) =>
             logger.error(s"Problem loading products into cache with message $m and exception error $ex")
-            Map[Int, Product]()
+            List[Product]()
           case Empty =>
             logger.error("Problem loading products into cache")
-            Map[Int, Product]()
+           List[Product]()
         }
       }
     }
 
-    def getStoreProductsOfStartPage(page: Int, dbStoreProducts: Map[Int, StoreProduct], allDbProductIds: Set[Int]): Map[Int, StoreProduct] = {
+    def getStoreProductsOfStartPage(dbStoreProducts: Map[Int, StoreProduct], allDbProductIds: Set[Int]): Vector[StoreProduct] = {
       def loadAllStoreProducts(dbStoreProducts: Map[Int, StoreProduct], requestSize: Int, storeId: Int, page: Int): Box[Map[EntityRecordState, IndexedSeq[StoreProduct]]] =
         tryo { storeProductByStore(dbStoreProducts, requestSize, storeId, page) }
 
       inTransaction {
-          loadAllStoreProducts(dbStoreProducts, productCacheSize, storeId, page) match {
+          loadAllStoreProducts(dbStoreProducts, productCacheSize, storeId, 1) match {
             case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
               for ((k, v) <- m) {
                 // v IndexedSeq[StoreProduct] containing product
@@ -791,13 +791,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                 }
               }
               // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
-              m.values.flatten.map(sp => sp.productid.get -> sp)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
+              m.values.flatten.toVector // flatten the 3 lists
             case Failure(m, ex, _) =>
               logger.error(s"Problem loading products into cache with message $m and exception error $ex")
-              Map[Int, StoreProduct]()
+              Vector[StoreProduct]()
             case Empty =>
               logger.error("Problem loading products into cache")
-              Map[Int, StoreProduct]()
+              Vector[StoreProduct]()
           }
       }
     }
@@ -807,42 +807,32 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val dbProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v.product)
     val dbStoreProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v.storeProduct)
 
-    def fetchInventories(initialPages: IndexedSeq[Int],
-                         dbStoreProducts: Map[Int, StoreProduct],
+    def fetchInventories(dbStoreProducts: Map[Int, StoreProduct],
                          allDbProductIds: Set[Int]): Unit = {
-      val allTheStoreInventories = Future.traverse(initialPages)(storeProductsByWorker)
-
+      val allTheStoreInventories = Future{storeProductsByWorker()}
       allTheStoreInventories onSuccess {
-        case maps: Iterable[Map[Int, StoreProduct]] =>
-          val fullMap: Map[Int, StoreProduct] = maps.flatten.toMap
-          StoreProduct.update(storeId, fullMap)
-      }
-
-      allTheStoreInventories onFailure {
-        case t => logger.error("loadCache, an error for inventories occurred because: " + t.getMessage)
+        case storesFut => storesFut.map{ stores => StoreProduct.update(storeId, stores ) }
       }
     }
 
-    def fetchProducts(initialParallelPages: IndexedSeq[Int]): Unit= {
-      val allTheProductsByCategory = Future.traverse(initialParallelPages)(productsByWorker)
+    def fetchProducts(): Unit= {
+      val allTheProductsByCategory = Future{ productsByWorker() }
       // we assume all along and depend strongly on that, that we never remove from cache. Updates that are strictly monotonic are easier to get right.
       allTheProductsByCategory onSuccess {
-        case maps: Iterable[Map[Int, Product]] =>
-          val keyedProductsForStore: IndexedSeq[(Int, Product)] = maps.flatten
-          val justTheProducts = keyedProductsForStore.map(_._2) // get rid of key we don't really need as it's also in Product
-          val productsByCategory = justTheProducts.groupBy(_.primary_category.get) // groupBy is a dandy!
+        case prodsFut => prodsFut.map { prods =>
+          val productsByCategory = prods.groupBy(_.primary_category.get) // groupBy is a dandy!
           productsByCategory.map {
             case (category, fetchedProducts) =>
               val storeCatKey = (storeId, category) // construct the key we need, i.e. grab the storeId
-              val newProductIdsSet = fetchedProducts.map(_.lcbo_id.get).toSet // project the products to only the productId
+            val newProductIdsSet = fetchedProducts.map(_.lcbo_id.get).toSet // project the products to only the productId
               if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, newProductIdsSet).isDefined) {
                 // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
                 storeCategoriesProductsCache(storeCatKey) ++= newProductIdsSet
               }
           }
-          Product.update(keyedProductsForStore.toMap) // refresh product cache
-          fetchInventories(initialParallelPages, dbStoreProducts, allDbProductIds)
-
+          Product.update(prods) // refresh product cache
+          fetchInventories(dbStoreProducts, allDbProductIds)
+        }
       }
 
       allTheProductsByCategory onFailure {
@@ -851,19 +841,18 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     }
 
     // evaluate the maps of product in parallel, tracking them by product id (lcbo_id) as key but in order to be able to cache them by category when aggregating results back.
-    def productsByWorker(page: Int): Future[ Map[Int, Product]] =
-      Future { getProductsOfStartPage(page, dbProducts, allDbProductIds) }
+    def productsByWorker(): Future[ Iterable[Product]] =
+      Future { getProductsOfStartPage(dbProducts, allDbProductIds) }
 
-    def storeProductsByWorker(page: Int): Future[ Map[Int, StoreProduct]] =
-      Future { getStoreProductsOfStartPage(page, dbStoreProducts, allDbProductIds) }
+    def storeProductsByWorker(): Future[ Vector[StoreProduct]] =
+      Future { getStoreProductsOfStartPage(dbStoreProducts, allDbProductIds) }
 
     logger.trace(s"loadCache start $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
     if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {
       // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
-      val initialParallelPages = (1 to prodLoadWorkers).toVector  // e.g. (1,2,3,4) when using 4 threads, used to aggregate the results of each thread.
       // we impose referential integrity so we MUST get products and build on that to get inventories that refer to products
-      fetchProducts(initialParallelPages)
+      fetchProducts()
     }
   }
 }
