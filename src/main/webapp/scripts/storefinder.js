@@ -78,25 +78,7 @@ var storeFinder = (function() {
     });
   };
 
-  var fetchAllStores = function() {
-    $.ajax({
-      url: '/stores',
-      type: 'GET',
-      success: function(data, status){
-        function createMarker(element, index, array) {
-          if (element.name != closestStoreName) {
-            var latlng = new google.maps.LatLng(element.latitude, element.longitude);
-            addMarker(latlng);
-          }
-        }
-        data.forEach(createMarker);
-      },
-      error: function(data, status){
-        console.log("Error Data: " + data.responseText + "\nStatus: " + status );
-        alert(data.responseText );
-      }
-    });
-  };
+
 
   var evaluateDistance = function(latLng) {
     distMatrixService.getDistanceMatrix(
@@ -172,6 +154,28 @@ var storeFinder = (function() {
       getDirections(e.latLng);
     },
 
+    fetchAllStores: function() {
+      $.ajax({
+        url: '/stores',
+        type: 'GET',
+        success: function(data, status){
+          function createMarker(element, index, array) {
+            if (element.name != closestStoreName) {
+              var latlng = new google.maps.LatLng(element.latitude, element.longitude);
+              addMarker(latlng);
+            }
+          }
+          data.forEach(createMarker);
+          storeFinder.fetchStoreFromPosition();
+
+        },
+        error: function(data, status){
+          console.log("Error Data: " + data.responseText + "\nStatus: " + status );
+          alert(data.responseText );
+        }
+      });
+    },
+
     distMatrixCB: function(response, status) {
       if (status == google.maps.DistanceMatrixStatus.OK) {
         var origins = response.originAddresses;
@@ -199,7 +203,7 @@ var storeFinder = (function() {
 }());
 
 $(document).ready(function(){
-  storeFinder.fetchStoreFromPosition();
+  storeFinder.fetchAllStores();
 });
 
 
