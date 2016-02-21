@@ -134,7 +134,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
-  def createProductElemVals: Vector[Attribute] =
+  def createProductElemVals: IndexedSeq[Attribute] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
     ( Attribute("Name:", name.get) ::
       Attribute("Primary Category:", primary_category.get) ::

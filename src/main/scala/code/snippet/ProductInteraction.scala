@@ -146,7 +146,7 @@ object ProductInteraction extends Loggable {
         showConfirmationJS
       }
 
-      def mayConsume(selectedProds: Vector[SelectedProduct]): JsCmd = {
+      def mayConsume(selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
         def mayConsumeItem(p: Product, quantity: Int): Option[Feedback] = {
           val x = UserProduct.consume(p, quantity) match {
             case Full((userName, count)) =>
@@ -160,7 +160,7 @@ object ProductInteraction extends Loggable {
         }
 
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
-        val feedback: Vector[(SelectedProduct, Feedback)] = for (sp <- selectedProds;
+        val feedback: IndexedSeq[(SelectedProduct, Feedback)] = for (sp <- selectedProds;
                                                                product <- Product.getProduct(sp.lcbo_id);
                                                                f <- mayConsumeItem(product, sp.quantity)) yield(sp, f)
         val partition = feedback.groupBy(_._2.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
