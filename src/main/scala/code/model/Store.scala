@@ -265,8 +265,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
       synchronizeData(idx, dbStores) match {
           case Full(m) => m
-          case Failure(m, ex, _) => throw new Exception(s"Problem loading LCBO stores into cache (worker $idx) with message '$m' and exception error '$ex'")
-          case Empty => throw new Exception(s"Problem loading LCBO stores into cache (worker $idx), none found")
+          case Failure(m, ex, _) =>
+            logger.error(s"Problem loading LCBO stores into cache (worker $idx) with message '$m' and exception error '$ex'")
+            dbStores
+          case Empty =>
+            logger.error(s"Problem loading LCBO stores into cache (worker $idx), none found")
+            dbStores
       }
     }
 
