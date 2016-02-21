@@ -160,9 +160,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
   private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
   private val storeLoadWorkers = Props.getInt("store.load.workers", 1)
-  private val yieldQuantum = Props.getInt("store.yieldQuantum", 1000)
-
-  private val synchLcbo = Props.getBool("store.synchLcbo", true)
 
   private val storeCategoriesProductsCache: concurrent.Map[(Int, String), Set[Int]] = TrieMap() // give set of available productIds by store+category
   private val storeProductsLoaded: concurrent.Map[Int, Unit] = TrieMap() // effectively a thread-safe lock-free set, which helps control access to storeCategoriesProductsCache.
@@ -187,8 +184,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def init() = { // could help queries find(lcbo_id)
 
     def asyncLoadStores(storeIds: Iterable[Int]): Unit = {
-      val fut = Future { storeIds.map{s => loadCache(s, withDB = true); Thread.sleep(yieldQuantum)} } // pause inside so not to be too aggressive and yield.
-      fut onComplete {
+      def dbLoadCache(storeId: Int): Future[ Unit] =
+        Future { loadCache(storeId, withDB = true) }
+
+      val allStoresLoaded = Future.traverse(storeIds)(dbLoadCache)
+      allStoresLoaded onComplete {
         case scala.util.Success(m) =>
           logger.trace(s"asyncLoadStores completed with success")
         // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
@@ -263,12 +263,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         }
       }
 
-      if (synchLcbo) synchronizeData(idx, dbStores) match {
+      synchronizeData(idx, dbStores) match {
           case Full(m) => m
           case Failure(m, ex, _) => throw new Exception(s"Problem loading LCBO stores into cache (worker $idx) with message '$m' and exception error '$ex'")
           case Empty => throw new Exception(s"Problem loading LCBO stores into cache (worker $idx), none found")
       }
-      else dbStores // configuration tells us to trust our db contents
     }
 
     logger.trace(s"Store.init start")
@@ -749,31 +748,28 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         }
 
       inTransaction {
-        if (synchLcbo) {
-          loadAll(dbProducts, productCacheSize, storeId, page) match {
-            case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-              if (withDB) for ((k, v) <- m) { // we don't want to have two clients taking responsibility to update database for synchronization
-                // v IndexedSeq[Product] containing product
-                Some(k) collect {
-                  // Clean is intentionally ignored
-                  case New =>
-                    Product.insertProducts(v) // insert to DB those we didn't get in our query to obtain allDbProducts
-                  case Dirty =>
-                    Product.updateProducts(v) // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
-                }
+        loadAll(dbProducts, productCacheSize, storeId, page) match {
+          case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
+            if (withDB) for ((k, v) <- m) {
+              // we don't want to have two clients taking responsibility to update database for synchronization
+              // v IndexedSeq[Product] containing product
+              Some(k) collect {
+                // Clean is intentionally ignored
+                case New =>
+                  Product.insertProducts(v) // insert to DB those we didn't get in our query to obtain allDbProducts
+                case Dirty =>
+                  Product.updateProducts(v) // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
               }
-              // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
-              m.values.flatten.map(p => p.lcbo_id.get -> p)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
-            case Failure(m, ex, _) =>
-              logger.error(s"Problem loading products into cache with message $m and exception error $ex")
-              Map[Int, Product]()
-            case Empty =>
-              logger.error("Problem loading products into cache")
-              Map[Int, Product]()
-          }
+            }
+            // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
+            m.values.flatten.map(p => p.lcbo_id.get -> p)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
+          case Failure(m, ex, _) =>
+            logger.error(s"Problem loading products into cache with message $m and exception error $ex")
+            Map[Int, Product]()
+          case Empty =>
+            logger.error("Problem loading products into cache")
+            Map[Int, Product]()
         }
-        else if (page == 1) dbProducts // just load from DB without going to LCBO. And if config is weird to use multiple threads, do it only on first one.
-        else Map[Int, Product]()
       }
     }
 
@@ -782,7 +778,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         tryo { storeProductByStore(dbStoreProducts, requestSize, storeId, page) }
 
       inTransaction {
-        if (synchLcbo) {
           loadAllStoreProducts(dbStoreProducts, productCacheSize, storeId, page) match {
             case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
               for ((k, v) <- m) {
@@ -804,9 +799,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
               logger.error("Problem loading products into cache")
               Map[Int, StoreProduct]()
           }
-        }
-        else if (page == 1) dbStoreProducts // just load from DB without going to LCBO. And if config is weird to use multiple threads, do it only on first one.
-        else Map()
       }
     }
 
