@@ -197,9 +197,9 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     ids.map(_.get).toSet
   }
 
-  def update(prodMap: Map[Int, Product]) = {
-    val newProds = prodMap.values.filter{ p: Product => !productsCache.keySet.contains(p.lcbo_id.get) }
-    val existingProds = prodMap.values.filter{ p: Product => productsCache.keySet.contains(p.lcbo_id.get) }
+  def update(prods: Iterable[Product]) = {
+    val newProds = prods.filter{ p: Product => !productsCache.keySet.contains(p.lcbo_id.get) }
+    val existingProds = prods.filter{ p: Product => productsCache.keySet.contains(p.lcbo_id.get) }
     updateProducts(existingProds.toSet)
     insertProducts(newProds)
   }

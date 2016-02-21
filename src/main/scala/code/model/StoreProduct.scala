@@ -103,9 +103,9 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
      { storeProductsCache += (store, lcbo_id) -> sp }
 
   }
-  def update(storeId: Int, storeMap: Map[Int, StoreProduct]) = {
-    val newSPs = storeMap.values.filter{ sp: StoreProduct => !storeProductsCache.keySet.contains(storeId, sp.productid.get) }
-    val existingSPs = storeMap.values.filter{ sp: StoreProduct => storeProductsCache.keySet.contains(storeId, sp.productid.get) }
+  def update(storeId: Int, theStores: Iterable[StoreProduct]) = {
+    val newSPs = theStores.filter{ sp: StoreProduct => !storeProductsCache.keySet.contains(storeId, sp.productid.get) }
+    val existingSPs = theStores.filter{ sp: StoreProduct => storeProductsCache.keySet.contains(storeId, sp.productid.get) }
     updateStoreProducts(existingSPs)
     insertStoreProducts(newSPs)
   }
