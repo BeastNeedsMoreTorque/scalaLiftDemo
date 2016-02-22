@@ -19,7 +19,6 @@ var storeFinder = (function() {
   var distMatrixService = new google.maps.DistanceMatrixService();
   var directionsService = new google.maps.DirectionsService();
   var directionsDisplay;
-  var title = 'Downtown Toronto Liquor Store';
 
   var distanceByGeo = function(latLng1, latLng2) {
     var x = kmsPerLat * (latLng1.lat()-latLng2.lat());
@@ -29,17 +28,19 @@ var storeFinder = (function() {
   };
 
   var closestStore = function(latLng) {
-    var bestDistance = 1000000;
+    var bestDistance = +Infinity;
     var dist = bestDistance;
     var s = null;
-    for (var i = 0; i < stores.length; i++) {
-      var storeLatLng = new google.maps.LatLng(stores[i].latitude, stores[i].longitude)
-      dist = distanceByGeo(latLng, storeLatLng);
-      if (dist < bestDistance) {
-        s = stores[i];
-        bestDistance = dist;
+    stores.forEach(
+      function (store, index, array) {
+        var storeLatLng = new google.maps.LatLng(store.latitude, store.longitude)
+        dist = distanceByGeo(latLng, storeLatLng);
+        if (dist < bestDistance) {
+          s = store;
+          bestDistance = dist;
+        }
       }
-    }
+    );
     return s;
   }
 
@@ -65,17 +66,17 @@ var storeFinder = (function() {
       directionsDisplay = new google.maps.DirectionsRenderer();
       directionsDisplay.setMap(map);
       userMarker = new google.maps.Marker({position:userLatLng,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
-      title = 'Downtown Toronto Liquor Store';
 
-      if (userLocationAvailable) {
-        var data = closestStore(userLatLng);
+      var data = closestStore(userLatLng);
+
+      if (data != null) {
         var closestLatLng = new google.maps.LatLng(data.latitude, data.longitude)
-        var closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
+        var closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:"Closest store",icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
         closestMarker.addListener('click', storeFinder.storeClickCB);
         evaluateDistance(closestLatLng);
         getDirections(closestLatLng);
+
         $("#storeNearby").html('Selected LCBO store:');
-        title = "Selected Store";
         $("#storeName").html(data.name);
         closestStoreName = data.name;
         $("#storeAddressLine1").html(data.address_line_1);
