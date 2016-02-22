@@ -15,11 +15,10 @@ var storeFinder = (function() {
   var userMarker;
   var userLocation;
   var storeDistance;  // could also get storeDuration if we wanted.
-  var closestStoreName = 'Unknown Store';
   var distMatrixService = new google.maps.DistanceMatrixService();
   var directionsService = new google.maps.DirectionsService();
   var directionsDisplay;
-  var theClosestStore = null;
+  var theSelectedStore = null;
 
   var distanceByGeo = function(latLng1, latLng2) {
     var x = kmsPerLat * (latLng1.lat()-latLng2.lat());
@@ -31,17 +30,18 @@ var storeFinder = (function() {
   var closestStore = function(latLng) {
     var bestDistance = +Infinity;
     var dist = bestDistance;
+    var closest = null;
     stores.forEach(
       function (store, index, array) {
         var storeLatLng = new google.maps.LatLng(store.latitude, store.longitude)
         dist = distanceByGeo(latLng, storeLatLng);
         if (dist < bestDistance) {
-          theClosestStore = store;
+          closest = store;
           bestDistance = dist;
         }
       }
     );
-    return theClosestStore;
+    return closest;
   }
 
   var fetchStore = function(userLatLng, userLocationAvailable, storeSelectedByApp) {
@@ -54,7 +54,7 @@ var storeFinder = (function() {
     if (storeSelectedByApp == true) {
       map = new google.maps.Map(mapCanvas, myOptions);
       map.addListener('bounds_changed', function() {
-        clearMarkers()
+        clearMarkers();
         if (this.zoom > 10) {
           showMarkers();
         }
@@ -66,30 +66,28 @@ var storeFinder = (function() {
       directionsDisplay = new google.maps.DirectionsRenderer();
       directionsDisplay.setMap(map);
       userMarker = new google.maps.Marker({position:userLatLng,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
+    }
+    theSelectedStore = closestStore(userLatLng);
+    if (theSelectedStore != null) {
+      var closestLatLng = new google.maps.LatLng(theSelectedStore.latitude, theSelectedStore.longitude)
+      var closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:"Closest store",icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
+      closestMarker.addListener('click', storeFinder.storeClickCB);
+      evaluateDistance(closestLatLng);
+      getDirections(closestLatLng);
 
-      var data = closestStore(userLatLng);
-
-      if (data != null) {
-        var closestLatLng = new google.maps.LatLng(data.latitude, data.longitude)
-        var closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:"Closest store",icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
-        closestMarker.addListener('click', storeFinder.storeClickCB);
-        evaluateDistance(closestLatLng);
-        getDirections(closestLatLng);
-
-        $("#storeNearby").html('Selected LCBO store:');
-        $("#storeName").html(data.name);
-        closestStoreName = data.name;
-        $("#storeAddressLine1").html(data.address_line_1);
-        $("#storeCity").html(data.city);
-        $("#storeLat").html(data.latitude);
-        $("#storeLon").html(data.longitude);
-        $("#storeAttributesTbl").show();
-      } else {
-        $("#storeNearby").html("Downtown Toronto LCBO (user location unavailable)");
-        $("#storeAttributesTbl").hide();
-      }
+      $("#storeNearby").html('Selected LCBO store:');
+      $("#storeName").html(theSelectedStore.name);
+      $("#storeAddressLine1").html(theSelectedStore.address_line_1);
+      $("#storeCity").html(theSelectedStore.city);
+      $("#storeLat").html(theSelectedStore.latitude);
+      $("#storeLon").html(theSelectedStore.longitude);
+      $("#storeAttributesTbl").show();
+    } else {
+      $("#storeNearby").html("Downtown Toronto LCBO (user location unavailable)");
+      $("#storeAttributesTbl").hide();
     }
   };
+
 
   var evaluateDistance = function(latLng) {
     distMatrixService.getDistanceMatrix(
@@ -166,9 +164,9 @@ var storeFinder = (function() {
       getDirections(e.latLng);
     },
 
-    getTheClosestStore: function() {
-      if (theClosestStore == null) return -1;
-      return theClosestStore.id;
+    getTheSelectedStore: function() {
+      if (theSelectedStore == null) return -1;
+      return theSelectedStore.id;
     },
 
     fetchAllStores: function() {
@@ -177,10 +175,8 @@ var storeFinder = (function() {
         type: 'GET',
         success: function(data, status){
           function createMarker(element, index, array) {
-            if (element.name != closestStoreName) {
-              var latlng = new google.maps.LatLng(element.latitude, element.longitude);
-              addMarker(element.name, latlng);
-            }
+            var latlng = new google.maps.LatLng(element.latitude, element.longitude);
+            addMarker(element.name, latlng);
           }
           data.forEach(createMarker);
           stores = data;
