@@ -384,35 +384,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def findAll(): Iterable[StoreAsLCBOJson] =
     storesCache.values.map(s => StoreAsLCBOJson(s))
 
-  /**
-    * Find the closest store by coordinates, caching is not applicable as we cannot guess what store is closest to input
-    * unless we do a geo query in DB ourselves, which is excessive effort given LCBO API.
-    */
-  def find( lat: String,  lng: String): Box[StoreAsLCBOJson] =  {
-    def findStore(lat: String, lng: String): Box[StoreAsLCBOJson] = {
-      val url = s"$LcboDomainURL/stores?where_not=is_dead" +
-        additionalParam("lat", lat) +
-        additionalParam("lon", lng)
-      tryo {
-        val b: Box[StoreAsLCBOJson] = collectFirstMatchingStore(url)
-        b.map { s => Future { loadCache(s.id)} } // to help prevent cache misses on new store and thus show non-zero inventory.
-        b.openOrThrowException(s"No store found near ($lat, $lng)") // it'd be a rare event not to find a store here. Exception will be caught immediately by tryo and transformed to Failure.
-      }
-    }
-
-    findStore(lat, lng) match {
-      case Full(x) =>
-        theStoreId.set(x.id)
-        Full(x)
-      case Failure(msg, exc, _) =>
-        logger.error(s"unable to find closest store with error $msg exception $exc")
-        Empty
-      case Empty =>
-        logger.error("unable to find closest store info")
-        Empty
-    }
-  }
-
   @throws(classOf[net.liftweb.json.MappingException])
   @throws(classOf[net.liftweb.json.JsonParser.ParseException])
   @throws(classOf[java.io.IOException])
@@ -438,27 +409,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     logger.debug(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     (parse(pageContent) \ "result").extract[PlainStoreAsLCBOJson] // more throws
-  }
-
-  def find( lcbo_id: Int): Box[Store] =  {
-    def findStore(lcbo_id: Int): Box[Store] = {
-      val url = s"$LcboDomainURL/stores/$lcbo_id"
-      logger.debug(s"findStore by id using $url")
-      tryo { fetchSynched(getSingleStore(url))}
-    }
-
-    if (storesCache.contains(lcbo_id)) Full(storesCache(lcbo_id))
-    else findStore(lcbo_id) match {
-      case Full(x) =>
-        theStoreId.set(x.lcbo_id.get)
-        Full(x)
-      case Failure(msg, exc, _) =>
-        logger.error(s"unable to find closest store with error $msg exception $exc")
-        Empty
-      case Empty =>
-        logger.error("unable to find closest store info")
-        Empty
-    }
   }
 
   def fetchSynched(s: PlainStoreAsLCBOJson): Store = {
