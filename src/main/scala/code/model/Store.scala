@@ -300,7 +300,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val dbStores: Map[Int, Store] = stores.map(s => s.lcbo_id.get -> s)(breakOut) // queries full store table and throw it into map
       def isPopular(storeId: Int): Boolean = {
         // opportunity to generalize to analytics, for now binary simple decision
-         StoreProduct.storeIdsWithCachedProducts.contains(storeId)
+        storeLoadAll || StoreProduct.storeIdsWithCachedProducts.contains(storeId)
       }
       for (i <- 1 to storeLoadWorkers) {
         val fut = Future { getStores(i, dbStores) } // do this asynchronously to be responsive asap.
