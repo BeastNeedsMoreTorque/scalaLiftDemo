@@ -206,7 +206,7 @@ object ProductInteraction extends Loggable {
     "select" #> ajaxSelect(RecommendCount.options, RecommendCount.default,
       { selected: String => theRecommendCount.set(toInt(selected)); Noop }) andThen // always before recommend so it takes effect.
     "@recommend [onclick]" #>
-      jsonCall( JE.Call("storeFinder.getTheClosestStore"),
+      jsonCall( JE.Call("storeFinder.getTheSelectedStore"),
         { j: JValue => recommend(j) & JSUtilities.setBorderJS(actionButtonsContainer, "recommend")})
   }
 }
