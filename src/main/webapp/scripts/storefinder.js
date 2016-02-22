@@ -6,9 +6,12 @@
 // Currently supported Store  (see lcboapi.com): id, name, is_dead, latitude, longitude, distance_in_meters (from specified location), address_line_1, city
 var storeFinder = (function() {
   var defaultOntarioLocation = new google.maps.LatLng(43.647219, -79.3789987); // Bay & Front LCBO address.
+  var kmsPerLat = 111;
+  var kmsPerLng = 78.4;
   var mapCanvas = document.getElementById('map-canvas');
   var map;
   var markers = [];
+  var stores = [];
   var userMarker;
   var userLocation;
   var storeDistance;  // could also get storeDuration if we wanted.
@@ -16,6 +19,29 @@ var storeFinder = (function() {
   var distMatrixService = new google.maps.DistanceMatrixService();
   var directionsService = new google.maps.DirectionsService();
   var directionsDisplay;
+  var title = 'Downtown Toronto Liquor Store';
+
+  var distanceByGeo = function(latLng1, latLng2) {
+    var x = kmsPerLat * (latLng1.lat()-latLng2.lat());
+    var y = kmsPerLng * (latLng1.lng()-latLng2.lng());
+
+    return (Math.sqrt(Math.pow(x,2) + Math.pow(y,2)));
+  };
+
+  var closestStore = function(latLng) {
+    var bestDistance = 1000000;
+    var dist = bestDistance;
+    var s = null;
+    for (var i = 0; i < stores.length; i++) {
+      var storeLatLng = new google.maps.LatLng(stores[i].latitude, stores[i].longitude)
+      dist = distanceByGeo(latLng, storeLatLng);
+      if (dist < bestDistance) {
+        s = stores[i];
+        bestDistance = dist;
+      }
+    }
+    return s;
+  }
 
   var fetchStore = function(userLatLng, userLocationAvailable, storeSelectedByApp) {
     var myOptions = {
@@ -35,49 +61,34 @@ var storeFinder = (function() {
           clearMarkers();
         }
       });
+
       directionsDisplay = new google.maps.DirectionsRenderer();
       directionsDisplay.setMap(map);
       userMarker = new google.maps.Marker({position:userLatLng,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
-    }
+      title = 'Downtown Toronto Liquor Store';
 
-
-    // Show particulars of nearby store in storeNearby and also show that point in a google map.
-    $.ajax({
-      // liftweb interprets periods in special way for suffixes in JSON calls (req parsing), so we escape them by using commas instead.
-      url: '/stores/lat/' + userLatLng.lat().toString().replace('.',  ',') + '/lng/' + userLatLng.lng().toString().replace('.', ','),
-      type: 'GET',
-      success: function(data, status){
-        var latlng = new google.maps.LatLng(data.latitude, data.longitude)
-        var title = 'Downtown Toronto Liquor Store';
-        if (userLocationAvailable) {
-          $("#storeNearby").html('Selected LCBO store:');
-          title = "Selected Store";
-          $("#storeName").html(data.name);
-          closestStoreName = data.name;
-          $("#storeAddressLine1").html(data.address_line_1);
-          $("#storeCity").html(data.city);
-          $("#storeLat").html(data.latitude);
-          $("#storeLon").html(data.longitude);
-          $("#storeAttributesTbl").show();
-        } else {
-          $("#storeNearby").html("Downtown Toronto LCBO (user location unavailable)");
-          $("#storeAttributesTbl").hide();
-        }
-        if (storeSelectedByApp == true) {
-          var closestMarker = new google.maps.Marker({position:latlng,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
-          closestMarker.addListener('click', storeFinder.storeClickCB);
-          evaluateDistance(latlng);
-          getDirections(latlng);
-        }
-      },
-      error: function(data, status){
-        console.log("Error Data: " + data.responseText + "\nStatus: " + status );
-        alert(data.responseText );
+      if (userLocationAvailable) {
+        var data = closestStore(userLatLng);
+        var closestLatLng = new google.maps.LatLng(data.latitude, data.longitude)
+        var closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:title,icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
+        closestMarker.addListener('click', storeFinder.storeClickCB);
+        evaluateDistance(closestLatLng);
+        getDirections(closestLatLng);
+        $("#storeNearby").html('Selected LCBO store:');
+        title = "Selected Store";
+        $("#storeName").html(data.name);
+        closestStoreName = data.name;
+        $("#storeAddressLine1").html(data.address_line_1);
+        $("#storeCity").html(data.city);
+        $("#storeLat").html(data.latitude);
+        $("#storeLon").html(data.longitude);
+        $("#storeAttributesTbl").show();
+      } else {
+        $("#storeNearby").html("Downtown Toronto LCBO (user location unavailable)");
+        $("#storeAttributesTbl").hide();
       }
-    });
+    }
   };
-
-
 
   var evaluateDistance = function(latLng) {
     distMatrixService.getDistanceMatrix(
@@ -114,8 +125,9 @@ var storeFinder = (function() {
   };
 
   // Adds a marker to the map and push to the array.
-  var addMarker = function(location) {
+  var addMarker = function(name, location) {
     var marker = new google.maps.Marker({
+      title: name,
       position: location,
       map: map
     });
@@ -161,12 +173,12 @@ var storeFinder = (function() {
           function createMarker(element, index, array) {
             if (element.name != closestStoreName) {
               var latlng = new google.maps.LatLng(element.latitude, element.longitude);
-              addMarker(latlng);
+              addMarker(element.name, latlng);
             }
           }
           data.forEach(createMarker);
+          stores = data;
           storeFinder.fetchStoreFromPosition();
-
         },
         error: function(data, status){
           console.log("Error Data: " + data.responseText + "\nStatus: " + status );

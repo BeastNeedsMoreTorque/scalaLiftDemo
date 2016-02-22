@@ -21,9 +21,6 @@ object AppRest extends RestHelper {
    * @see http://simply.liftweb.net/index-5.3.html#prev
    * @see http://simply.liftweb.net/index-Chapter-11.html
    * @see https://www.assembla.com/spaces/liftweb/wiki/REST_Web_Services
-   * find /store/lat/43,0/lng/-80,0.json
-   * find /store/lat/43,0/lng/-80,0.xml (tested with curl or JS)
-   * findInRectangle /store/swlat/43,0/swlng/-80,0/nelat/44,00/nelng/-79,00.json (or .xml)
    */
   serve {
     case "stores" :: Nil JsonGet _ =>
@@ -33,21 +30,6 @@ object AppRest extends RestHelper {
     case "stores" :: Nil XmlGet _ =>
       val stores = Store.findAll()
       <stores>{stores.map(s => {s:Node})}</stores>
-
-    case "stores" :: "lat" :: DotDecimalString(lat) :: "lng" :: DotDecimalString(lng) :: Nil JsonGet _ =>
-      for {
-      // find the store, and if it's not found,
-      // return a nice message for the 404
-        store <- Store.find(lat, lng) ?~ s"Store Not Found near location ($lat, $lng)"
-      } yield Extraction.decompose(store) // a JValue, allowing servlet to return some JSon
-
-    case "stores" :: "lat" :: DotDecimalString(lat) :: "lng" :: DotDecimalString(lng) :: Nil XmlGet _ =>
-      for {
-      // find the store, and if it's not found,
-      // return a nice message for the 404
-        store <- Store.find(lat, lng) ?~ s"Store Not Found near location ($lat, $lng)"
-      } yield store: Node  // Node is what generates XML (see converters in Store)
-
   }
 
 }
