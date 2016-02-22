@@ -19,6 +19,7 @@ var storeFinder = (function() {
   var distMatrixService = new google.maps.DistanceMatrixService();
   var directionsService = new google.maps.DirectionsService();
   var directionsDisplay;
+  var theClosestStore = null;
 
   var distanceByGeo = function(latLng1, latLng2) {
     var x = kmsPerLat * (latLng1.lat()-latLng2.lat());
@@ -30,18 +31,17 @@ var storeFinder = (function() {
   var closestStore = function(latLng) {
     var bestDistance = +Infinity;
     var dist = bestDistance;
-    var s = null;
     stores.forEach(
       function (store, index, array) {
         var storeLatLng = new google.maps.LatLng(store.latitude, store.longitude)
         dist = distanceByGeo(latLng, storeLatLng);
         if (dist < bestDistance) {
-          s = store;
+          theClosestStore = store;
           bestDistance = dist;
         }
       }
     );
-    return s;
+    return theClosestStore;
   }
 
   var fetchStore = function(userLatLng, userLocationAvailable, storeSelectedByApp) {
@@ -164,6 +164,11 @@ var storeFinder = (function() {
       fetchStore(e.latLng, true, false);
       evaluateDistance(e.latLng);
       getDirections(e.latLng);
+    },
+
+    getTheClosestStore: function() {
+      if (theClosestStore == null) return -1;
+      return theClosestStore.id;
     },
 
     fetchAllStores: function() {

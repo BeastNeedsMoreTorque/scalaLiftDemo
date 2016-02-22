@@ -6,10 +6,10 @@ import net.liftweb.common._
 import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.S
-import net.liftweb.json.JsonParser.parse
+import net.liftweb.json.JsonParser._
 import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
-import net.liftweb.http.SHtml.{ajaxInvoke,ajaxSelect,jsonCall}
+import net.liftweb.http.SHtml._
 
 import scala.xml._
 import scala.language.implicitConversions
@@ -51,7 +51,7 @@ object ProductInteraction extends Loggable {
   }
 
   def render = {
-    def recommend: JsCmd = {
+    def recommend(jsStore: JValue): JsCmd = {
       def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd = {
         def getDiv(qOfProd: QuantityOfProduct): NodeSeq = {
           // layout description:
@@ -100,10 +100,10 @@ object ProductInteraction extends Loggable {
         SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
       }
 
-      def maySelect: JsCmd =
-        if (theStoreId.is > 0 ) {
-          // validate expected numeric input theStoreId (a http session attribute) then access LCBO data
-          val quantityProdSeq = Store.recommend(theStoreId.is, theCategory.is, theRecommendCount.is) match {
+      def maySelect(storeId: Int): JsCmd =
+        if (storeId > 0 ) {
+          // validate expected numeric input storeId then access LCBO data
+          val quantityProdSeq = Store.recommend(storeId, theCategory.is, theRecommendCount.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
             case Full(pairs) => Full(pairs) // returns prod and quantity in inventory normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
@@ -120,8 +120,10 @@ object ProductInteraction extends Loggable {
           Noop
         }
 
+      val jsonOpt = jsStore.extractOpt[String].map( parse)
+      val storeId = jsonOpt.fold(-1){ json =>  json.extract[Int]}
       User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
-      { user => maySelect} // normal processing
+      { user => maySelect(storeId)} // normal processing
     }
 
     def consumeProducts(selection: JValue): JsCmd = {
@@ -204,6 +206,7 @@ object ProductInteraction extends Loggable {
     "select" #> ajaxSelect(RecommendCount.options, RecommendCount.default,
       { selected: String => theRecommendCount.set(toInt(selected)); Noop }) andThen // always before recommend so it takes effect.
     "@recommend [onclick]" #>
-      ajaxInvoke({() => recommend & JSUtilities.setBorderJS(actionButtonsContainer, "recommend")})
+      jsonCall( JE.Call("storeFinder.getTheClosestStore"),
+        { j: JValue => recommend(j) & JSUtilities.setBorderJS(actionButtonsContainer, "recommend")})
   }
 }
