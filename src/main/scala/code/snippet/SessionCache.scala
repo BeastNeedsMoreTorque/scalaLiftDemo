@@ -10,10 +10,6 @@ import net.liftweb.util.Props
   */
 object SessionCache {
   val defaultCategory = Props.get("product.Category", "wine")
-  val defaultStore = 0                  // invalid on purpose.
-
   object theCategory extends SessionVar[String](defaultCategory)
-  object theStoreId extends SessionVar[Int](defaultStore)
   object theRecommendCount extends SessionVar[Int](1)
-
 }
