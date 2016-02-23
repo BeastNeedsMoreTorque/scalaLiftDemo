@@ -206,15 +206,6 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   def cachedProductIds: Set[Int] = productsCache.keySet
 
-  def fetchSynched(p: ProductAsLCBOJson) = {
-    DB.use(DefaultConnectionIdentifier) { connection =>
-      val o = products.where(_.lcbo_id === p.id).forUpdate.headOption // Load from DB if available, else create it Squeryl very friendly DSL syntax!
-      o.fold {
-        val q = create(p); q.save; q
-      } { q => q.synchUp(p); q }
-    }
-  }
-
   // @see http://squeryl.org/occ.html
   def updateProducts(myProducts: Iterable[Product]): Unit = synchronized {
     myProducts.grouped(DBBatchSize).
@@ -264,12 +255,10 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val entries = cachedProductIds // evaluate once
     val filteredProds = myProducts.filterNot { p => entries.contains(p.lcbo_id.get) }.toVector.
         groupBy{ p => p.lcbo_id.get}.map{ case (k,v) => v.head}
-
     // break it down and then serialize the work.
     filteredProds.grouped(DBBatchSize).foreach { insertBatch }
 
   }
-
 
   def create(p: ProductAsLCBOJson): Product = {
     // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
