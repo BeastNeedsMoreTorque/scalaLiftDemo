@@ -68,7 +68,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   private implicit val formats = net.liftweb.json.DefaultFormats
 
   // thread-safe lock free object
-  private val storeProductsCache: concurrent.Map[(Int, Int), StoreProduct] = TrieMap() // only update after confirmed to be in database!
+  private val storeProductsCache: concurrent.Map[(Int, Int), Int] = TrieMap() // only update after confirmed to be in database!
   private val allStoreProductsFromDB: concurrent.Map[Int, IndexedSeq[ProductWithInventory]] = TrieMap()
 
   def cachedStoreProductIds: Set[(Int, Int)] = storeProductsCache.keySet
@@ -99,7 +99,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
          prod <- Option(inv.product);
          sp <- Option(inv.storeProduct);
          lcbo_id <- Option(prod.lcbo_id.get))
-     { storeProductsCache += (store, lcbo_id) -> sp }
+     { storeProductsCache += (store, lcbo_id) -> sp.quantity.get }
 
   }
   def update(storeId: Int, theStores: Iterable[StoreProduct]) = {
@@ -108,7 +108,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     insertStoreProducts(newSPs)
   }
 
-  def getStoreProduct(storeId: Int, prodId: Int): Option[StoreProduct] =
+  def getStoreProductQuantity(storeId: Int, prodId: Int): Option[Int] =
     storeProductsCache get (storeId, prodId)
 
   // Uses convenient Squeryl native Scala ORM for a simple 2-table join.
@@ -132,7 +132,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       foreach { x =>
         inTransaction { storeProducts.forceUpdate(x) }
           // @see http://squeryl.org/occ.html (two threads might fight for same update and if one is stale, that could be trouble with the regular update
-        storeProductsCache ++= x.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
+        storeProductsCache ++= x.map { sp => (sp.storeid.get, sp.productid.get) -> sp.quantity.get }.toMap
       }
   }
 
@@ -142,7 +142,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       try { // the DB could fail for PK or whatever other reason.
         inTransaction { storeProducts.insert(filtered) }
         // update in memory for next caller who should be blocked, also in chunks to be conservative.
-        storeProductsCache ++= (filtered.map{sp => (sp.storeid.get, sp.productid.get) -> sp}).toMap
+        storeProductsCache ++= filtered.map { sp => (sp.storeid.get, sp.productid.get) -> sp.quantity.get }.toMap
       } catch {
         case se: SQLException =>
           logger.error("SQLException ")

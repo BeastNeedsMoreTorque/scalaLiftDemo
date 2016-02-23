@@ -237,7 +237,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       try { // the DB could fail for PK or whatever other reason.
         inTransaction { products.insert(filteredProds) }
         // update in memory for next caller who should be blocked
-        productsCache ++= (filteredProds.map { p => p.lcbo_id.get -> p }).toMap
+        productsCache ++= filteredProds.map { p => p.lcbo_id.get -> p }.toMap
       } catch {
         case se: SQLException =>
           logger.error("SQLException ")
