@@ -131,7 +131,7 @@ object ProductInteraction extends Loggable {
       def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
         def getItem(item: PurchasedProductConfirmation): NodeSeq = {
           def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Int): String =
-            s"${confirmation} including the cost of today's purchase at ${formattedCost} for ${quantity} extra units"
+            s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
 
           val formattedCost = formatter format item.selectedProduct.cost
           val liContent = purchaseConfirmationMessage(item.confirmation, formattedCost, item.selectedProduct.quantity)
@@ -154,8 +154,8 @@ object ProductInteraction extends Loggable {
           val x = UserProduct.consume(p, quantity) match {
             case Full((userName, count)) =>
               Feedback(userName, success=true, s"${p.name} $count unit(s) over the years")
-            case Failure(x, ex, _) =>
-              Feedback(userName="", success=false, s"Unable to sell you product ${p.name} with error $x and exception '$ex'")
+            case Failure(e, ex, _) =>
+              Feedback(userName="", success=false, s"Unable to sell you product ${p.name} with error $e and exception '$ex'")
             case Empty =>
               Feedback(userName="", success=false, s"Unable to sell you product ${p.name}")
           }

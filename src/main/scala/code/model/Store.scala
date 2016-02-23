@@ -11,7 +11,6 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 
-import net.liftweb.db.DB
 import net.liftweb.common.{Full, Empty, Box, Failure, Loggable}
 import net.liftweb.json._
 import net.liftweb.json.JsonParser.{ParseException, parse}
@@ -20,7 +19,7 @@ import net.liftweb.record.{MetaRecord, Record}
 import net.liftweb.record.field._
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
-import net.liftweb.util.{DefaultConnectionIdentifier, Props}
+import net.liftweb.util.Props
 
 import org.squeryl.annotations._
 
@@ -150,19 +149,21 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val PositiveInventoryIterations = Props.getInt("store.PositiveInventoryIterations",  10)
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
   private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
-  private val storeLoadWorkers = Props.getInt("store.load.workers", 1)
-  private val storeLoadAll = Props.getBool("store.loadAll", false) // not ready (mem, JVM issues)
+  private val storeLoadAll = Props.getBool("store.loadAll", false)
+  private val storeLoadBatchSize = Props.getInt("store.loadBatchSize", 10)
+
   private val storeCategoriesProductsCache: concurrent.Map[(Int, String), Set[Int]] = TrieMap() // give set of available productIds by store+category
   private val storeProductsLoaded: concurrent.Map[Int, Unit] = TrieMap() // effectively a thread-safe lock-free set, which helps control access to storeCategoriesProductsCache.
   // would play a role if user selects a store from a map. A bit of an exercise for caching and threading for now.
   private val storesCache: concurrent.Map[Int, Store] = TrieMap[Int, Store]()
-  @volatile
-  var dummy: Any = _
+
 
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
 
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
 
+  @volatile
+  var dummy: Any = _
   def timed[T](body: =>T): Double = {
     val start = System.nanoTime
     dummy = body
@@ -175,20 +176,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                  f: PlainStoreAsLCBOJson => Option[Store] ): IndexedSeq[Store] =
     storesByState.getOrElse(state, Vector()).flatMap{ f(_)}
 
-  def init() = { // could help queries find(lcbo_id)
+  def init() = {
 
     def asyncLoadStores(storeIds: Iterable[Int]): Unit = {
-      def dbLoadCache(storeId: Int): Future[ Unit] =
-        Future { loadCache(storeId) }
+      def dbLoadCache(storeIds: Iterable[Int]): Future[ Unit] =
+        Future { storeIds.foreach(loadCache) }
 
-      val allStoresLoaded = Future.traverse(storeIds)(dbLoadCache)
-      allStoresLoaded onComplete {
-        case scala.util.Success(m) =>
-          logger.trace(s"asyncLoadStores completed with success")
-        // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
-        // We could define a finer policy as to when we want to use a default set from database even when we attempt to go to LCBO.
-        case scala.util.Failure(t) => logger.error(s"Store.init ${t.getMessage} " )
-      }
+      storeIds.grouped(storeLoadBatchSize).foreach { dbLoadCache }
     }
 
     def getStores(idx: Int, dbStores: Map[Int, Store]): Map[Int, Store] = {
@@ -232,7 +226,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
             dbStores,
             revisedAccumItems,
             urlRoot,
-            pageNo + storeLoadWorkers) // union of this page with next page when we are asked for a full sample
+            pageNo + 1) // union of this page with next page when we are asked for a full sample
         }
 
         // we'd like the is_dead ones as well to update state (but apparently you have to query for it explicitly!?!?)
@@ -275,7 +269,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // warm up from our database known products by storeId and category, later on load all stores for navigation.
     // declaration is to verify we already support indexing so we can group by efficiently
     StoreProduct.getProductsByStore.foreach {
-      case (storeId, seqOfProducts) => {
+      case (storeId, seqOfProducts) =>
         val productsByCategory = seqOfProducts.groupBy(_.primary_category.get) // partition the products of a store by category (make sure to get a vector first)
         productsByCategory.foreach { case (category, productsIter) =>
           // we're first setter of the cache, so we don't need to append if already in cache.
@@ -283,7 +277,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           if (storeCategoriesProductsCache.putIfAbsent((storeId, category), dbProductIds).isDefined)   // restrict the products to simply productId (lcbo_id) and put  in cache lock-free
             storeCategoriesProductsCache((storeId, category)) ++= dbProductIds
         }
-      }
     }
 
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
@@ -292,19 +285,19 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val dbStores: Map[Int, Store] = stores.map(s => s.lcbo_id.get -> s)(breakOut) // queries full store table and throw it into map
       def isPopular(storeId: Int): Boolean = {
         // opportunity to generalize to analytics, for now binary simple decision
-        storeLoadAll || StoreProduct.storeIdsWithCachedProducts.contains(storeId)
+        storeLoadAll || //This chokes JVM and GC at 100-130 stores !!!
+        StoreProduct.storeIdsWithCachedProducts.contains(storeId)
       }
-      for (i <- 1 to storeLoadWorkers) {
-        val fut = Future { getStores(i, dbStores) } // do this asynchronously to be responsive asap.
-        fut onComplete {
-          case Success(m) => storesCache ++= m
-            asyncLoadStores(m.keys.filter(isPopular))
-            logger.trace(s"Store.init worker completed with success")
-          case Failure(t) => logger.error(s"Store.init ${t.getMessage} " )
-          // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
-          // We could define a finer policy as to when we want to use a default set from database even when we attempt to go to LCBO.
-        }
+      val fut = Future { getStores(1, dbStores) } // do this asynchronously to be responsive asap.
+      fut onComplete {
+        case Success(m) => storesCache ++= m
+          asyncLoadStores(m.keys.filter(isPopular))
+          logger.trace(s"Store.init worker completed with success")
+        case Failure(t) => logger.error(s"Store.init ${t.getMessage} " )
+        // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
+        // We could define a finer policy as to when we want to use a default set from database even when we attempt to go to LCBO.
       }
+
     }
     logger.trace("Store.init end")
   }
@@ -324,8 +317,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val seq = for (
            lcbo_id <- lcboids;
            p <- Product.getProduct(lcbo_id);
-           inv <- StoreProduct.getStoreProduct(storeId, lcbo_id);
-           qty <- Option(inv.quantity.get) if qty > 0 ) yield (qty, p)
+           qty <- StoreProduct.getStoreProductQuantity(storeId, lcbo_id) if qty > 0 ) yield (qty, p)
       seq.take(requestSize)
     }
 
@@ -348,8 +340,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
             for (idx <- indices;
                p <- Option(prods(idx));
                lcbo_id <- Option(p.lcbo_id.get);
-               inv <- StoreProduct.getStoreProduct(storeId, lcbo_id);
-               qty <- Option(inv.quantity.get) if qty > 0) yield (qty, p)
+               qty <- StoreProduct.getStoreProductQuantity(storeId, lcbo_id) if qty > 0) yield (qty, p)
           else // just use 0 as placeholder for inventory for now as we don't have this info yet.
             for (idx <- indices;
                  p <- Option(prods(idx));
