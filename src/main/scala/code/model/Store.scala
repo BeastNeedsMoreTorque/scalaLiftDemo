@@ -2,16 +2,17 @@ package code.model
 
 import java.io.IOException
 
+
 import scala.annotation.tailrec
 import scala.collection.{Iterable, Set, Map, concurrent,breakOut}
 import scala.language.implicitConversions
-import scala.util.Random
+import scala.util.{Success, Random}
 import scala.xml.Node
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 
-import net.liftweb.common.{Full, Empty, Box, Failure, Loggable}
+import net.liftweb.common.{Full, Empty, Box, Loggable}
 import net.liftweb.json._
 import net.liftweb.json.JsonParser.{ParseException, parse}
 import net.liftweb.util.Helpers.tryo
@@ -179,8 +180,25 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def init() = {
 
     def asyncLoadStores(storeIds: Iterable[Int]): Unit = {
-      def dbLoadCache(storeIds: Iterable[Int]): Future[ Unit] =
-        Future { storeIds.foreach(loadCache) }
+      def dbLoadCache(storeIds: Iterable[Int]): Future[ Unit] = {
+        val fut = Future { storeIds.foreach(loadCache)}
+        fut onComplete {
+          case Success(m) =>
+            logger.info(s"asyncLoadStores succeeded for ${storeIds.mkString(":")}")
+            storeIds.foreach { s =>
+              val inv = StoreProduct.totalInventoryForStore(s)
+              if (inv == 0) {
+                logger.warn(s"got NO product inventory for store $s !") // could trigger a retry later on.
+              }
+              else {
+                logger.trace(s"got $inv total product inventory for store $s")
+              }
+            }
+          case scala.util.Failure(t) =>
+            logger.info(s"asyncLoadStores explicitly failed for ${storeIds.mkString(":")} cause $t")
+        }
+        fut
+      }
 
       storeIds.grouped(storeLoadBatchSize).foreach { dbLoadCache }
     }
@@ -251,6 +269,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         }
       }
 
+      import net.liftweb.common.Failure
       synchronizeData(idx, dbStores) match {
           case Full(m) => m
           case Failure(m, ex, _) =>
@@ -399,11 +418,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
             }
             // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
             m.values.flatten // flatten the 3 lists
-          case Failure(m, ex, _) =>
-            logger.error(s"Problem loading products into cache with message $m and exception error $ex")
+          case net.liftweb.common.Failure(m, ex, _) =>
+            logger.error(s"Problem loading products into cache for '$storeId' with message $m and exception error $ex")
             List[Product]()
           case Empty =>
-            logger.error("Problem loading products into cache")
+            logger.error(s"Problem loading products into cache for '$storeId'")
            List[Product]()
         }
       }
@@ -427,11 +446,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
               }
               // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
               m.values.flatten.toVector // flatten the 3 lists
-            case Failure(m, ex, _) =>
-              logger.error(s"Problem loading products into cache with message $m and exception error $ex")
+            case net.liftweb.common.Failure(m, ex, _) =>
+              logger.error(s"Problem loading inventories into cache for '$storeId' with message $m and exception error $ex")
               Vector[StoreProduct]()
             case Empty =>
-              logger.error("Problem loading products into cache")
+              logger.error(s"Problem loading inventories into cache for '$storeId'")
               Vector[StoreProduct]()
           }
       }
@@ -455,7 +474,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       productsByCategory.foreach {
         case (category, fetchedProducts) =>
           val storeCatKey = (storeId, category) // construct the key we need, i.e. grab the storeId
-        val newProductIdsSet = fetchedProducts.map(_.lcbo_id.get).toSet // project the products to only the productId
+          val newProductIdsSet = fetchedProducts.map(_.lcbo_id.get).toSet // project the products to only the productId
           if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, newProductIdsSet).isDefined) {
             // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
             storeCategoriesProductsCache(storeCatKey) ++= newProductIdsSet

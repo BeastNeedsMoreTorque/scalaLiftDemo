@@ -108,6 +108,10 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     insertStoreProducts(newSPs)
   }
 
+  def totalInventoryForStore(storeId: Int) =
+    cachedStoreProductIds.map{ case (s, p) => if (s == storeId) (s, p)}.
+    flatMap{ case (s: Int, p: Int) => getStoreProductQuantity(s,p)}.sum
+
   def getStoreProductQuantity(storeId: Int, prodId: Int): Option[Int] =
     storeProductsCache get (storeId, prodId)
 
@@ -168,7 +172,6 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     val filtered: Iterable[StoreProduct] = filteredByStoreAndProduct.map { case (k,v) => v.head } // remove duplicate( using head)
     // break it down and then serialize the work.
     filtered.grouped(DBBatchSize).foreach { insertBatch }
-
   }
 
 
