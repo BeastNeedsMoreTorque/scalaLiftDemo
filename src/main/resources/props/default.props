@@ -36,11 +36,7 @@ store.lcboMinPerPage=10
 store.DBBatchSize=250
 store.load.workers=1
 store.PositiveInventoryIterations=10
-
-# When true, got error GC overhead limit exceeded and exception error Full(java.lang.OutOfMemoryError: GC overhead limit exceeded)
-# Playing around with JVM options higher didn't do it. Does not work on my MacBook Air, which is probably not JVM GC server class
-# server class requires 2+ processors and the MacBook has 1 only. Keep loadAll as false.
-store.loadAll=false
+store.loadAll=true
 
 storeProduct.DBBatchSize=500
 

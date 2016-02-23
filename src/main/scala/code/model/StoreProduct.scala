@@ -74,21 +74,20 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   def cachedStoreProductIds: Set[(Int, Int)] = storeProductsCache.keySet
 
   def getProductsByStore: Map[Int, IndexedSeq[Product]] =
-    allStoreProductsFromDB.map{case (storeId, iter) => (storeId, iter.map(_.product))}
+    allStoreProductsFromDB.map{ case (storeId, sps) => (storeId, sps.map(_.product)) }
 
   def storeIdsWithCachedProducts = allStoreProductsFromDB.keys.toSet
   def hasCachedProducts(storeId: Int) = storeIdsWithCachedProducts contains storeId
 
   def init(): Unit = {
-    val tmp: Map[Int, IndexedSeq[ProductWithInventory]] =
+    val tmp =
      inTransaction {
-       // toVector is essential for decent performance
        import scala.language.postfixOps
        val pairs = from(storeProducts, products)((sp, p) =>
          where(sp.productid === p.lcbo_id)
            select(sp, p))
          .toVector
-       logger.trace("StoreProduct.init query done")
+       logger.trace("StoreProduct.init query done")        // toVector is essential for decent performance
        pairs.groupBy(_._1.storeid.get).map {
          case (storeId, vecOfPairs) => storeId -> vecOfPairs.map(pair => ProductWithInventory(pair._2, pair._1))
        }
@@ -104,8 +103,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
 
   }
   def update(storeId: Int, theStores: Iterable[StoreProduct]) = {
-    val newSPs = theStores.filter{ sp: StoreProduct => !storeProductsCache.keySet.contains(storeId, sp.productid.get) }
-    val existingSPs = theStores.filter{ sp: StoreProduct => storeProductsCache.keySet.contains(storeId, sp.productid.get) }
+    val (existingSPs, newSPs) = theStores.partition{ sp: StoreProduct => storeProductsCache.keySet.contains(storeId, sp.productid.get) }
     updateStoreProducts(existingSPs)
     insertStoreProducts(newSPs)
   }
@@ -132,34 +130,19 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   def updateStoreProducts(myStoreProducts: Iterable[StoreProduct]) = {
     myStoreProducts.grouped(DBBatchSize).
       foreach { x =>
-        inTransaction {
-          storeProducts.forceUpdate(x)
+        inTransaction { storeProducts.forceUpdate(x) }
           // @see http://squeryl.org/occ.html (two threads might fight for same update and if one is stale, that could be trouble with the regular update
-        }
         storeProductsCache ++= x.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
       }
   }
 
   def insertStoreProducts( myStoreProducts: Iterable[StoreProduct]): Unit = {
     // Do special handling to filter out duplicate keys, which would throw.
-    def insertBatch(myStoreProducts: Iterable[StoreProduct]): Unit = synchronized { // synchronize on object StoreProduct as clients are from different threads
-    // first evaluate against cache (assumed in synch with DB) what's genuinely new.
-    // Then, annoying filter to ensure uniqueness (see Product, it's easier)
-      val entries = cachedStoreProductIds
-      val referentialIntegrity: (StoreProduct) => Boolean = { sp =>
-        !entries.contains((sp.storeid.get, sp.productid.get)) &&
-          Product.cachedProductIds.contains(sp.productid.get)
-      }
-      val fewerEntries: IndexedSeq[StoreProduct] = myStoreProducts.filter { referentialIntegrity }.toVector
-      // help the peculiar type system...
-      val filteredByStoreAndProduct: Map[(Int, Int), IndexedSeq[StoreProduct]] = fewerEntries.groupBy{ sp: StoreProduct => (sp.storeid.get, sp.productid.get): (Int, Int)}
-      val filtered: Iterable[StoreProduct] = filteredByStoreAndProduct.map {
-        case (k,v) => v.head} // remove duplicate(head)
-      // insert them
+    def insertBatch(filtered: Iterable[StoreProduct]): Unit = synchronized {
       try { // the DB could fail for PK or whatever other reason.
-          storeProducts.insert(filtered)
-        // update in memory for next caller who should be blocked
-        storeProductsCache ++= filtered.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
+        inTransaction { storeProducts.insert(filtered) }
+        // update in memory for next caller who should be blocked, also in chunks to be conservative.
+        storeProductsCache ++= (filtered.map{sp => (sp.storeid.get, sp.productid.get) -> sp}).toMap
       } catch {
         case se: SQLException =>
           logger.error("SQLException ")
@@ -170,12 +153,22 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         case e: Exception =>
           logger.error("General exception caught: " + e)
       }
+    }
 
+    // synchronize on object StoreProduct as clients are from different threads
+    // first evaluate against cache (assumed in synch with DB) what's genuinely new, by satisfying ref. integrity constraints.
+    // Then, annoying filter to ensure uniqueness (see Product, it's easier), preventing duplicate key violation
+    val entries = cachedStoreProductIds
+    val referentialIntegrity: (StoreProduct) => Boolean = { sp =>
+      !entries.contains((sp.storeid.get, sp.productid.get)) &&
+        Product.cachedProductIds.contains(sp.productid.get)
     }
-    inTransaction {
-      // break it down and then serialize the work.
-      myStoreProducts.grouped(DBBatchSize).foreach { insertBatch }
-    }
+    val fewerEntries = myStoreProducts.filter { referentialIntegrity }.toVector
+    val filteredByStoreAndProduct = fewerEntries.groupBy{ sp: StoreProduct => (sp.storeid.get, sp.productid.get): (Int, Int)}
+    val filtered: Iterable[StoreProduct] = filteredByStoreAndProduct.map { case (k,v) => v.head } // remove duplicate( using head)
+    // break it down and then serialize the work.
+    filtered.grouped(DBBatchSize).foreach { insertBatch }
+
   }
 
 
