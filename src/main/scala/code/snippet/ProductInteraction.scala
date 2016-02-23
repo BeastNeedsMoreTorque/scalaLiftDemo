@@ -27,6 +27,7 @@ object ProductInteraction extends Loggable {
   case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
   case class QuantityOfProduct(quantity: Int, product: Product)  // quantity available at the current store for a product (store is implied by context)
   case class SelectedProduct(lcbo_id: Int, quantity: Int, cost: Double) // to capture user input via JS and JSON
+  case class SelectedProductFeedback(selectedProduct: SelectedProduct, feedback: Feedback)
   case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
 
   private implicit val formats = net.liftweb.json.DefaultFormats
@@ -47,7 +48,7 @@ object ProductInteraction extends Loggable {
       "20" -> 20
     )
     val default = Full("1")
-    val options: List[(String, String)] = values.keys.map(p => (p, p)).toList
+    val options = values.keys.map(p => (p, p)).toList
   }
 
   def render = {
@@ -120,8 +121,8 @@ object ProductInteraction extends Loggable {
           Noop
         }
 
-      val jsonOpt = jsStore.extractOpt[String].map( parse)
-      val storeId = jsonOpt.fold(-1){ json =>  json.extract[Int]}
+      val json = jsStore.extractOpt[String].map( parse)
+      val storeId = json.fold(-1){ json =>  json.extract[Int]}
       User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
       { user => maySelect(storeId)} // normal processing
     }
@@ -162,11 +163,11 @@ object ProductInteraction extends Loggable {
         }
 
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
-        val feedback: IndexedSeq[(SelectedProduct, Feedback)] = for (sp <- selectedProds;
+        val feedback: IndexedSeq[SelectedProductFeedback] = for (sp <- selectedProds;
                                                                product <- Product.getProduct(sp.lcbo_id);
-                                                               f <- mayConsumeItem(product, sp.quantity)) yield(sp, f)
-        val partition = feedback.groupBy(_._2.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
-        partition.getOrElse(false, Nil).map{ _._2.message}.map(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
+                                                               f <- mayConsumeItem(product, sp.quantity)) yield SelectedProductFeedback(sp, f)
+        val partition = feedback.groupBy(_.feedback.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
+        partition.getOrElse(false, Nil).map{ _.feedback.message}.map(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
         val goodConfirmations = partition.getOrElse(true, Nil) // select those for which we have success and positive message
         if (goodConfirmations.isEmpty) {
           S.error("Make sure you select a product if you want to consume") // they all failed!
@@ -174,9 +175,9 @@ object ProductInteraction extends Loggable {
         }
         else {
           if (goodConfirmations.size == feedback.size) S.error("") // no error, erase old errors no longer applicable.
-          val confirmationMessages = goodConfirmations.map{case(selectedProd, feedBck) =>
-                                                            PurchasedProductConfirmation(selectedProd, feedBck.message) } // get some particulars about cost and quantity in addition to message
-          val userName = goodConfirmations.head._2.userName
+          val confirmationMessages = goodConfirmations.map{ x =>
+                                                            PurchasedProductConfirmation(x.selectedProduct, x.feedback.message) } // get some particulars about cost and quantity in addition to message
+          val userName = goodConfirmations.head.feedback.userName
           transactionsConfirmationJS(userName, confirmationMessages) &
           hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
         }

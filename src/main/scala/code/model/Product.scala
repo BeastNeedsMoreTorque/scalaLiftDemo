@@ -147,7 +147,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
       Attribute("Serving Suggestion:", serving_suggestion.get) ::
       Attribute("Alcohol content:", alcoholContent) ::
       Attribute ("Origin:", origin.get) ::
-      Nil).filter{ attr: Attribute => attr.value != "null" && attr.value.nonEmpty }.toVector
+      Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
 
   def isDirty(p: ProductAsLCBOJson): Boolean = {
     price_in_cents.get != p.price_in_cents ||
@@ -192,14 +192,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   }
 
   def getProductIds: Set[Int] = inTransaction {
-    val ids = from(products)(p =>
-      select(p.lcbo_id))
-    ids.map(_.get).toSet
+    { from(products)(p =>
+      select(p.lcbo_id.get)) }.toSet
   }
 
   def update(prods: Iterable[Product]) = {
-    val newProds = prods.filter{ p: Product => !productsCache.keySet.contains(p.lcbo_id.get) }
-    val existingProds = prods.filter{ p: Product => productsCache.keySet.contains(p.lcbo_id.get) }
+    val (existingProds, newProds) = prods.partition{ p: Product => productsCache.keySet.contains(p.lcbo_id.get) }
     updateProducts(existingProds.toSet)
     insertProducts(newProds)
   }
@@ -219,45 +217,36 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   // @see http://squeryl.org/occ.html
   def updateProducts(myProducts: Iterable[Product]): Unit = synchronized {
-    inTransaction {
-      myProducts.grouped(DBBatchSize).
-        foreach { x =>
-          try {
-            products.forceUpdate(x)   // @see http://squeryl.org/occ.html.
-            // regular call as update throws.
-            // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
-            // However, there are other situations where we might well care.
-          } catch {
-            case se: SQLException =>
-              logger.error("SQLException ")
-              logger.error("Code: " + se.getErrorCode())
-              logger.error("SqlState: " + se.getSQLState())
-              logger.error("Error Message: " + se.getMessage())
-              logger.error("NextException:" + se.getNextException())
-            case e: Exception =>
-              logger.error("General exception caught: " + e+ " " + x)
-          }
-            // update in memory for next caller who should be blocked
-            productsCache ++= x.map { p => p.lcbo_id.get -> p }.toMap
-
+    myProducts.grouped(DBBatchSize).
+      foreach { x =>
+        try {
+          inTransaction { products.forceUpdate(x) }  // @see http://squeryl.org/occ.html.
+          // regular call as update throws.
+          // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
+          // However, there are other situations where we might well care.
+        } catch {
+          case se: SQLException =>
+            logger.error("SQLException ")
+            logger.error("Code: " + se.getErrorCode())
+            logger.error("SqlState: " + se.getSQLState())
+            logger.error("Error Message: " + se.getMessage())
+            logger.error("NextException:" + se.getNextException())
+          case e: Exception =>
+            logger.error("General exception caught: " + e+ " " + x)
         }
-    }
+        // update in memory for next caller who should be blocked
+        productsCache ++= x.map { p => p.lcbo_id.get -> p }.toMap
+      }
   }
-
 
   def insertProducts( myProducts: Iterable[Product]): Unit = {
     // Do special handling to filter out duplicate keys, which would throw.
-    def insertBatch(myProducts: Iterable[Product]): Unit = synchronized { // synchronize on object Product as clients are from different threads
-      // first evaluate against cache (assumed in synch with DB) what's genuinely new.
-      // Then, annoying filter to ensure uniqueness by lcbo_id, take the head of each set sharing same lcbo_id and then collect the values
-      val entries = cachedProductIds // evaluate once
-      val filteredProds = myProducts.filter { p => !entries.contains(p.lcbo_id.get) }.toVector.
-        groupBy{ p => p.lcbo_id.get}.map{ case (k,v) => v.head}
+    def insertBatch(filteredProds: Iterable[Product]): Unit = synchronized { // synchronize on object Product as clients are from different threads
         // insert them
       try { // the DB could fail for PK or whatever other reason.
-        products.insert(filteredProds)
+        inTransaction { products.insert(filteredProds) }
         // update in memory for next caller who should be blocked
-        productsCache ++= filteredProds.map { p => p.lcbo_id.get -> p }.toMap
+        productsCache ++= (filteredProds.map { p => p.lcbo_id.get -> p }).toMap
       } catch {
         case se: SQLException =>
           logger.error("SQLException ")
@@ -270,10 +259,15 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       }
 
     }
-    inTransaction {
-      // break it down and then serialize the work.
-      myProducts.grouped(DBBatchSize).foreach { insertBatch }
-    }
+    // first evaluate against cache (assumed in synch with DB) what's genuinely new.
+    // Then, annoying filter to ensure uniqueness by lcbo_id, take the head of each set sharing same lcbo_id and then collect the values
+    val entries = cachedProductIds // evaluate once
+    val filteredProds = myProducts.filterNot { p => entries.contains(p.lcbo_id.get) }.toVector.
+        groupBy{ p => p.lcbo_id.get}.map{ case (k,v) => v.head}
+
+    // break it down and then serialize the work.
+    filteredProds.grouped(DBBatchSize).foreach { insertBatch }
+
   }
 
 

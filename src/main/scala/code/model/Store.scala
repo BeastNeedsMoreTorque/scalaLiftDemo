@@ -28,7 +28,6 @@ import org.squeryl.annotations._
 import code.model.Product._
 import code.Rest.pagerRestClient
 import MainSchema._
-import code.snippet.SessionCache.theStoreId
 
 /**
   * Created by philippederome on 15-11-01.
@@ -66,7 +65,7 @@ case class StoreAsLCBOJson (id: Int = 0,
      Attribute("Your Distance: ", distanceInKMs) ::
      Attribute("Latitude: ", latitude.toString) ::
      Attribute("Longitude: ", longitude.toString) ::
-     Nil).filter{ attr: Attribute =>  attr.value != "null" && attr.value.nonEmpty }.toVector
+     Nil).filterNot{ attr =>  attr.value == "null" || attr.value.isEmpty }.toVector
 
 }
 
@@ -281,11 +280,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     StoreProduct.init()
     // warm up from our database known products by storeId and category, later on load all stores for navigation.
     // declaration is to verify we already support indexing so we can group by efficiently
-    val productsByStore: Map[Int, IndexedSeq[Product]] = StoreProduct.getProductsByStore
-    productsByStore.map {
+    StoreProduct.getProductsByStore.foreach {
       case (storeId, seqOfProducts) => {
         val productsByCategory = seqOfProducts.groupBy(_.primary_category.get) // partition the products of a store by category (make sure to get a vector first)
-        productsByCategory.map { case (category, productsIter) =>
+        productsByCategory.foreach { case (category, productsIter) =>
           // we're first setter of the cache, so we don't need to append if already in cache.
           val dbProductIds = productsIter.map(_.lcbo_id.get).toSet
           if (storeCategoriesProductsCache.putIfAbsent((storeId, category), dbProductIds).isDefined)   // restrict the products to simply productId (lcbo_id) and put  in cache lock-free
@@ -347,8 +345,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     tryo { // we could get errors going to LCBO, this tryo captures those.
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
-        logger.warn(s"recommend cache miss for $storeId")
-        Future { loadCache(storeId) } // get the full store inventory in background after products for future requests and then respond to immediate request.
+        logger.warn(s"recommend cache miss for $storeId") // don't try to load it asynchronously as that's start up job to get going with it.
         val prods = productsByStoreCategory(MaxSampleSize, storeId, category) // take a hit of one go to LCBO, no more.
         val indices = Random.shuffle[Int, IndexedSeq](0 until prods.size )
         // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
@@ -382,7 +379,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   }
 
   def findAll(): Iterable[StoreAsLCBOJson] =
-    storesCache.values.map(s => StoreAsLCBOJson(s))
+    storesCache.values.map( StoreAsLCBOJson(_))
 
   @throws(classOf[net.liftweb.json.MappingException])
   @throws(classOf[net.liftweb.json.JsonParser.ParseException])
@@ -571,8 +568,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
 
       val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, storeProductsByState, {inv => inv.getProduct(dbStoreProducts)})
-      val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => inv.getProduct(dbStoreProducts).map({ _.copyAttributes( inv)})})
-      val newProducts = accumItems(New) ++ storeProductsByState.getOrElse(New, Nil).map{ sp => StoreProduct.create(sp) }
+      val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => inv.getProduct(dbStoreProducts).map { _.copyAttributes( inv)} } )
+      val newProducts = accumItems(New) ++ storeProductsByState.getOrElse(New, Nil).map { sp => StoreProduct.create(sp) }
       val revisedAccumItems: Map[EntityRecordState, IndexedSeq[StoreProduct]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
 
       if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) return revisedAccumItems
@@ -697,6 +694,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // may have side effect to update database with more up to date from LCBO's content (if different)
   // lock free. For correctness, we use putIfAbsent to get some atomicity when we do complex read-write at once (complex linearizable operations).
   // For now, we call this lazily for first user having an interaction with a particular store and not before.
+  // heavy long lasting, for now no thread inside, but clients call this asynchronously
   def loadCache(storeId: Int, withDB: Boolean = false) = {
 
     def getProductsOfStartPage(dbProducts: Map[Int, Product], allDbProductIds: Set[Int]): Iterable[Product] = {
@@ -767,43 +765,26 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     def fetchInventories(dbStoreProducts: Map[Int, StoreProduct],
                          allDbProductIds: Set[Int]): Unit = {
-      val allTheStoreInventories = Future{storeProductsByWorker()}
-      allTheStoreInventories onSuccess {
-        case storesFut => storesFut.map{ stores => StoreProduct.update(storeId, stores ) }
-      }
+      val allTheStoreInventories = getStoreProductsOfStartPage(dbStoreProducts, allDbProductIds)
+      StoreProduct.update(storeId, allTheStoreInventories )
     }
 
     def fetchProducts(): Unit= {
-      val allTheProductsByCategory = Future{ productsByWorker() }
-      // we assume all along and depend strongly on that, that we never remove from cache. Updates that are strictly monotonic are easier to get right.
-      allTheProductsByCategory onSuccess {
-        case prodsFut => prodsFut.map { prods =>
-          val productsByCategory = prods.groupBy(_.primary_category.get) // groupBy is a dandy!
-          productsByCategory.map {
-            case (category, fetchedProducts) =>
-              val storeCatKey = (storeId, category) // construct the key we need, i.e. grab the storeId
-            val newProductIdsSet = fetchedProducts.map(_.lcbo_id.get).toSet // project the products to only the productId
-              if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, newProductIdsSet).isDefined) {
-                // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
-                storeCategoriesProductsCache(storeCatKey) ++= newProductIdsSet
-              }
+      // evaluate the maps of product in parallel, tracking them by product id (lcbo_id) as key but in order to be able to cache them by category when aggregating results back.
+      val prods = getProductsOfStartPage(dbProducts, allDbProductIds)
+      val productsByCategory = prods.toVector.groupBy(_.primary_category.get) // groupBy is a dandy!
+      productsByCategory.foreach {
+        case (category, fetchedProducts) =>
+          val storeCatKey = (storeId, category) // construct the key we need, i.e. grab the storeId
+        val newProductIdsSet = fetchedProducts.map(_.lcbo_id.get).toSet // project the products to only the productId
+          if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, newProductIdsSet).isDefined) {
+            // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
+            storeCategoriesProductsCache(storeCatKey) ++= newProductIdsSet
           }
-          Product.update(prods) // refresh product cache
-          fetchInventories(dbStoreProducts, allDbProductIds)
-        }
       }
-
-      allTheProductsByCategory onFailure {
-        case t => logger.error("loadCache, an error occurred because: " + t.getMessage)
-      }
+      Product.update(prods) // refresh product cache
+      fetchInventories(dbStoreProducts, allDbProductIds)
     }
-
-    // evaluate the maps of product in parallel, tracking them by product id (lcbo_id) as key but in order to be able to cache them by category when aggregating results back.
-    def productsByWorker(): Future[ Iterable[Product]] =
-      Future { getProductsOfStartPage(dbProducts, allDbProductIds) }
-
-    def storeProductsByWorker(): Future[ Vector[StoreProduct]] =
-      Future { getStoreProductsOfStartPage(dbStoreProducts, allDbProductIds) }
 
     logger.trace(s"loadCache start $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
     if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {
