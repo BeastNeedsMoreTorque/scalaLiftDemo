@@ -17,7 +17,7 @@ import net.liftweb.util.Props
 import org.squeryl.annotations.Column
 
 import scala.collection.concurrent.TrieMap
-import scala.collection.{Set, concurrent, Map, Iterable, breakOut}
+import scala.collection.{Set, concurrent, Map, Iterable}
 import scala.language.implicitConversions
 
 case class InventoryAsLCBOJson(product_id: Int,
@@ -36,11 +36,9 @@ case class InventoryAsLCBOJson(product_id: Int,
       notNull(updated_on),
       quantity)
   }
-  // dbStoreProducts is assumed bound to a StoreId, so we can key simply by product_id
-  def getProduct(dbStoreProducts: Map[Int, StoreProduct]) = dbStoreProducts.get(product_id)
 }
 
-case class ProductWithInventory(product: Product, storeProduct: StoreProduct)
+case class ProductWithInventory(productId: Int, quantity: Int)
 
 class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long] with CreatedUpdated[StoreProduct] {
   def meta = StoreProduct
@@ -68,48 +66,27 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   private implicit val formats = net.liftweb.json.DefaultFormats
 
   // thread-safe lock free object
-  private val storeProductsCache: concurrent.Map[(Int, Int), Int] = TrieMap() // only update after confirmed to be in database!
+  private val storeProductsCache: concurrent.Map[(Int, Int), StoreProduct] = TrieMap() // only update after confirmed to be in database!
   private val allStoreProductsFromDB: concurrent.Map[Int, IndexedSeq[ProductWithInventory]] = TrieMap()
+
+  def getInventories: Map[(Int, Int), StoreProduct] = storeProductsCache
 
   def cachedStoreProductIds: Set[(Int, Int)] = storeProductsCache.keySet
 
-  def getProductsByStore: Map[Int, IndexedSeq[Product]] =
-    allStoreProductsFromDB.map{ case (storeId, sps) => (storeId, sps.map(_.product)) }
+  def getProductIdsByStore: Map[Int, IndexedSeq[Int]] =
+    allStoreProductsFromDB.map{ case (storeId, sps) => (storeId, sps.map(_.productId)) }
 
   def storeIdsWithCachedProducts = allStoreProductsFromDB.keys.toSet
   def hasCachedProducts(storeId: Int) = storeIdsWithCachedProducts contains storeId
 
   def init(): Unit = {
-    def loadInventories(offset: Int, pageLength: Int) = {
-      import scala.language.postfixOps
-      from(storeProducts, products)((sp, p) =>
-        where(sp.productid === p.lcbo_id)
-          select(sp, p)
-          orderBy (sp.storeid)
-      ).page(offset, pageLength)
-    }
-
     inTransaction {
-      val total = {from(storeProducts)( _ => compute(count(1))) }.toInt
-
-      val pageLength = 10000
-      for (i <- 0 to (total / pageLength) ) {
-        val x = loadInventories(pageLength * i, pageLength)
-        logger.trace(s"StoreProduct.init batch $i done") // for performance monitoring (issues)
-        val y = x.toVector.groupBy(_._1.storeid.get).map {
-          case (storeId, vecOfPairs) => storeId -> vecOfPairs.map(pair => ProductWithInventory(pair._2, pair._1))
-        }
-        allStoreProductsFromDB ++= y
-      }
+      val sps = from(storeProducts)(sp =>
+        select(sp))
+      storeProductsCache ++= sps.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
     }
-       for ((store, it) <- allStoreProductsFromDB;
-         inv <- it;
-         prod = inv.product;
-         sp = inv.storeProduct;
-         lcbo_id = prod.lcbo_id.get)
-     { storeProductsCache += (store, lcbo_id) -> sp.quantity.get }
-
   }
+
   def update(storeId: Int, theStores: Iterable[StoreProduct]) = {
     val (existingSPs, newSPs) = theStores.partition{ sp: StoreProduct => storeProductsCache.keySet.contains(storeId, sp.productid.get) }
     updateStoreProducts(existingSPs)
@@ -122,16 +99,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   }
 
   def getStoreProductQuantity(storeId: Int, prodId: Int): Option[Int] =
-    storeProductsCache get (storeId, prodId)
-
-  // Uses convenient Squeryl native Scala ORM for a simple 2-table join.
-  def getStoreProductsFromDB(storeId: Int): Map[Int, ProductWithInventory] =
-    inTransaction {
-      val prods = from(storeProducts, products)((sp, p) =>
-        where(sp.storeid === storeId and sp.productid === p.lcbo_id  )
-          select (p, sp) )
-      prods.map({ case (p, sp) => p.lcbo_id.get -> ProductWithInventory(p, sp)})(breakOut)
-    }
+    storeProductsCache get (storeId, prodId) map( _.quantity.get)
 
   def create(inv: InventoryAsLCBOJson): StoreProduct =
     createRecord.
@@ -144,8 +112,8 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     myStoreProducts.grouped(DBBatchSize).
       foreach { x =>
         inTransaction { storeProducts.forceUpdate(x) }
-          // @see http://squeryl.org/occ.html (two threads might fight for same update and if one is stale, that could be trouble with the regular update
-        storeProductsCache ++= x.map { sp => (sp.storeid.get, sp.productid.get) -> sp.quantity.get }.toMap
+        // @see http://squeryl.org/occ.html (two threads might fight for same update and if one is stale, that could be trouble with the regular update
+        storeProductsCache ++= x.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
       }
   }
 
@@ -155,7 +123,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       try { // the DB could fail for PK or whatever other reason.
         inTransaction { storeProducts.insert(filtered) }
         // update in memory for next caller who should be blocked, also in chunks to be conservative.
-        storeProductsCache ++= filtered.map { sp => (sp.storeid.get, sp.productid.get) -> sp.quantity.get }.toMap
+        storeProductsCache ++= filtered.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
       } catch {
         case se: SQLException =>
           logger.error("SQLException ")
