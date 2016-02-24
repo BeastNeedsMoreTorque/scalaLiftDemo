@@ -80,25 +80,32 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   def hasCachedProducts(storeId: Int) = storeIdsWithCachedProducts contains storeId
 
   def init(): Unit = {
-    val tmp =
-     inTransaction {
-       import scala.language.postfixOps
-       val pairs = from(storeProducts, products)((sp, p) =>
-         where(sp.productid === p.lcbo_id)
-           select(sp, p))
-         .toVector
-       logger.trace("StoreProduct.init query done")        // toVector is essential for decent performance
-       pairs.groupBy(_._1.storeid.get).map {
-         case (storeId, vecOfPairs) => storeId -> vecOfPairs.map(pair => ProductWithInventory(pair._2, pair._1))
-       }
-     }
-     allStoreProductsFromDB ++= tmp
+    def loadInventories(offset: Int, pageLength: Int) = {
+      import scala.language.postfixOps
+      from(storeProducts, products)((sp, p) =>
+        where(sp.productid === p.lcbo_id)
+          select(sp, p)
+          orderBy (sp.storeid)
+      ).page(offset, pageLength)
+    }
 
-     for ((store, it) <- allStoreProductsFromDB;
+    inTransaction {
+      val total = {from(storeProducts)( sp => select(1))}.sum
+      val pageLength = 10000
+      for (i <- 0 to (total / pageLength) ) {
+        val x = loadInventories(pageLength * i, pageLength)
+        logger.trace(s"StoreProduct.init batch $i done") // for performance monitoring (issues)
+        val y = x.toVector.groupBy(_._1.storeid.get).map {
+          case (storeId, vecOfPairs) => storeId -> vecOfPairs.map(pair => ProductWithInventory(pair._2, pair._1))
+        }
+        allStoreProductsFromDB ++= y
+      }
+    }
+       for ((store, it) <- allStoreProductsFromDB;
          inv <- it;
-         prod <- Option(inv.product);
-         sp <- Option(inv.storeProduct);
-         lcbo_id <- Option(prod.lcbo_id.get))
+         prod = inv.product;
+         sp = inv.storeProduct;
+         lcbo_id = prod.lcbo_id.get)
      { storeProductsCache += (store, lcbo_id) -> sp.quantity.get }
 
   }
