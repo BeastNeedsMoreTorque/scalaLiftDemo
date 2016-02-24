@@ -90,7 +90,8 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     }
 
     inTransaction {
-      val total = {from(storeProducts)( sp => select(1))}.sum
+      val total = {from(storeProducts)( _ => compute(count(1))) }.toInt
+
       val pageLength = 10000
       for (i <- 0 to (total / pageLength) ) {
         val x = loadInventories(pageLength * i, pageLength)
@@ -115,9 +116,10 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     insertStoreProducts(newSPs)
   }
 
-  def totalInventoryForStore(storeId: Int) =
-    cachedStoreProductIds.map{ case (s, p) => if (s == storeId) (s, p)}.
-    flatMap{ case (s: Int, p: Int) => getStoreProductQuantity(s,p)}.sum
+  def totalInventoryForStore(storeId: Int) = {
+    val pairs: Iterable[(Int, Int)] = cachedStoreProductIds.filter{ case (s,p) => s == storeId }
+    pairs.map { case (s, p) => getStoreProductQuantity(s, p) }.flatten.sum
+  }
 
   def getStoreProductQuantity(storeId: Int, prodId: Int): Option[Int] =
     storeProductsCache get (storeId, prodId)
