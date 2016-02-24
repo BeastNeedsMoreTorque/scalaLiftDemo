@@ -182,8 +182,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     def asyncLoadStores(storeIds: Iterable[Int]): Unit = {
       def dbLoadCache(storeIds: Iterable[Int]): Future[ Unit] = {
         val fut = Future { storeIds.foreach(loadCache)}
-        fut onComplete {
-          case Success(m) =>
+        fut foreach {
+          case m =>
             logger.info(s"asyncLoadStores succeeded for ${storeIds.mkString(":")}")
             storeIds.foreach { s =>
               val inv = StoreProduct.totalInventoryForStore(s)
@@ -194,8 +194,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                 logger.trace(s"got $inv total product inventory for store $s")
               }
             }
-          case scala.util.Failure(t) =>
-            logger.info(s"asyncLoadStores explicitly failed for ${storeIds.mkString(":")} cause $t")
+        }
+        fut.failed foreach {
+          case f =>
+          logger.info(s"asyncLoadStores explicitly failed for ${storeIds.mkString(":")} cause $f")
         }
         fut
       }
@@ -300,19 +302,20 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     inTransaction {  // for the initial stores select
-      import scala.util.{Success, Failure}
       val dbStores: Map[Int, Store] = stores.map(s => s.lcbo_id.get -> s)(breakOut) // queries full store table and throw it into map
       def isPopular(storeId: Int): Boolean = {
         // opportunity to generalize to analytics, for now binary simple decision
-        storeLoadAll || //This chokes JVM and GC at 100-130 stores !!!
+        storeLoadAll || //This does about 180-200 stores per hour out of 600. Beware!
         StoreProduct.storeIdsWithCachedProducts.contains(storeId)
       }
       val fut = Future { getStores(1, dbStores) } // do this asynchronously to be responsive asap.
-      fut onComplete {
-        case Success(m) => storesCache ++= m
+      fut foreach {
+        case m => storesCache ++= m
           asyncLoadStores(m.keys.filter(isPopular))
           logger.trace(s"Store.init worker completed with success")
-        case Failure(t) => logger.error(s"Store.init ${t.getMessage} " )
+      }
+      fut.failed foreach {
+        case t => logger.error(s"Store.init ${t.getMessage} " )
         // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
         // We could define a finer policy as to when we want to use a default set from database even when we attempt to go to LCBO.
       }
@@ -333,8 +336,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     def randomSampler(prodKeys: IndexedSeq[Int]) = {
       val lcboids = Random.shuffle(prodKeys)
       // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
-      val seq = for (
-           lcbo_id <- lcboids;
+      val seq =
+        for ( lcbo_id <- lcboids;
            p <- Product.getProduct(lcbo_id);
            qty <- StoreProduct.getStoreProductQuantity(storeId, lcbo_id) if qty > 0 ) yield (qty, p)
       seq.take(requestSize)
@@ -357,13 +360,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val seq = {
           if (StoreProduct.hasCachedProducts(storeId)) // use inventory cache if it has anything useful to say
             for (idx <- indices;
-               p <- Option(prods(idx));
-               lcbo_id <- Option(p.lcbo_id.get);
+               p = prods(idx);
+               lcbo_id = p.lcbo_id.get;
                qty <- StoreProduct.getStoreProductQuantity(storeId, lcbo_id) if qty > 0) yield (qty, p)
           else // just use 0 as placeholder for inventory for now as we don't have this info yet.
             for (idx <- indices;
-                 p <- Option(prods(idx));
-                 lcbo_id <- Option(p.lcbo_id.get)) yield (0, p)
+                 p = prods(idx);
+                 lcbo_id = p.lcbo_id.get) yield (0, p)
         }
         seq.take(requestSize)
       }

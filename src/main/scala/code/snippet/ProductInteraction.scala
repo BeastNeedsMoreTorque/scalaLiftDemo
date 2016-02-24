@@ -163,9 +163,9 @@ object ProductInteraction extends Loggable {
         }
 
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
-        val feedback: IndexedSeq[SelectedProductFeedback] = for (sp <- selectedProds;
-                                                               product <- Product.getProduct(sp.lcbo_id);
-                                                               f <- mayConsumeItem(product, sp.quantity)) yield SelectedProductFeedback(sp, f)
+        val feedback = for(sp <- selectedProds;
+                           product <- Product.getProduct(sp.lcbo_id);
+                           f <- mayConsumeItem(product, sp.quantity)) yield SelectedProductFeedback(sp, f)
         val partition = feedback.groupBy(_.feedback.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
         partition.getOrElse(false, Nil).map{ _.feedback.message}.map(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
         val goodConfirmations = partition.getOrElse(true, Nil) // select those for which we have success and positive message
@@ -184,7 +184,7 @@ object ProductInteraction extends Loggable {
       }
 
       val jsonOpt = selection.extractOpt[String].map( parse)
-      val selectedProducts = jsonOpt.map( json => {for (p <- json.children.toVector) yield p.extractOpt[SelectedProduct]}.flatten )
+      val selectedProducts: Option[Vector[SelectedProduct]] = jsonOpt.map(json => {for (p <- json.children.toVector) yield p.extractOpt[SelectedProduct]}.flatten )
       selectedProducts.fold {
         S.warning("Select some recommended products before attempting to consume")
         Noop
