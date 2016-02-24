@@ -2,11 +2,10 @@ package code.model
 
 import java.io.IOException
 
-
 import scala.annotation.tailrec
 import scala.collection.{Iterable, Set, Map, concurrent,breakOut}
 import scala.language.implicitConversions
-import scala.util.{Success, Random}
+import scala.util.Random
 import scala.xml.Node
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
@@ -289,8 +288,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     StoreProduct.init()
     // warm up from our database known products by storeId and category, later on load all stores for navigation.
     // declaration is to verify we already support indexing so we can group by efficiently
-    StoreProduct.getProductsByStore.foreach {
-      case (storeId, seqOfProducts) =>
+    StoreProduct.getProductIdsByStore.foreach {
+      case (storeId, seqOfProductIds) =>
+        val seqOfProducts = seqOfProductIds.flatMap ( Product getProduct )
         val productsByCategory = seqOfProducts.groupBy(_.primary_category.get) // partition the products of a store by category (make sure to get a vector first)
         productsByCategory.foreach { case (category, productsIter) =>
           // we're first setter of the cache, so we don't need to append if already in cache.
@@ -431,40 +431,39 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    def getStoreProductsOfStartPage(dbStoreProducts: Map[Int, StoreProduct], allDbProductIds: Set[Int]): Vector[StoreProduct] = {
-      def loadAllStoreProducts(dbStoreProducts: Map[Int, StoreProduct], requestSize: Int, storeId: Int, page: Int): Box[Map[EntityRecordState, IndexedSeq[StoreProduct]]] =
+    def getStoreProductsOfStartPage(dbStoreProducts: Map[(Int, Int), StoreProduct], allDbProductIds: Set[Int]): Vector[StoreProduct] = {
+      def loadAllStoreProducts(dbStoreProducts: Map[(Int, Int), StoreProduct], requestSize: Int, storeId: Int, page: Int): Box[Map[EntityRecordState, IndexedSeq[StoreProduct]]] =
         tryo { storeProductByStore(dbStoreProducts, requestSize, storeId, page) }
 
       inTransaction {
-          loadAllStoreProducts(dbStoreProducts, productCacheSize, storeId, 1) match {
-            case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-              for ((k, v) <- m) {
-                Some(k) collect {
-                  // Clean is intentionally ignored
-                  case New =>
-                    StoreProduct.insertStoreProducts(v)
-                  case Dirty =>
-                    StoreProduct.updateStoreProducts(v)
-                }
+        loadAllStoreProducts(dbStoreProducts, productCacheSize, storeId, 1) match {
+          case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
+            for ((k, v) <- m) {
+              Some(k) collect {
+                // Clean is intentionally ignored
+                case New =>
+                  StoreProduct.insertStoreProducts(v)
+                case Dirty =>
+                  StoreProduct.updateStoreProducts(v)
               }
-              // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
-              m.values.flatten.toVector // flatten the 3 lists
-            case net.liftweb.common.Failure(m, ex, _) =>
-              logger.error(s"Problem loading inventories into cache for '$storeId' with message $m and exception error $ex")
-              Vector[StoreProduct]()
-            case Empty =>
-              logger.error(s"Problem loading inventories into cache for '$storeId'")
-              Vector[StoreProduct]()
-          }
+            }
+            // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
+            m.values.flatten.toVector // flatten the 3 lists
+          case net.liftweb.common.Failure(m, ex, _) =>
+            logger.error(s"Problem loading inventories into cache for '$storeId' with message $m and exception error $ex")
+            Vector[StoreProduct]()
+          case Empty =>
+            logger.error(s"Problem loading inventories into cache for '$storeId'")
+            Vector[StoreProduct]()
+        }
       }
     }
 
     val allDbProductIds = Product.cachedProductIds
-    val dbProductsAndStoreProducts = StoreProduct.getStoreProductsFromDB(storeId)
-    val dbProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v.product)
-    val dbStoreProducts = for ((k, v) <- dbProductsAndStoreProducts) yield (k, v.storeProduct)
+    val dbProducts = Product.getProducts
+    val dbStoreProducts = StoreProduct.getInventories
 
-    def fetchInventories(dbStoreProducts: Map[Int, StoreProduct],
+    def fetchInventories(dbStoreProducts: Map[(Int, Int), StoreProduct],
                          allDbProductIds: Set[Int]): Unit = {
       val allTheStoreInventories = getStoreProductsOfStartPage(dbStoreProducts, allDbProductIds)
       StoreProduct.update(storeId, allTheStoreInventories )
@@ -586,7 +585,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def storeProductByStore(dbStoreProducts: Map[Int, StoreProduct],
+  private def storeProductByStore(dbStoreProducts: Map[(Int, Int), StoreProduct],
                                  requiredSize: Int,
                                  store: Int,
                                  page: Int): Map[EntityRecordState, IndexedSeq[StoreProduct]] = {
@@ -596,7 +595,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     @throws(classOf[java.net.SocketTimeoutException])
     @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
     @tailrec
-    def collectStoreProductsOnAPage(dbStoreProducts: Map[Int, StoreProduct],
+    def collectStoreProductsOnAPage(dbStoreProducts: Map[(Int, Int), StoreProduct],
                                                   accumItems: Map[EntityRecordState, IndexedSeq[StoreProduct]],
                                                   urlRoot: String,
                                                   requiredSize: Int,
@@ -628,15 +627,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
       // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.groupBy {
-        i => (dbStoreProducts.get(i.product_id), i) match {
-          case (None, _)  => New
-          case (Some(storeProduct), lcboInventory) if storeProduct.isDirty(lcboInventory) => Dirty
-          case (_ , _) => Clean
+        i => dbStoreProducts.get(store, i.product_id) match {
+          case None  => New
+          case Some(quantity) if i.quantity != quantity => Dirty
+          case _ => Clean
         }
       }
 
-      val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, storeProductsByState, {inv => inv.getProduct(dbStoreProducts)})
-      val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => inv.getProduct(dbStoreProducts).map { _.copyAttributes( inv)} } )
+      val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, storeProductsByState, {inv => dbStoreProducts.get(inv.store_id, inv.product_id )})
+      val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => dbStoreProducts.get(inv.store_id, inv.product_id ).map { _.copyAttributes( inv)} } )
       val newProducts = accumItems(New) ++ storeProductsByState.getOrElse(New, Nil).map { sp => StoreProduct.create(sp) }
       val revisedAccumItems: Map[EntityRecordState, IndexedSeq[StoreProduct]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
 

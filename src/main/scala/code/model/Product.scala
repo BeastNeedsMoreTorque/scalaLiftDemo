@@ -6,11 +6,10 @@ import java.sql.SQLException
 import scala.collection.concurrent.TrieMap
 import scala.collection._
 
-import net.liftweb.db.DB
 import net.liftweb.record.field.{LongField,StringField,BooleanField,IntField}
 import net.liftweb.record.{Record, MetaRecord}
 import net.liftweb.common._
-import net.liftweb.util.{Props, DefaultConnectionIdentifier}
+import net.liftweb.util.{Props}
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.squerylrecord.KeyedRecord
 
@@ -184,6 +183,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Int, Product] = TrieMap() // only update once confirmed in DB!
+  def getProducts: Map[Int, Product] = productsCache
 
   def init(): Unit = inTransaction {
     val prods = from(products)(p =>
