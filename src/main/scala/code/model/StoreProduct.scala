@@ -62,11 +62,13 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
 }
 
 object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with pagerRestClient with Loggable {
-  private val DBBatchSize = Props.getInt("storeProduct.DBBatchSize", 1)
+  private val DBBatchSize = Props.getInt("inventory.DBWrite.BatchSize", 100)
+  private val DBSelectPageSize = Props.getInt("inventory.DBRead.BatchSize", 1000)
   private implicit val formats = net.liftweb.json.DefaultFormats
 
   // thread-safe lock free object
-  private val storeProductsCache: concurrent.Map[(Int, Int), StoreProduct] = TrieMap() // only update after confirmed to be in database!
+  private val storeProductsCache: concurrent.Map[(Int, Int), StoreProduct] = TrieMap()
+  // only update after confirmed to be in database!
   private val allStoreProductsFromDB: concurrent.Map[Int, IndexedSeq[ProductWithInventory]] = TrieMap()
 
   def getInventories: Map[(Int, Int), StoreProduct] = storeProductsCache
@@ -74,23 +76,50 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   def cachedStoreProductIds: Set[(Int, Int)] = storeProductsCache.keySet
 
   def getProductIdsByStore: Map[Int, IndexedSeq[Int]] =
-    allStoreProductsFromDB.map{ case (storeId, sps) => (storeId, sps.map(_.productId)) }
+    allStoreProductsFromDB.map { case (storeId, sps) => (storeId, sps.map(_.productId)) }
 
   def storeIdsWithCachedProducts = allStoreProductsFromDB.keys.toSet
+
   def hasCachedProducts(storeId: Int) = storeIdsWithCachedProducts contains storeId
 
   def init(): Unit = {
+    def loadBatch(offset: Int, pageSize: Int): IndexedSeq[StoreProduct] = {
+      from(storeProducts)(sp =>
+        select(sp)
+        orderBy(sp.storeid)).
+        page(offset, pageSize).toVector
+    }
     inTransaction {
-      val sps = from(storeProducts)(sp =>
-        select(sp))
-      storeProductsCache ++= sps.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
+      // GC and JVM wrestle match start
+      val total =
+      {from(storeProducts)( _ =>
+        compute(count))}.toInt
+      logger.trace(s"storeProducts row count: $total")
+
+      for (i <- 0 to (total / DBSelectPageSize);
+           inventories = loadBatch(i * DBSelectPageSize, DBSelectPageSize)) {
+        storeProductsCache ++= inventories.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
+        val invsByStore = inventories.groupBy(_.storeid.get)
+        invsByStore.keys.foreach{s: Int =>
+          val newInvs: IndexedSeq[ProductWithInventory] = invsByStore(s) map {sp => ProductWithInventory(sp.productid.get, sp.quantity.get)}
+          if (allStoreProductsFromDB.isDefinedAt(s)) {
+            allStoreProductsFromDB.put(s, allStoreProductsFromDB(s)  ++ newInvs)
+          }
+          else {
+            allStoreProductsFromDB.putIfAbsent(s, newInvs)
+          }
+        }
+      }
+      logger.trace(s"storeProducts loaded over : ${total/DBSelectPageSize} pages")
+
+      // GC and JVM wrestle match end (not enough, sigh)
     }
   }
 
   def update(storeId: Int, theStores: Iterable[StoreProduct]) = {
-    val (existingSPs, newSPs) = theStores.partition{ sp: StoreProduct => storeProductsCache.keySet.contains(storeId, sp.productid.get) }
-    updateStoreProducts(existingSPs)
-    insertStoreProducts(newSPs)
+    val (existingInventories, newInventories) = theStores.partition{ sp: StoreProduct => storeProductsCache.keySet.contains(storeId, sp.productid.get) }
+    updateStoreProducts(existingInventories)
+    insertStoreProducts(newInventories)
   }
 
   def totalInventoryForStore(storeId: Int) = {
@@ -114,6 +143,14 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         inTransaction { storeProducts.forceUpdate(x) }
         // @see http://squeryl.org/occ.html (two threads might fight for same update and if one is stale, that could be trouble with the regular update
         storeProductsCache ++= x.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
+        x.foreach {sp =>
+          if (allStoreProductsFromDB.isDefinedAt(sp.storeid.get)) {
+            val oldSeq: IndexedSeq[ProductWithInventory] = allStoreProductsFromDB(sp.storeid.get)
+            val idx = oldSeq.indexWhere( _.productId == sp.productid.get)
+            if (idx >= 0)
+              allStoreProductsFromDB.put(sp.storeid.get,  oldSeq.updated( idx, ProductWithInventory(sp.productid.get, sp.quantity.get)))
+          }
+        }
       }
   }
 
@@ -124,6 +161,14 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         inTransaction { storeProducts.insert(filtered) }
         // update in memory for next caller who should be blocked, also in chunks to be conservative.
         storeProductsCache ++= filtered.map { sp => (sp.storeid.get, sp.productid.get) -> sp }.toMap
+        filtered.foreach {sp =>
+          if (allStoreProductsFromDB.isDefinedAt(sp.storeid.get)) {
+            allStoreProductsFromDB.put(sp.storeid.get, allStoreProductsFromDB(sp.storeid.get)  :+ ProductWithInventory(sp.productid.get, sp.quantity.get))
+          }
+          else {
+            allStoreProductsFromDB.putIfAbsent(sp.storeid.get, IndexedSeq( ProductWithInventory(sp.productid.get, sp.quantity.get)))
+          }
+        }
       } catch {
         case se: SQLException =>
           logger.error("SQLException ")

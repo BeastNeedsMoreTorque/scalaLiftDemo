@@ -36,10 +36,14 @@ store.lcboMinPerPage=10
 store.DBBatchSize=250
 store.load.workers=1
 store.PositiveInventoryIterations=10
-store.loadAll=true
-store.loadBatchSize=5
+# loadAll true seems very difficult to get right with GC and JVM issues propping up nastily.
+store.loadAll=false
+#the higher this parameter, the greater the risk of uncontrollable GC
+store.loadBatchSize=10
 
-storeProduct.DBBatchSize=500
+inventory.DBWrite.BatchSize=500
+# the higher DBRead.BatchSize is, the higher the risk of unwanted uncontrollable GC on start up, but fewer db trip calls.
+inventory.DBRead.BatchSize=1000
 
 
 
