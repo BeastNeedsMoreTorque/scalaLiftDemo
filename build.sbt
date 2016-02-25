@@ -9,7 +9,7 @@ resolvers ++= Seq("snapshots"     at "https://oss.sonatype.org/content/repositor
 unmanagedResourceDirectories in Test <+= baseDirectory { _ / "src/main/webapp" }
 scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked", "-Xfatal-warnings", "-Dusejavacp=true")
 
-//javaOptions in run += "-Xmn768M -Xmx3072M -XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+UseCompressedOops"
+javaOptions in run += "-Xmn2G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+PrintGC -XX:+PrintGCTimeStamps"
 // log4j/slf4j is not standard for liftweb so we use ch.qos.logback (https://www.assembla.com/wiki/show/liftweb/Logging)
 // We use postgresql in place of simple DB    "com.h2database"    % "h2"                  % "1.3.167"
 // For Twitter Bootstrap, possibly try (in vain?)     "net.liftmodules" %% "fobo_2.6"    % "1.4"       % "compile",

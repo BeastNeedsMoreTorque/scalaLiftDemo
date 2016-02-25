@@ -183,14 +183,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val fut = Future { storeIds.foreach(loadCache)}
         fut foreach {
           case m =>
-            logger.info(s"asyncLoadStores succeeded for ${storeIds.mkString(":")}")
+            logger.trace(s"asyncLoadStores succeeded for ${storeIds.mkString(" ")}")
             storeIds.foreach { s =>
               val inv = StoreProduct.totalInventoryForStore(s)
               if (inv == 0) {
                 logger.warn(s"got NO product inventory for store $s !") // could trigger a retry later on.
               }
               else {
-                logger.trace(s"got $inv total product inventory for store $s")
+                logger.debug(s"got $inv total product inventory for store $s")
               }
             }
         }
@@ -204,8 +204,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       storeIds.grouped(storeLoadBatchSize).foreach { dbLoadCache }
     }
 
-    def getStores(idx: Int, dbStores: Map[Int, Store]): Map[Int, Store] = {
-      def synchronizeData(idx: Int, dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
+    def getStores(dbStores: Map[Int, Store]): Map[Int, Store] = {
+      def synchronizeData(dbStores: Map[Int, Store]): Box[Map[Int, Store]] = {
         // collects stores individually from LCBO REST as PlainStoreAsLCBOJson on as many pages as required.
         // we declare types fairly often in the following because it's not trivial to follow otherwise
         @tailrec
@@ -251,40 +251,36 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         // we'd like the is_dead ones as well to update state (but apparently you have to query for it explicitly!?!?)
         val url = s"$LcboDomainURL/stores?"
         tryo {
-          // gather stores on this page (url, idx) with classification as to whether they are new, dirty or clean
+          // gather stores on this page (url) with classification as to whether they are new, dirty or clean
           val initMap = Map[EntityRecordState, IndexedSeq[Store]](New -> Vector(), Dirty -> Vector(), Clean -> Vector())
-          val lcboStoresPerWorker = collectStoresOnAPage(dbStores, initMap, url, idx)
+          val lcboStores = collectStoresOnAPage(dbStores, initMap, url, 1)
           logger.trace(s"done loading to LCBO")
 
-          // 0.9 sec to do this work with 1 thread (going to DB one by one). With 2 threads and batch access to DB went down to 0.250 sec
-          // on about 400 records to update and 650 records total. When no change is required to DB, this would take 0.200 sec. (MacBook Air 2010)
-          // With more complex solution, whole thing takes 2.7 secs and about 170 ms on db side end processing (best case).
-          // identify the dirty and new stores for batch update and then retain all of them as the set identified by the worker (not visibly slower than when there is no change to DB)
+          // identify the dirty and new stores for batch update and then retain all of them as the requested set
           inTransaction {
             // for the activity on separate thread for synchronizeData
             // batch update the database now.
-            updateStores(lcboStoresPerWorker(Dirty))
-            insertStores(lcboStoresPerWorker(New))
+            updateStores(lcboStores(Dirty))
+            insertStores(lcboStores(New))
           }
-          lcboStoresPerWorker.values.flatten.map(s => s.lcbo_id.get -> s)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
+          lcboStores.values.flatten.map(s => s.lcbo_id.get -> s)(breakOut) // flatten the 3 lists and then build a map from the stores keyed by lcbo_id.
         }
       }
 
       import net.liftweb.common.Failure
-      synchronizeData(idx, dbStores) match {
+      synchronizeData( dbStores) match {
           case Full(m) => m
           case Failure(m, ex, _) =>
-            logger.error(s"Problem loading LCBO stores into cache (worker $idx) with message '$m' and exception error '$ex'")
+            logger.error(s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'")
             dbStores
           case Empty =>
-            logger.error(s"Problem loading LCBO stores into cache (worker $idx), none found")
+            logger.error(s"Problem loading LCBO stores into cache, none found")
             dbStores
       }
     }
 
     logger.trace(s"Store.init start")
     Product.init()
-
     StoreProduct.init()
     // warm up from our database known products by storeId and category, later on load all stores for navigation.
     // declaration is to verify we already support indexing so we can group by efficiently
@@ -304,22 +300,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     inTransaction {  // for the initial stores select
       val dbStores: Map[Int, Store] = stores.map(s => s.lcbo_id.get -> s)(breakOut) // queries full store table and throw it into map
       def isPopular(storeId: Int): Boolean = {
-        // opportunity to generalize to analytics, for now binary simple decision
-        storeLoadAll || //This does about 180-200 stores per hour out of 600. Beware!
+        storeLoadAll || //This does about 180-200 stores per hour out of 600 and ultimately chokes on GC. Beware!
         StoreProduct.storeIdsWithCachedProducts.contains(storeId)
       }
-      val fut = Future { getStores(1, dbStores) } // do this asynchronously to be responsive asap.
-      fut foreach {
-        case m => storesCache ++= m
-          asyncLoadStores(m.keys.filter(isPopular))
-          logger.trace(s"Store.init worker completed with success")
-      }
-      fut.failed foreach {
-        case t => logger.error(s"Store.init ${t.getMessage} " )
-        // don't attempt to reset storesCache here as we crossed the bridge that we want to trust the current LCBO data.
-        // We could define a finer policy as to when we want to use a default set from database even when we attempt to go to LCBO.
-      }
-
+      val res = getStores(dbStores)
+      storesCache ++= res
+      //val (stockedStores, emptyStores) = res.keys.partition( StoreProduct.hasCachedProducts)
+      //logger.debug(s"stocked ${stockedStores.size} empty ${emptyStores.size}")
+     // asyncLoadStores(emptyStores ++ stockedStores)
+      asyncLoadStores(res.keys.filter{isPopular})
     }
     logger.trace("Store.init end")
   }
@@ -354,6 +343,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     tryo { // we could get errors going to LCBO, this tryo captures those.
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         logger.warn(s"recommend cache miss for $storeId") // don't try to load it asynchronously as that's start up job to get going with it.
+        Future {loadCache(storeId)}
         val prods = productsByStoreCategory(MaxSampleSize, storeId, category) // take a hit of one go to LCBO, no more.
         val indices = Random.shuffle[Int, IndexedSeq](0 until prods.size )
         // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
