@@ -185,12 +185,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           case m =>
             logger.trace(s"asyncLoadStores succeeded for ${storeIds.mkString(" ")}")
             storeIds.foreach { s =>
-              val inv = StoreProduct.totalInventoryForStore(s)
-              if (inv == 0) {
+              StoreProduct.emptyInventoryForStore(s)
+              if (StoreProduct.emptyInventoryForStore(s)) {
                 logger.warn(s"got NO product inventory for store $s !") // could trigger a retry later on.
-              }
-              else {
-                logger.debug(s"got $inv total product inventory for store $s")
               }
             }
         }
@@ -281,7 +278,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
     logger.trace(s"Store.init start")
     Product.init()
-    StoreProduct.init()
+    // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
+    val dbStores: Map[Int, Store] = inTransaction { stores.map(s => s.lcbo_id.get -> s)(breakOut) }// queries full store table and throw it into map
+    StoreProduct.init(dbStores.keys.max)
     // warm up from our database known products by storeId and category, later on load all stores for navigation.
     // declaration is to verify we already support indexing so we can group by efficiently
     StoreProduct.getProductIdsByStore.foreach {
@@ -296,21 +295,20 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         }
     }
 
-    // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
-    inTransaction {  // for the initial stores select
-      val dbStores: Map[Int, Store] = stores.map(s => s.lcbo_id.get -> s)(breakOut) // queries full store table and throw it into map
-      def isPopular(storeId: Int): Boolean = {
-        storeLoadAll || //This does about 180-200 stores per hour out of 600 and ultimately chokes on GC. Beware!
-        StoreProduct.storeIdsWithCachedProducts.contains(storeId)
-      }
-      val res = getStores(dbStores)
-      storesCache ++= res
-      //val (stockedStores, emptyStores) = res.keys.partition( StoreProduct.hasCachedProducts)
-      //logger.debug(s"stocked ${stockedStores.size} empty ${emptyStores.size}")
-     // asyncLoadStores(emptyStores ++ stockedStores)
-      asyncLoadStores(res.keys.filter{isPopular})
+
+    def isPopular(storeId: Int): Boolean = {
+      storeLoadAll || //This does about 180-200 stores per hour out of 600 and ultimately chokes on GC. Beware!
+      StoreProduct.storeIdsWithCachedProducts.contains(storeId)
     }
-    logger.trace("Store.init end")
+    val res = getStores(dbStores)
+    storesCache ++= res
+    val (stockedStores, emptyStores) = res.keys.partition( StoreProduct.hasCachedProducts)
+    logger.debug(s"stocked ${stockedStores}")
+   // logger.debug(s"stocked ${stockedStores} empty ${emptyStores}")
+
+    // asyncLoadStores(emptyStores ++ stockedStores)
+    asyncLoadStores(res.keys.filter{isPopular})
+  logger.trace("Store.init end")
   }
 
   /**
@@ -452,7 +450,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val allDbProductIds = Product.cachedProductIds
     val dbProducts = Product.getProducts
     val dbStoreProducts = StoreProduct.getInventories
-
     def fetchInventories(dbStoreProducts: Map[(Int, Int), StoreProduct],
                          allDbProductIds: Set[Int]): Unit = {
       val allTheStoreInventories = getStoreProductsOfStartPage(dbStoreProducts, allDbProductIds)
