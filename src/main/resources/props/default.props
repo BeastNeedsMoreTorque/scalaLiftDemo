@@ -37,7 +37,7 @@ store.DBBatchSize=250
 store.load.workers=1
 store.PositiveInventoryIterations=10
 # loadAll true seems very difficult to get right with GC and JVM issues propping up nastily.
-store.loadAll=false
+store.loadAll=true
 #the higher this parameter, the greater the risk of uncontrollable GC
 store.loadBatchSize=10
 
