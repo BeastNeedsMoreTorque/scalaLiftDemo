@@ -146,11 +146,11 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
 
 object Store extends Store with MetaRecord[Store] with pagerRestClient with Loggable {
   private implicit val formats = net.liftweb.json.DefaultFormats
-  private val PositiveInventoryIterations = Props.getInt("store.PositiveInventoryIterations",  10)
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
   private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
   private val storeLoadAll = Props.getBool("store.loadAll", false)
   private val storeLoadBatchSize = Props.getInt("store.loadBatchSize", 10)
+  private val productCacheSize = Props.getInt("product.cacheSize", 10000)
 
   private val storeCategoriesProductsCache: concurrent.Map[(Int, String), Set[Int]] = TrieMap() // give set of available productIds by store+category
   private val storeProductsLoaded: concurrent.Map[Int, Unit] = TrieMap() // effectively a thread-safe lock-free set, which helps control access to storeCategoriesProductsCache.
@@ -302,9 +302,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val res = getStores(dbStores)
     storesCache ++= res
     val (stockedStores, emptyStores) = res.keys.partition( StoreProduct.hasCachedProducts)
-    logger.debug(s"stocked ${stockedStores}")
-    //asyncLoadStores(emptyStores ++ stockedStores)
-    asyncLoadStores(res.keys.filter{isPopular})
+    logger.debug(s"empties ${emptyStores} stocked ${stockedStores}")
+    asyncLoadStores(emptyStores ++ stockedStores)
+    //asyncLoadStores(res.keys.filter{isPopular})
     logger.trace("Store.init end")
   }
 

@@ -94,8 +94,8 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         page(offset, pageSize).toVector
     }
     inTransaction {
-      val total = { from(storeProducts)
-                    ( _ => compute(count))}.toInt
+      val total = {from(storeProducts)( _ =>
+        compute(count))}.toInt
 
       logger.trace(s"storeProducts row count: $total")
 
@@ -129,7 +129,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
 
   def getStoreProductQuantity(storeId: Int, prodId: Int): Option[Int] = {
     val it: Iterable[Option[StoreProduct]] = allStoreProductsFromDB.get(storeId).map{ _.get(prodId) }
-    it.head.map(_.quantity.get)
+    it.headOption.getOrElse(None).map(_.quantity.get)
   }
 
   def create(inv: InventoryAsLCBOJson): StoreProduct =
@@ -148,7 +148,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         val invsByStore: Map[Int, IndexedSeq[StoreProduct]] = x.groupBy(_.storeid.get)
         for (s <- invsByStore.keys;
              receivedInvs = invsByStore(s);
-             inventoriesByProd = receivedInvs.groupBy {_.productid.get } map { case (k,v) => (k, v.head)}
+             inventoriesByProd = receivedInvs.groupBy {_.productid.get } map { case (k,v) => (k, v.head)}  // groupBy will give us a head.
         ) {
           allStoreProductsFromDB.get(s).fold{
             allStoreProductsFromDB.putIfAbsent(s, inventoriesByProd)
@@ -175,7 +175,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
           if (allStoreProductsFromDB.isDefinedAt(storeId)) {
             allStoreProductsFromDB.put(storeId, allStoreProductsFromDB(storeId) ++ prodsWithInventory)
           }
-          else {
+          else {  // first time we add products for a store in memory
             allStoreProductsFromDB.putIfAbsent(storeId, prodsWithInventory)
           }
         }
@@ -197,11 +197,14 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     def referentialIntegrity (sp: StoreProduct): Boolean = {
       val s = sp.storeid.get
       val p = sp.productid.get
-      allStoreProductsFromDB.contains(s) &&  Product.cachedProductIds.contains(p) && !allStoreProductsFromDB(s).contains(p)
+      Product.cachedProductIds.contains(p) && (!allStoreProductsFromDB.contains(s) || !allStoreProductsFromDB(s).contains(p))
+      // we don't require store to be in hash because we'll enter it when introducing products for first time
+      // That hash is for inventories not for stores. It's assumed all stores are in memory on start up.
+      // That's why there's asymetry with Product where we require it to be there.
     }
     val RIEntries = myStoreProducts.filter { referentialIntegrity }.toVector
     val filteredByStoreAndProduct = RIEntries.groupBy{ sp: StoreProduct => (sp.storeid.get, sp.productid.get): (Int, Int)}
-    val filtered: Iterable[StoreProduct] = filteredByStoreAndProduct.map { case (k,v) => v.head } // remove duplicate( using head)
+    val filtered: Iterable[StoreProduct] = filteredByStoreAndProduct.map { case (k,v) => v.head } // remove duplicate( using head, which exists because of groupBy)
     // break it down and then serialize the work.
     filtered.grouped(DBBatchSize).foreach { insertBatch }
   }
