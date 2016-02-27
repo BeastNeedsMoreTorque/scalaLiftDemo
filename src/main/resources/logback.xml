@@ -15,11 +15,11 @@
 
     <logger name="code.comet" level="info"/>
     <logger name="code.model" level="info"/>
-    <logger name="code.model.Store" level="trace"/>
-    <logger name="code.model.Product" level="trace"/>
-    <logger name="code.model.StoreProduct" level="trace"/>
+    <logger name="code.model.Store" level="debug"/>
+    <logger name="code.model.Product" level="debug"/>
+    <logger name="code.model.StoreProduct" level="debug"/>
     <logger name="code.snippet" level="info"/>
-    <logger name="code.snippet.ProductInteraction" level="trace"/>
+    <logger name="code.snippet.ProductInteraction" level="debug"/>
     <logger name="net.liftweb" level="warn"/>
     <logger name="bootstrap.liftweb" level="info"/>
     <root level="warn">

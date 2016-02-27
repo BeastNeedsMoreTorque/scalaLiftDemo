@@ -69,10 +69,9 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   // only update after confirmed to be in database!
   private val allStoreProductsFromDB: concurrent.Map[Int, Map[Int, StoreProduct]] = TrieMap()
 
-  def getInventories: Map[(Int, Int), StoreProduct] = {
-     for ( (s, v) <- allStoreProductsFromDB;
-           (p, sp) <- v) yield (s, p) -> sp
-  }
+  def getInventories(storeId: Int): Map[Int, StoreProduct] =
+    allStoreProductsFromDB.get(storeId).getOrElse(Map())
+
 
   def cachedStoreProductIds: Set[(Int, Int)] = {
     { for ( (s, v) <- allStoreProductsFromDB;
@@ -97,7 +96,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       val total = {from(storeProducts)( _ =>
         compute(count))}.toInt
 
-      logger.trace(s"storeProducts row count: $total")
+      logger.debug(s"storeProducts row count: $total")
 
       for (i <- 0 to (total / DBSelectPageSize);
            inventories = loadBatch(i * DBSelectPageSize, DBSelectPageSize)) {
@@ -110,7 +109,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
           }
         }
       }
-      logger.trace(s"storeProducts loaded over : ${total/DBSelectPageSize} pages")
+      logger.debug(s"storeProducts loaded over : ${total/DBSelectPageSize} pages")
 
       // GC and JVM wrestle match end (not enough, sigh)
     }
@@ -216,7 +215,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   @throws(classOf[MappingException])
   def inventoryForStoreProduct(storeId: Int, productId: Int): InventoryAsLCBOJson = {
     val uri = s"$LcboDomainURL/stores/$storeId/products/$productId/inventory"
-    logger.trace(uri)
+    logger.debug(uri)
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     (parse(pageContent) \ "result").extract[InventoryAsLCBOJson] // more throws
   }
