@@ -177,7 +177,6 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   * Errors are possible if data is too large to fit. tryo will catch those and report them.
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
-  val productCacheSize = Props.getInt("product.cacheSize", 0)
   val prodLoadWorkers = Props.getInt("product.load.workers", 1)
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
 

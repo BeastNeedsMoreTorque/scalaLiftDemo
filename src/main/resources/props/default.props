@@ -26,24 +26,23 @@ product.interactionsImageMap={"recommend":"/images/recommend.jpg","cancel":"/ima
 product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
 product.Category=wine
 product.load.workers=1
-product.DBBatchSize=500
+product.DBBatchSize=512
 
 product.cacheSize=20000
 
 store.maxSampleSize=150
 store.lcboMaxPerPage=100
 store.lcboMinPerPage=10
-store.DBBatchSize=250
+store.DBBatchSize=256
 store.load.workers=1
-store.PositiveInventoryIterations=10
-# loadAll true seems very difficult to get right with GC and JVM issues propping up nastily. 300,000 sp entries seem to be limit of reasonable.
-store.loadAll=false
-#the higher this parameter, the greater the risk of uncontrollable GC
-store.loadBatchSize=10
+# loadAll true seems very difficult to get right with GC and JVM issues propping up nastily. 300,000 sp entries seem to be limit of reasonable (mid Feb 2016).
+store.loadAll=true
+#the higher this parameter, the greater the risk of uncontrollable GC (perhaps less so as of Feb 26 2016).
+store.loadBatchSize=16
 
-inventory.DBWrite.BatchSize=500
-# the higher DBRead.BatchSize is, the higher the risk of unwanted uncontrollable GC on start up, but fewer db trip calls.
-inventory.DBRead.BatchSize=20000
+inventory.DBWrite.BatchSize=512
+# the higher DBRead.BatchSize is, the higher the risk of unwanted uncontrollable GC on start up, but fewer db trip calls. Less relevant than in earlier releases.
+inventory.DBRead.BatchSize=16384
 
 
 
