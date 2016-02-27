@@ -185,7 +185,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           case m =>
             logger.trace(s"asyncLoadStores succeeded for ${storeIds.mkString(" ")}")
             storeIds.foreach { s =>
-              StoreProduct.emptyInventoryForStore(s)
               if (StoreProduct.emptyInventoryForStore(s)) {
                 logger.warn(s"got NO product inventory for store $s !") // could trigger a retry later on.
               }
@@ -304,11 +303,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     storesCache ++= res
     val (stockedStores, emptyStores) = res.keys.partition( StoreProduct.hasCachedProducts)
     logger.debug(s"stocked ${stockedStores}")
-   // logger.debug(s"stocked ${stockedStores} empty ${emptyStores}")
-
-    // asyncLoadStores(emptyStores ++ stockedStores)
+    //asyncLoadStores(emptyStores ++ stockedStores)
     asyncLoadStores(res.keys.filter{isPopular})
-  logger.trace("Store.init end")
+    logger.trace("Store.init end")
   }
 
   /**
@@ -614,7 +611,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
       // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.groupBy {
-        i => dbStoreProducts.get(store, i.product_id) match {
+        i => StoreProduct.getStoreProductQuantity(store, i.product_id) match {
           case None  => New
           case Some(quantity) if i.quantity != quantity => Dirty
           case _ => Clean
