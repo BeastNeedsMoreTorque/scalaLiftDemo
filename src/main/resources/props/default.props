@@ -42,7 +42,7 @@ store.loadBatchSize=16
 
 inventory.DBWrite.BatchSize=512
 # the higher DBRead.BatchSize is, the higher the risk of unwanted uncontrollable GC on start up, but fewer db trip calls. Less relevant than in earlier releases.
-inventory.DBRead.BatchSize=16384
+inventory.DBRead.BatchSize=32768
 
 
 
