@@ -63,7 +63,6 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
 
 object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with pagerRestClient with Loggable {
   private val DBBatchSize = Props.getInt("inventory.DBWrite.BatchSize", 100)
-  private val DBSelectPageSize = Props.getInt("inventory.DBRead.BatchSize", 1000)
   private implicit val formats = net.liftweb.json.DefaultFormats
 
   // only update after confirmed to be in database!
@@ -116,32 +115,21 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   def hasCachedProducts(storeId: Int): Boolean =
     allStoreProductsFromDB.get(storeId).exists{ _.nonEmpty }
 
-  def init(maxStoreId: Int): Unit =  { // done on single thread on start up.
-    def loadBatch(offset: Int, pageSize: Int): IndexedSeq[StoreProduct] = {
-    // @see http://squeryl.org/pagination.html
+  def init(availableStores: Iterable[Int]): Unit =  { // done on single thread on start up.
+    def loadBatch(storeId: Int): Iterable[StoreProduct] =
       from(storeProducts)(sp =>
-        select(sp)
-        orderBy(sp.storeid)).
-        page(offset, pageSize).toVector
-    }
-    inTransaction {
-      val rowCount = {from(storeProducts)( _ =>
-        compute(count))}.toInt
+        where(sp.storeid === storeId)
+        select(sp))
 
-      logger.debug(s"storeProducts row count: $rowCount")
-      // this may cause GC, possibly because of my memory constraints???
-      for (i <- 0 to (rowCount / DBSelectPageSize);
-           inventories = loadBatch(i * DBSelectPageSize, DBSelectPageSize)) {
-        val invsByStore = inventories.groupBy(_.storeid.get)
-        invsByStore.foreach{ case (s, prods) =>
-          val newMap = prods.map{ sp => sp.productid.get -> sp}(collection.breakOut): Map[Int, StoreProduct]
-          allStoreProductsFromDB.get(s).fold {
-            allStoreProductsFromDB.putIfAbsent(s, newMap)
-          } { m => allStoreProductsFromDB.put(s, m ++ newMap)
-          }
-        }
+
+    inTransaction {
+      for (storeId <- availableStores;
+           inventories = loadBatch(storeId))
+      {
+        val newMap = inventories.map{ sp => sp.productid.get -> sp}(collection.breakOut): Map[Int, StoreProduct]
+        allStoreProductsFromDB.putIfAbsent(storeId, newMap)
       }
-      logger.debug(s"storeProducts loaded over : ${rowCount/DBSelectPageSize} pages")
+      logger.debug(s"storeProducts loaded over for ${availableStores.size} stores")
     }
   }
 
@@ -150,7 +138,6 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     updateStoreProducts(existingInventories)
     insertStoreProducts(newInventories)
   }
-
 
   def create(inv: InventoryAsLCBOJson): StoreProduct =
     createRecord.
