@@ -72,64 +72,85 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   def getInventories(storeId: Int): Map[Int, StoreProduct] =
     allStoreProductsFromDB.get(storeId).getOrElse(Map())
 
-
-  def cachedStoreProductIds: Set[(Int, Int)] = {
-    { for ( (s, v) <- allStoreProductsFromDB;
-         p <- v.keysIterator) yield (s, p) }.toSet
-  }
-
-  def getProductIdsByStore: Map[Int, IndexedSeq[Int]] =
-    allStoreProductsFromDB.map { case (storeId, m) => storeId -> m.keys.toIndexedSeq }
-
-  def storeIdsWithCachedProducts: Set[Int] = allStoreProductsFromDB.filter{ case(k,m) => m.nonEmpty}.keySet
-
-  def hasCachedProducts(storeId: Int) = storeIdsWithCachedProducts contains storeId
-
-  def init(maxStoreId: Int): Unit =  { // done on single thread on start up.
-    def loadBatch(offset: Int, pageSize: Int): IndexedSeq[StoreProduct] = {
-      from(storeProducts)(sp =>
-        select(sp)
-        orderBy(sp.storeid)).
-        page(offset, pageSize).toVector
-    }
-    inTransaction {
-      val total = {from(storeProducts)( _ =>
-        compute(count))}.toInt
-
-      logger.debug(s"storeProducts row count: $total")
-
-      for (i <- 0 to (total / DBSelectPageSize);
-           inventories = loadBatch(i * DBSelectPageSize, DBSelectPageSize)) {
-        val invsByStore: Map[Int, IndexedSeq[StoreProduct]] = inventories.groupBy(_.storeid.get)
-        invsByStore.foreach{ case (s, prods) =>
-          val newMap = prods.map{ sp => sp.productid.get -> sp}.toMap[Int, StoreProduct]
-          allStoreProductsFromDB.get(s).fold {
-            allStoreProductsFromDB.putIfAbsent(s, newMap)
-          } { m => allStoreProductsFromDB.put(s,  m ++ newMap)
-          }
-        }
-      }
-      logger.debug(s"storeProducts loaded over : ${total/DBSelectPageSize} pages")
-
-      // GC and JVM wrestle match end (not enough, sigh)
-    }
-  }
-
-  def update(storeId: Int, theStores: Iterable[StoreProduct]) = {
-    val idPairs = cachedStoreProductIds
-    val (existingInventories, newInventories) = theStores.partition{ sp: StoreProduct => idPairs.contains(storeId, sp.productid.get) }
-    updateStoreProducts(existingInventories)
-    insertStoreProducts(newInventories)
-  }
-
   def emptyInventoryForStore(storeId: Int): Boolean = {
-    allStoreProductsFromDB.get(storeId).fold{true}{ m => !m.values.exists(_.quantity.get > 0 )}
+    // if that store does not exist in cache, it's false.
+    // if it exists we check that all values are with quantity <= 0 (i.e. none > 0 as coded below)
+    allStoreProductsFromDB.get(storeId).exists{ m => !m.values.exists(_.quantity.get > 0 )}
   }
 
   def getStoreProductQuantity(storeId: Int, prodId: Int): Option[Int] = {
     val it: Iterable[Option[StoreProduct]] = allStoreProductsFromDB.get(storeId).map{ _.get(prodId) }
     it.headOption.getOrElse(None).map(_.quantity.get)
   }
+
+  def existsStoreProduct(storeId: Int, prodId: Int): Boolean = {
+    allStoreProductsFromDB.get(storeId).map{ _.get(prodId) }.isDefined
+  }
+
+  def getProductIdsByStore: Map[Int, IndexedSeq[Int]] =
+    allStoreProductsFromDB.map { case (storeId, m) => storeId -> m.keys.toIndexedSeq }
+
+  def hasProductsByStoreCategory(storeId: Int, category: String) = {
+    // common English: There is the cached store such that it has a product key such that its product can be fetched
+    // such that the product's primaryCategory is the requested category.
+    // No attempt to obfuscate here, seriously!
+    allStoreProductsFromDB.get(storeId).exists {
+      _.keys.exists {
+        Product.getProduct(_).exists {
+          _.primaryCategory == category
+        }
+      }
+    }
+  }
+
+  def getProductIdsByStoreCategory(storeId: Int, category: String): IndexedSeq[Int] = {
+    { for (storeMap <- allStoreProductsFromDB.get(storeId).toSeq; // toSeq is to make what follows work on sequences rather than options, as first guy dictates interface
+           storeProdId <- storeMap.keys;
+           storeProd <- Product.getProduct(storeProdId) if storeProd.primaryCategory == category
+    ) yield storeProd.lcbo_id.get }.toIndexedSeq
+  }
+
+  def storeIdsWithCachedProducts: Set[Int] =
+    allStoreProductsFromDB.filter{ case(k,m) => m.nonEmpty }.keySet
+
+  def hasCachedProducts(storeId: Int): Boolean =
+    allStoreProductsFromDB.get(storeId).exists{ _.nonEmpty }
+
+  def init(maxStoreId: Int): Unit =  { // done on single thread on start up.
+    def loadBatch(offset: Int, pageSize: Int): IndexedSeq[StoreProduct] = {
+    // @see http://squeryl.org/pagination.html
+      from(storeProducts)(sp =>
+        select(sp)
+        orderBy(sp.storeid)).
+        page(offset, pageSize).toVector
+    }
+    inTransaction {
+      val rowCount = {from(storeProducts)( _ =>
+        compute(count))}.toInt
+
+      logger.debug(s"storeProducts row count: $rowCount")
+      // this may cause GC, possibly because of my memory constraints???
+      for (i <- 0 to (rowCount / DBSelectPageSize);
+           inventories = loadBatch(i * DBSelectPageSize, DBSelectPageSize)) {
+        val invsByStore = inventories.groupBy(_.storeid.get)
+        invsByStore.foreach{ case (s, prods) =>
+          val newMap = prods.map{ sp => sp.productid.get -> sp}(collection.breakOut): Map[Int, StoreProduct]
+          allStoreProductsFromDB.get(s).fold {
+            allStoreProductsFromDB.putIfAbsent(s, newMap)
+          } { m => allStoreProductsFromDB.put(s, m ++ newMap)
+          }
+        }
+      }
+      logger.debug(s"storeProducts loaded over : ${rowCount/DBSelectPageSize} pages")
+    }
+  }
+
+  def update(storeId: Int, theStores: Iterable[StoreProduct]) = {
+    val (existingInventories, newInventories) = theStores.partition{ sp: StoreProduct => existsStoreProduct(storeId, sp.productid.get) }
+    updateStoreProducts(existingInventories)
+    insertStoreProducts(newInventories)
+  }
+
 
   def create(inv: InventoryAsLCBOJson): StoreProduct =
     createRecord.

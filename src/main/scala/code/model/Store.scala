@@ -152,14 +152,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val storeLoadBatchSize = Props.getInt("store.loadBatchSize", 10)
   private val productCacheSize = Props.getInt("product.cacheSize", 10000)
 
-  private val storeCategoriesProductsCache: concurrent.Map[(Int, String), Set[Int]] = TrieMap() // give set of available productIds by store+category
-  private val storeProductsLoaded: concurrent.Map[Int, Unit] = TrieMap() // effectively a thread-safe lock-free set, which helps control access to storeCategoriesProductsCache.
-  // would play a role if user selects a store from a map. A bit of an exercise for caching and threading for now.
+  private val storeProductsLoaded: concurrent.Map[Int, Unit] = TrieMap()
+  // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
+
   private val storesCache: concurrent.Map[Int, Store] = TrieMap[Int, Store]()
 
-
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
-
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
 
   @volatile
@@ -281,20 +279,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     val dbStores: Map[Int, Store] = inTransaction { stores.map(s => s.lcbo_id.get -> s)(breakOut) }// queries full store table and throw it into map
     StoreProduct.init(dbStores.keys.max)
-    // warm up from our database known products by storeId and category, later on load all stores for navigation.
-    // declaration is to verify we already support indexing so we can group by efficiently
-    StoreProduct.getProductIdsByStore.foreach {
-      case (storeId, seqOfProductIds) =>
-        val seqOfProducts = seqOfProductIds.flatMap ( Product getProduct )
-        val productsByCategory = seqOfProducts.groupBy(_.primary_category.get) // partition the products of a store by category (make sure to get a vector first)
-        productsByCategory.foreach { case (category, productsIter) =>
-          // we're first setter of the cache, so we don't need to append if already in cache.
-          val dbProductIds = productsIter.map(_.lcbo_id.get).toSet
-          if (storeCategoriesProductsCache.putIfAbsent((storeId, category), dbProductIds).isDefined)   // restrict the products to simply productId (lcbo_id) and put  in cache lock-free
-            storeCategoriesProductsCache((storeId, category)) ++= dbProductIds
-        }
-    }
-
 
     def isPopular(storeId: Int): Boolean = {
       storeLoadAll || //This does about 180-200 stores per hour out of 600 and ultimately chokes on GC. Beware!
@@ -331,8 +315,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // note: cacheSuccess (top level code) grabs a lock
     def cacheSuccess(storeId: Int, category: String): Option[Iterable[(Int, Product)]] = {
       // note: we never delete from cache, so we don't worry about data disappearing in a potential race condition
-      if (storeCategoriesProductsCache.contains((storeId, category)) && storeCategoriesProductsCache((storeId, category)).nonEmpty)
-        Option(randomSampler(storeCategoriesProductsCache((storeId, category)).toVector))
+      if (StoreProduct.hasProductsByStoreCategory(storeId, category))
+        Option(randomSampler(StoreProduct.getProductIdsByStoreCategory(storeId, category)))
       else None
     }
 
@@ -388,7 +372,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // heavy long lasting, for now no thread inside, but clients call this asynchronously
   def loadCache(storeId: Int) = {
 
-    def getProductsOfStartPage(): Iterable[Product] = {
+    def getProductsOfStartPage: Iterable[Product] = {
       def loadAll(storeId: Int): Box[Map[EntityRecordState, IndexedSeq[Product]]] =
         tryo { getProductsByStore(storeId) }
 
@@ -445,35 +429,15 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    def fetchInventories(): Unit = {
-      val allTheStoreInventories = getStoreProductsOfStartPage
-      StoreProduct.update(storeId, allTheStoreInventories )
-    }
-
-    def fetchProducts(): Unit= {
-      // evaluate the maps of product in parallel, tracking them by product id (lcbo_id) as key but in order to be able to cache them by category when aggregating results back.
-      val prods = getProductsOfStartPage
-      val productsByCategory = prods.toVector.groupBy(_.primary_category.get) // groupBy is a dandy!
-      productsByCategory.foreach {
-        case (category, fetchedProducts) =>
-          val storeCatKey = (storeId, category) // construct the key we need, i.e. grab the storeId
-          val newProductIdsSet = fetchedProducts.map(_.lcbo_id.get).toSet // project the products to only the productId
-          if (storeCategoriesProductsCache.putIfAbsent(storeCatKey, newProductIdsSet).isDefined) {
-            // if was empty, we just initialized it atomically with set(id) but if there was something, just add to set below
-            storeCategoriesProductsCache(storeCatKey) ++= newProductIdsSet
-          }
-      }
-      Product.update(prods) // refresh product cache
-      fetchInventories()
-    }
-
     logger.debug(s"loadCache start $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
     if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {
       // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
       // we impose referential integrity so we MUST get products and build on that to get inventories that refer to products
-      fetchProducts()
-    }
+
+      // fetch and then make sure model classes update to DB and their cache synchronously, so we can use their caches.
+      Product.update(getProductsOfStartPage) // refresh product cache
+      StoreProduct.update(storeId, getStoreProductsOfStartPage )    }
   }
 
   import java.net.SocketTimeoutException
