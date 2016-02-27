@@ -3,7 +3,7 @@ package code.model
 import java.io.IOException
 
 import scala.annotation.tailrec
-import scala.collection.{Iterable, Set, Map, concurrent,breakOut}
+import scala.collection.{Iterable, Map, concurrent,breakOut}
 import scala.language.implicitConversions
 import scala.util.Random
 import scala.xml.Node
@@ -148,14 +148,18 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private implicit val formats = net.liftweb.json.DefaultFormats
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
   private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
-  private val storeLoadAll = Props.getBool("store.loadAll", false)
+
   private val storeLoadBatchSize = Props.getInt("store.loadBatchSize", 10)
+  private val storeMinStoreId = Props.getInt("store.minStoreId", 150)
+  private val storeMaxStoreId = Props.getInt("store.maxStoreId", 500)   // asking for more than 400 could be asking for trouble
+
   private val productCacheSize = Props.getInt("product.cacheSize", 10000)
 
   private val storeProductsLoaded: concurrent.Map[Int, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
   private val storesCache: concurrent.Map[Int, Store] = TrieMap[Int, Store]()
+  def availableStores: Iterable[Int] = storesCache.keys
 
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
@@ -215,11 +219,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           val pageStores = {for (p <- itemNodes) yield p.extractOpt[PlainStoreAsLCBOJson]}.flatten
 
           // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
+          // range of storeMinStoreId and storeMaxStoreId serve to constrain GC in tight memory environment, so we don't cache/synch with those outside of range.
           val storesByState: Map[EntityRecordState, IndexedSeq[PlainStoreAsLCBOJson]] = pageStores.groupBy {
             s => (dbStores.get(s.id), s) match {
-              case (None, _)  => New
+              case (None, _) if s.id > storeMinStoreId && s.id < storeMaxStoreId => New
               case (Some(store), lcboStore) if store.isDirty(lcboStore) => Dirty
-              case (_ , _) => Clean
+              case (_ , _) => Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
             }
           }
 
@@ -277,19 +282,21 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     logger.info(s"Store.init start")
     Product.init()
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
-    val dbStores: Map[Int, Store] = inTransaction { stores.map(s => s.lcbo_id.get -> s)(breakOut) }// queries full store table and throw it into map
-    StoreProduct.init(dbStores.keys.max)
+    val dbStores: Map[Int, Store] = inTransaction {
+      from(stores)(s =>
+        where( (s.lcbo_id gt storeMinStoreId) and (s.lcbo_id lt storeMaxStoreId) )
+          select (s)).map(s => s.lcbo_id.get -> s)(breakOut)
+    }  // queries store table to largest extent possible (mem dependent) and throw it into map
+    // range of storeMinStoreId and storeMaxStoreId serve to constrain GC in tight memory environment
 
-    def isPopular(storeId: Int): Boolean = {
-      storeLoadAll || //This does about 180-200 stores per hour out of 600 and ultimately chokes on GC. Beware!
-      StoreProduct.storeIdsWithCachedProducts.contains(storeId)
-    }
-    val res = getStores(dbStores)
-    storesCache ++= res
-    val (stockedStores, emptyStores) = res.keys.partition( StoreProduct.hasCachedProducts)
+    storesCache ++= getStores(dbStores)
+
+    StoreProduct.init(availableStores)
+
+    val (stockedStores, emptyStores) = availableStores.partition( StoreProduct.hasCachedProducts)
     logger.trace(s"empties ${emptyStores} stocked ${stockedStores}")
     asyncLoadStores(emptyStores ++ stockedStores)
-    //asyncLoadStores(res.keys.filter{isPopular})
+
     logger.info("Store.init end")
   }
 
