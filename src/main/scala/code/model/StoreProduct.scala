@@ -66,29 +66,23 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   private val DBSelectPageSize = Props.getInt("inventory.DBRead.BatchSize", 1000)
   private implicit val formats = net.liftweb.json.DefaultFormats
 
-  private var storeProductsCache: Vector[Map[Int, StoreProduct]] = Vector()
-
   // only update after confirmed to be in database!
-  private val allStoreProductsFromDB: concurrent.Map[Int, IndexedSeq[ProductWithInventory]] = TrieMap()
+  private val allStoreProductsFromDB: concurrent.Map[Int, Map[Int, StoreProduct]] = TrieMap()
 
   def getInventories: Map[(Int, Int), StoreProduct] = {
-    val x = {for ((x,storeIdx) <- storeProductsCache.view.zipWithIndex;
-         productid <- x.keys;
-         sp <- x.get(productid)
-    ) yield ((storeIdx, productid) -> sp) }
-    x.toMap
+     for ( (s, v) <- allStoreProductsFromDB;
+           (p, sp) <- v) yield (s, p) -> sp
   }
 
   def cachedStoreProductIds: Set[(Int, Int)] = {
-    {  for ((x, storeIdx) <- storeProductsCache.view.zipWithIndex;
-           productid <- x.keys) yield (storeIdx, productid)
-    }.toSet
+    { for ( (s, v) <- allStoreProductsFromDB;
+         p <- v.keysIterator) yield (s, p) }.toSet
   }
 
   def getProductIdsByStore: Map[Int, IndexedSeq[Int]] =
-    allStoreProductsFromDB.map { case (storeId, sps) => (storeId, sps.map(_.productId)) }
+    allStoreProductsFromDB.map { case (storeId, m) => storeId -> m.keys.toIndexedSeq }
 
-  def storeIdsWithCachedProducts = allStoreProductsFromDB.keys.toSet
+  def storeIdsWithCachedProducts: Set[Int] = allStoreProductsFromDB.filter{ case(k,m) => m.nonEmpty}.keySet
 
   def hasCachedProducts(storeId: Int) = storeIdsWithCachedProducts contains storeId
 
@@ -99,30 +93,20 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         orderBy(sp.storeid)).
         page(offset, pageSize).toVector
     }
-    storeProductsCache = Range(1, maxStoreId).map{i => Map[Int, StoreProduct]() }.toVector
     inTransaction {
-      // GC and JVM wrestle match start
-      val total =
-      {from(storeProducts)( _ =>
-        compute(count))}.toInt
+      val total = { from(storeProducts)
+                    ( _ => compute(count))}.toInt
+
       logger.trace(s"storeProducts row count: $total")
 
       for (i <- 0 to (total / DBSelectPageSize);
            inventories = loadBatch(i * DBSelectPageSize, DBSelectPageSize)) {
         val invsByStore: Map[Int, IndexedSeq[StoreProduct]] = inventories.groupBy(_.storeid.get)
-        for (s <- invsByStore.keys;
-          randomInvs = invsByStore(s);
-          inventoriesByProd = randomInvs.groupBy {_.productid.get } map { case (k,v) => (k, v.head)}
-        ) {
-          storeProductsCache = storeProductsCache.updated (s, inventoriesByProd)
-        }
-
-        inventories.foreach {sp =>
-          if (allStoreProductsFromDB.isDefinedAt(sp.storeid.get)) {
-            val oldSeq: IndexedSeq[ProductWithInventory] = allStoreProductsFromDB(sp.storeid.get)
-            val idx = oldSeq.indexWhere( _.productId == sp.productid.get)
-            if (idx >= 0)
-              allStoreProductsFromDB.put(sp.storeid.get,  oldSeq.updated( idx, ProductWithInventory(sp.productid.get, sp.quantity.get)))
+        invsByStore.foreach{ case (s, prods) =>
+          val newMap = prods.map{ sp => sp.productid.get -> sp}.toMap[Int, StoreProduct]
+          allStoreProductsFromDB.get(s).fold {
+            allStoreProductsFromDB.putIfAbsent(s, newMap)
+          } { m => allStoreProductsFromDB.put(s,  m ++ newMap)
           }
         }
       }
@@ -140,13 +124,12 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   }
 
   def emptyInventoryForStore(storeId: Int): Boolean = {
-    storeProductsCache(storeId).exists{ p: (Int, StoreProduct) => p._2.quantity.get > 0}
+    allStoreProductsFromDB.get(storeId).fold{true}{ m => !m.values.exists(_.quantity.get > 0 )}
   }
 
   def getStoreProductQuantity(storeId: Int, prodId: Int): Option[Int] = {
-    if (storeProductsCache.isDefinedAt(storeId))
-      storeProductsCache(storeId).get(prodId).map{_.quantity.get}
-    else None
+    val it: Iterable[Option[StoreProduct]] = allStoreProductsFromDB.get(storeId).map{ _.get(prodId) }
+    it.head.map(_.quantity.get)
   }
 
   def create(inv: InventoryAsLCBOJson): StoreProduct =
@@ -164,18 +147,17 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
 
         val invsByStore: Map[Int, IndexedSeq[StoreProduct]] = x.groupBy(_.storeid.get)
         for (s <- invsByStore.keys;
-             randomInvs = invsByStore(s);
-             inventoriesByProd = randomInvs.groupBy {_.productid.get } map { case (k,v) => (k, v.head)}
+             receivedInvs = invsByStore(s);
+             inventoriesByProd = receivedInvs.groupBy {_.productid.get } map { case (k,v) => (k, v.head)}
         ) {
-          storeProductsCache = storeProductsCache.updated (s, inventoriesByProd)
-        }
+          allStoreProductsFromDB.get(s).fold{
+            allStoreProductsFromDB.putIfAbsent(s, inventoriesByProd)
+          } { oldInvs =>
+            val (clean, dirty) = oldInvs.partition( {p: ((Int, StoreProduct)) => !inventoriesByProd.keySet.contains(p._1) })
+            val replaced: Map[Int, StoreProduct] = dirty.map{case (k,v) => (k, inventoriesByProd(k))}
+            val completelyNew = inventoriesByProd.filterKeys{k: Int => !oldInvs.keySet.contains(k)}
+            allStoreProductsFromDB.put(s,  clean ++ replaced ++ completelyNew)
 
-        x.foreach {sp =>
-          if (allStoreProductsFromDB.isDefinedAt(sp.storeid.get)) {
-            val oldSeq: IndexedSeq[ProductWithInventory] = allStoreProductsFromDB(sp.storeid.get)
-            val idx = oldSeq.indexWhere( _.productId == sp.productid.get)
-            if (idx >= 0)
-              allStoreProductsFromDB.put(sp.storeid.get,  oldSeq.updated( idx, ProductWithInventory(sp.productid.get, sp.quantity.get)))
           }
         }
       }
@@ -189,10 +171,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         // update in memory for next caller who should be blocked, also in chunks to be conservative.
         val indexedFiltered = filtered.toVector.groupBy(_.storeid.get)
         indexedFiltered.foreach{ case (storeId, values) =>
-          val oldOnes = storeProductsCache(storeId)
-          val newOnes = values.toIndexedSeq.groupBy{sp => sp.productid.get}.mapValues( _.head)
-          storeProductsCache = storeProductsCache.updated(storeId, oldOnes ++ newOnes)
-          val prodsWithInventory = values.map(sp => ProductWithInventory(sp.productid.get, sp.quantity.get))
+          val prodsWithInventory: Map[Int, StoreProduct] = values.map{sp: StoreProduct => sp.productid.get -> sp}(collection.breakOut): Map[Int, StoreProduct]
           if (allStoreProductsFromDB.isDefinedAt(storeId)) {
             allStoreProductsFromDB.put(storeId, allStoreProductsFromDB(storeId) ++ prodsWithInventory)
           }
@@ -215,13 +194,13 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     // synchronize on object StoreProduct as clients are from different threads
     // first evaluate against cache (assumed in synch with DB) what's genuinely new, by satisfying ref. integrity constraints.
     // Then, annoying filter to ensure uniqueness (see Product, it's easier), preventing duplicate key violation
-    val entries = cachedStoreProductIds
-    val referentialIntegrity: (StoreProduct) => Boolean = { sp =>
-      !entries.contains((sp.storeid.get, sp.productid.get)) &&
-        Product.cachedProductIds.contains(sp.productid.get)
+    def referentialIntegrity (sp: StoreProduct): Boolean = {
+      val s = sp.storeid.get
+      val p = sp.productid.get
+      allStoreProductsFromDB.contains(s) &&  Product.cachedProductIds.contains(p) && !allStoreProductsFromDB(s).contains(p)
     }
-    val fewerEntries = myStoreProducts.filter { referentialIntegrity }.toVector
-    val filteredByStoreAndProduct = fewerEntries.groupBy{ sp: StoreProduct => (sp.storeid.get, sp.productid.get): (Int, Int)}
+    val RIEntries = myStoreProducts.filter { referentialIntegrity }.toVector
+    val filteredByStoreAndProduct = RIEntries.groupBy{ sp: StoreProduct => (sp.storeid.get, sp.productid.get): (Int, Int)}
     val filtered: Iterable[StoreProduct] = filteredByStoreAndProduct.map { case (k,v) => v.head } // remove duplicate( using head)
     // break it down and then serialize the work.
     filtered.grouped(DBBatchSize).foreach { insertBatch }
