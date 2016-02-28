@@ -37,8 +37,8 @@ store.DBBatchSize=256
 store.load.workers=1
 
 # to constrain GC in tight memory environment
-store.minStoreId=100
-store.maxStoreId=500
+store.minStoreId=1
+store.maxStoreId=600
 
 store.loadBatchSize=16
 
