@@ -386,16 +386,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       inTransaction {
         loadAll(storeId) match {
           case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-            for ((k, v) <- m) {
-              // we don't want to have two clients taking responsibility to update database for synchronization
-              Some(k) collect {
-                // Clean is intentionally ignored
-                case New =>
-                  Product.insertProducts(v) // insert to DB those we didn't get find in memory cache
-                case Dirty =>
-                  Product.updateProducts(v) // discard inventory that we don't need. This is just conveniently realizing our product is out of date and needs touched up to DB.
-              }
-            }
             // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
             m.values.flatten // flatten the 3 lists
           case net.liftweb.common.Failure(m, ex, _) =>
@@ -415,16 +405,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       inTransaction {
         loadAllStoreProducts() match {
           case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-            for ((k, v) <- m) {
-              Some(k) collect {
-                // Clean is intentionally ignored
-                case New =>
-                  StoreProduct.insertStoreProducts(v)
-                case Dirty =>
-                  StoreProduct.updateStoreProducts(v)
-              }
-            }
-            // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
             m.values.flatten.toVector // flatten the 3 lists
           case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading inventories into cache for '$storeId' with message $m and exception error $ex")
