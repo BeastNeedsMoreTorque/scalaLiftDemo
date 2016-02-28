@@ -252,10 +252,11 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
     // Then, annoying filter to ensure uniqueness by lcbo_id, take the head of each set sharing same lcbo_id and then collect the values
     val entries = cachedProductIds // evaluate once
-    val filteredProds = myProducts.filterNot { p => entries.contains(p.lcbo_id.get) }
+    val filteredForRI = myProducts.filterNot { p => entries.contains(p.lcbo_id.get) }
+    val filteredForUnique = filteredForRI.toVector.groupBy { p: Product => p.lcbo_id.get: Int}.
+      map { case (k,v) => v.head }
     // break it down and then serialize the work.
-    filteredProds.grouped(DBBatchSize).foreach { insertBatch }
-
+    filteredForUnique.grouped(DBBatchSize).foreach { insertBatch }
   }
 
   def create(p: ProductAsLCBOJson): Product = {

@@ -150,8 +150,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
 
   private val storeLoadBatchSize = Props.getInt("store.loadBatchSize", 10)
-  private val storeMinStoreId = Props.getInt("store.minStoreId", 150)
-  private val storeMaxStoreId = Props.getInt("store.maxStoreId", 500)   // asking for more than 400 could be asking for trouble
 
   private val productCacheSize = Props.getInt("product.cacheSize", 10000)
 
@@ -222,8 +220,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           // range of storeMinStoreId and storeMaxStoreId serve to constrain GC in tight memory environment, so we don't cache/synch with those outside of range.
           val storesByState: Map[EntityRecordState, IndexedSeq[PlainStoreAsLCBOJson]] = pageStores.groupBy {
             s => (dbStores.get(s.id), s) match {
-              case (None, _) if s.id >= storeMinStoreId && s.id <= storeMaxStoreId => New
-              case (Some(store), lcboStore) if store.isDirty(lcboStore) => Dirty
+              case (None, _) => New
+              case (Some(store), lcboStore) => Dirty
               case (_ , _) => Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
             }
           }
@@ -284,18 +282,16 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     val dbStores: Map[Int, Store] = inTransaction {
       from(stores)(s =>
-        where( (s.lcbo_id gte storeMinStoreId) and (s.lcbo_id lte storeMaxStoreId) )
           select (s)).map(s => s.lcbo_id.get -> s)(breakOut)
-    }  // queries store table to largest extent possible (mem dependent) and throw it into map
-    // range of storeMinStoreId and storeMaxStoreId serve to constrain GC in tight memory environment
+    }  // queries store table and throw it into map
 
     storesCache ++= getStores(dbStores)
 
     StoreProduct.init(availableStores)
 
-    val (stockedStores, emptyStores) = availableStores.partition( StoreProduct.hasCachedProducts)
-    logger.trace(s"empties ${emptyStores} stocked ${stockedStores}")
-    asyncLoadStores(emptyStores ++ stockedStores)
+    val (stockedStores, emptyStores) = availableStores.toSeq.partition( StoreProduct.hasCachedProducts)
+    logger.trace(s"empties $emptyStores stocked $stockedStores")
+    asyncLoadStores( stockedStores ++ emptyStores)
 
     logger.info("Store.init end")
   }
@@ -424,7 +420,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
       // fetch and then make sure model classes update to DB and their cache synchronously, so we can use their caches.
       Product.update(getProductsOfStartPage) // refresh product cache
-      StoreProduct.update(storeId, getStoreProductsOfStartPage )    }
+      StoreProduct.update(storeId, getStoreProductsOfStartPage )
+    }
   }
 
   import java.net.SocketTimeoutException
