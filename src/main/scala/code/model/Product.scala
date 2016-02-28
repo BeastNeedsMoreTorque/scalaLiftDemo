@@ -104,11 +104,11 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 
-  // intentional aliasing allowing more standard naming convention.
-  def primaryCategory = primary_category
-  def isDiscontinued = is_discontinued
-  def totalPackageUnits = total_package_units
-  def imageThumbUrl = image_thumb_url
+  // intentional aliasing allowing more standard naming convention and not having to call get on.
+  def primaryCategory = primary_category.get
+  def isDiscontinued = is_discontinued.get
+  def totalPackageUnits = total_package_units.get
+  def imageThumbUrl = image_thumb_url.get
   def Package = `package`.get // alias to avoid back ticks
 
   val formatter = NumberFormat.getCurrencyInstance() // Not French Canada, which does it differently...

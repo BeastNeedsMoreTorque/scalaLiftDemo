@@ -152,7 +152,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         // @see http://squeryl.org/occ.html (two threads might fight for same update and if one is stale, that could be trouble with the regular update
 
         val inventoriesByProd = x.toVector.groupBy {_.productid.get } map { case (k,v) => (k, v.head)}  // groupBy will give us a head.
-        allStoreProductsFromDB.get(storeId).fold{
+        allStoreProductsFromDB.get(storeId).fold {
           allStoreProductsFromDB.putIfAbsent(storeId, inventoriesByProd)
         } { oldInvs =>
           val (dirty, clean) = oldInvs.partition( {p: ((Int, StoreProduct)) => inventoriesByProd.keySet.contains(p._1) })
@@ -169,9 +169,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     def insertBatch(filtered: Iterable[StoreProduct]): Unit = {
       try {
         // the DB could fail for PK or whatever other reason.
-        inTransaction {
-          storeProducts.insert(filtered)
-        }
+        inTransaction { storeProducts.insert(filtered) }
         // update in memory for next caller who should be blocked, also in chunks to be conservative.
         val prodsWithInventory: Map[Int, StoreProduct] = filtered.map { sp: StoreProduct => sp.productid.get -> sp }(collection.breakOut): Map[Int, StoreProduct]
         if (allStoreProductsFromDB.isDefinedAt(storeId)) {

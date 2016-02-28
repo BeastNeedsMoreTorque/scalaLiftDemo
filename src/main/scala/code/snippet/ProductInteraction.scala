@@ -88,7 +88,7 @@ object ProductInteraction extends Loggable {
           </label>
           val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"/>
 
-          val imgNS = <img src={prod.imageThumbUrl.get}/>
+          val imgNS = <img src={prod.imageThumbUrl}/>
           val ns: NodeSeq =  <div>
             <div class="span-8">{attributesNS}</div>
             <div class="span-8 last">{imgNS}<br></br>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div>

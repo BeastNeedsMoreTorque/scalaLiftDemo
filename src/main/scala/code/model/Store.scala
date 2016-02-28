@@ -222,7 +222,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           // range of storeMinStoreId and storeMaxStoreId serve to constrain GC in tight memory environment, so we don't cache/synch with those outside of range.
           val storesByState: Map[EntityRecordState, IndexedSeq[PlainStoreAsLCBOJson]] = pageStores.groupBy {
             s => (dbStores.get(s.id), s) match {
-              case (None, _) if s.id > storeMinStoreId && s.id < storeMaxStoreId => New
+              case (None, _) if s.id >= storeMinStoreId && s.id <= storeMaxStoreId => New
               case (Some(store), lcboStore) if store.isDirty(lcboStore) => Dirty
               case (_ , _) => Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
             }
@@ -284,7 +284,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     val dbStores: Map[Int, Store] = inTransaction {
       from(stores)(s =>
-        where( (s.lcbo_id gt storeMinStoreId) and (s.lcbo_id lt storeMaxStoreId) )
+        where( (s.lcbo_id gte storeMinStoreId) and (s.lcbo_id lte storeMaxStoreId) )
           select (s)).map(s => s.lcbo_id.get -> s)(breakOut)
     }  // queries store table to largest extent possible (mem dependent) and throw it into map
     // range of storeMinStoreId and storeMaxStoreId serve to constrain GC in tight memory environment
