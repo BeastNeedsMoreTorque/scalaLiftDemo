@@ -115,7 +115,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   def hasCachedProducts(storeId: Int): Boolean =
     allStoreProductsFromDB.get(storeId).exists{ _.nonEmpty }
 
-  def init(availableStores: Iterable[Int]): Unit =  { // done on single thread on start up.
+  def init(availableStores: Set[Int]): Unit = { // done on single thread on start up.
     def loadBatch(storeId: Int): Iterable[StoreProduct] =
       from(storeProducts)(sp =>
         where(sp.storeid === storeId)
@@ -125,8 +125,9 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       for (storeId <- availableStores;
            inventories = loadBatch(storeId))
       {
-        val newMap = inventories.map{ sp => sp.productid.get -> sp}(collection.breakOut): Map[Int, StoreProduct]
-        allStoreProductsFromDB.putIfAbsent(storeId, newMap)
+        val m: Map[Int, StoreProduct] = inventories.groupBy { sp => sp.productid.get}.
+          map{ case (k,v) => k -> v.last } // groupBy gives us all the required prod keys and once we have a key, we retain only one StoreProduct to avoid duplicates
+        allStoreProductsFromDB.putIfAbsent(storeId, m)
       }
       logger.debug(s"storeProducts loaded over for ${availableStores.size} stores")
     }
@@ -145,7 +146,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       quantity(inv.quantity)
 
   // @see http://squeryl.org/occ.html
-  private def updateStoreProducts(storeId: Int, myStoreProducts: Iterable[StoreProduct]) = {
+  private def updateStoreProducts(storeId: Int, myStoreProducts: Iterable[StoreProduct]): Unit = {
     myStoreProducts.grouped(DBBatchSize).
       foreach { x =>
         inTransaction { storeProducts.forceUpdate(x) }
@@ -181,7 +182,8 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         }
       } catch {
         case se: SQLException =>
-          logger.error("SQLException ")
+          val prodIds = filtered.map{sp => sp.productid.get}
+          logger.error(s"SQLException $prodIds")
           logger.error("Code: " + se.getErrorCode())
           logger.error("SqlState: " + se.getSQLState())
           logger.error("Error Message: " + se.getMessage())
@@ -190,25 +192,35 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
           logger.error("General exception caught: " + e)
       }
     }
+    if (!Store.availableStores.contains(storeId)) {
+      logger.error(s"Invalid parameter storeId $storeId not even in memory!")
+      return
+    } // store does not even exists! Forget about it. Apology for being imperative...
 
+    val productIds = Product.cachedProductIds // evaluate once
     // synchronize on object StoreProduct as clients are from different threads
     // first evaluate against cache (assumed in synch with DB) what's genuinely new, by satisfying ref. integrity constraints.
     // Then, annoying filter to ensure uniqueness (see Product, it's easier), preventing duplicate key violation
     def referentialIntegrity(sp: StoreProduct): Boolean = {
       val p = sp.productid.get
-      Product.cachedProductIds.contains(p) && !allStoreProductsFromDB(storeId).contains(p)
-      // we don't require store to be in hash because we'll enter it when introducing products for first time
-      // That hash is for inventories not for stores. It's assumed all or almost all stores are in memory on start up.
-      // That's why there's asymmetry with Product where we require it to be there (meaning no concern for FK on stores.storeid).
+      productIds.contains(p) && !allStoreProductsFromDB(storeId).contains(p)
     }
-    val filteredForRI = {
+
+    // filter on expected store, sequence it for efficient groupBy, then group by product to filter out duplicates as we'll select only
+    // last one for each product as we don't want more than one (RI problem on duped insert for FK productid if we take it)
+    val filteredForUnique: Set[StoreProduct] = myStoreProducts.filter{sp => sp.storeid.get == storeId}.
+      toVector.groupBy { sp: StoreProduct => sp.productid.get: Int}.
+      map { case (k,v) => v.last }.toSet // remove duplicate( using last, i.e. most up to date, which exists because of groupBy)
+    // Since we know we have this store in inventory do a check on both sp combo and product
+    // but if we have a new store not in inventory but that exists, make sure the product exists.
+    // We already filtered for input myStoreProducts only containing expected storeId.
+    val filteredForRI: Set[StoreProduct] = {
       if (allStoreProductsFromDB.contains(storeId))
-        myStoreProducts.filter {referentialIntegrity}
-      else myStoreProducts
+        filteredForUnique.filter { referentialIntegrity }
+      else filteredForUnique.filter {sp => productIds.contains(sp.productid.get) }
     }
-    val filteredForUnique = filteredForRI.toVector.groupBy { sp: StoreProduct => (sp.storeid.get, sp.productid.get): (Int, Int)}.
-      map { case (k,v) => v.head } // remove duplicate( using head, which exists because of groupBy)
-    filteredForUnique.grouped(DBBatchSize).foreach { insertBatch }
+    // break it down in chunks
+    filteredForRI.grouped(DBBatchSize).foreach { insertBatch }
   }
 
   @throws(classOf[SocketTimeoutException])

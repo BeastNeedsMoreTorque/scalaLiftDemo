@@ -157,7 +157,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
   private val storesCache: concurrent.Map[Int, Store] = TrieMap[Int, Store]()
-  def availableStores: Iterable[Int] = storesCache.keys
+  def availableStores: Set[Int] = storesCache.toMap.keySet
 
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
@@ -220,7 +220,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           // range of storeMinStoreId and storeMaxStoreId serve to constrain GC in tight memory environment, so we don't cache/synch with those outside of range.
           val storesByState: Map[EntityRecordState, IndexedSeq[PlainStoreAsLCBOJson]] = pageStores.groupBy {
             s => (dbStores.get(s.id), s) match {
-              case (None, _) => New
+              case (None, _) if (s.id >= 100) && (s.id <= 700) => New
               case (Some(store), lcboStore) => Dirty
               case (_ , _) => Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
             }
@@ -282,6 +282,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     val dbStores: Map[Int, Store] = inTransaction {
       from(stores)(s =>
+          where ((s.lcbo_id.get gte 100) and (s.lcbo_id.get lte 700))
           select (s)).map(s => s.lcbo_id.get -> s)(breakOut)
     }  // queries store table and throw it into map
 
@@ -290,8 +291,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     StoreProduct.init(availableStores)
 
     val (stockedStores, emptyStores) = availableStores.toSeq.partition( StoreProduct.hasCachedProducts)
-    logger.trace(s"empties $emptyStores stocked $stockedStores")
-    asyncLoadStores( stockedStores ++ emptyStores)
+    logger.debug(s"empties $emptyStores ")
+    logger.debug(s"stocked $stockedStores")
+    asyncLoadStores(  emptyStores ++ stockedStores)
 
     logger.info("Store.init end")
   }

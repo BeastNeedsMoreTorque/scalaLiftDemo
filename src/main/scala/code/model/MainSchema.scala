@@ -33,6 +33,11 @@ object MainSchema extends Schema {
   val productToStoreProducts = oneToManyRelation(products, storeProducts).
     via((p,s) => p.id === s.productid)
 
+  on(stores) { s =>
+    declare(
+      s.lcbo_id defineAs (unique,indexed("store_lcbo_id_idx")))
+  }
+
   on(userProducts) { up =>
     declare(
       up.productid defineAs indexed("userproduct_product"),
@@ -48,6 +53,7 @@ object MainSchema extends Schema {
       sp.storeid defineAs indexed("store_idx"),
       columns(sp.storeid, sp.productid) are(unique, indexed("storeproduct_idx")))
     //  alter table storeproduct add constraint storeproductFK1 foreign key (productid) references product (lcbo_id) match full;
+    //  alter table storeproduct add constraint storeproductFK2 foreign key (storeid) references store (lcbo_id) match full;
 
   }
 
