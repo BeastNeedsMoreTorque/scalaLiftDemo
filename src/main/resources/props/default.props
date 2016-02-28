@@ -35,11 +35,6 @@ store.lcboMaxPerPage=100
 store.lcboMinPerPage=10
 store.DBBatchSize=256
 store.load.workers=1
-
-# to constrain GC in tight memory environment
-store.minStoreId=1
-store.maxStoreId=600
-
 store.loadBatchSize=16
 
 inventory.DBWrite.BatchSize=512

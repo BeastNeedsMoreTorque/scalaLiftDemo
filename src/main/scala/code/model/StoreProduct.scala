@@ -83,7 +83,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   }
 
   def existsStoreProduct(storeId: Int, prodId: Int): Boolean = {
-    allStoreProductsFromDB.get(storeId).map{ _.get(prodId) }.isDefined
+    allStoreProductsFromDB.get(storeId).exists{ _.isDefinedAt(prodId) }
   }
 
   def getProductIdsByStore: Map[Int, IndexedSeq[Int]] =
@@ -201,13 +201,14 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       // That hash is for inventories not for stores. It's assumed all or almost all stores are in memory on start up.
       // That's why there's asymmetry with Product where we require it to be there (meaning no concern for FK on stores.storeid).
     }
-    if (!allStoreProductsFromDB.contains(storeId)) {
-      myStoreProducts.grouped(DBBatchSize).foreach {insertBatch} // no RI risk for new store.
-    } else {
-      val RIEntries = myStoreProducts.filter {referentialIntegrity} // to be defensive in case caching is somewhat broken.
-      // break it down and then serialize the work.
-      RIEntries.grouped(DBBatchSize).foreach {insertBatch}
+    val filteredForRI = {
+      if (allStoreProductsFromDB.contains(storeId))
+        myStoreProducts.filter {referentialIntegrity}
+      else myStoreProducts
     }
+    val filteredForUnique = filteredForRI.toVector.groupBy { sp: StoreProduct => (sp.storeid.get, sp.productid.get): (Int, Int)}.
+      map { case (k,v) => v.head } // remove duplicate( using head, which exists because of groupBy)
+    filteredForUnique.grouped(DBBatchSize).foreach { insertBatch }
   }
 
   @throws(classOf[SocketTimeoutException])
