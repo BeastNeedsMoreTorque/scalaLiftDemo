@@ -152,6 +152,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val storeLoadBatchSize = Props.getInt("store.loadBatchSize", 10)
 
   private val productCacheSize = Props.getInt("product.cacheSize", 10000)
+  private val minStoreId = Props.getInt("store.minStoreId", 100)
+  private val maxStoreId = Props.getInt("store.maxStoreId", 700)
+  private val synchEmptiesFirst = Props.getBool("store.synchEmptiesFirst", false)
+
 
   private val storeProductsLoaded: concurrent.Map[Int, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
@@ -220,7 +224,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           // range of storeMinStoreId and storeMaxStoreId serve to constrain GC in tight memory environment, so we don't cache/synch with those outside of range.
           val storesByState: Map[EntityRecordState, IndexedSeq[PlainStoreAsLCBOJson]] = pageStores.groupBy {
             s => (dbStores.get(s.id), s) match {
-              case (None, _) if (s.id >= 100) && (s.id <= 700) => New
+              case (None, _) if (s.id >= minStoreId) && (s.id <= maxStoreId) => New
               case (Some(store), lcboStore) => Dirty
               case (_ , _) => Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
             }
@@ -282,7 +286,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     val dbStores: Map[Int, Store] = inTransaction {
       from(stores)(s =>
-          where ((s.lcbo_id.get gte 100) and (s.lcbo_id.get lte 700))
+          where ((s.lcbo_id.get gte minStoreId) and (s.lcbo_id.get lte maxStoreId))
           select (s)).map(s => s.lcbo_id.get -> s)(breakOut)
     }  // queries store table and throw it into map
 
@@ -293,7 +297,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val (stockedStores, emptyStores) = availableStores.toSeq.partition( StoreProduct.hasCachedProducts)
     logger.debug(s"empties $emptyStores ")
     logger.debug(s"stocked $stockedStores")
-    asyncLoadStores(  emptyStores ++ stockedStores)
+    if (synchEmptiesFirst)
+      asyncLoadStores(emptyStores ++ stockedStores)
+    else
+      asyncLoadStores(stockedStores ++ emptyStores)
 
     logger.info("Store.init end")
   }
