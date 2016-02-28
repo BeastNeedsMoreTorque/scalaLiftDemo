@@ -37,6 +37,13 @@ store.DBBatchSize=256
 store.load.workers=1
 store.loadBatchSize=16
 
+# if true, we synch with LCBO stores for which we have nothing in DB first, if false we go with those for which we already have data.
+# This parameter would be useful if we're constrained by size and cannot load them all and then we'd select a tighter range than full range of stores
+# for minStoreId and maxStoreId
+store.synchEmptiesFirst=false
+store.minStoreId=100
+store.maxStoreId=700
+
 inventory.DBWrite.BatchSize=512
 
 
