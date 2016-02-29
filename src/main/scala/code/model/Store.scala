@@ -152,8 +152,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val storeLoadBatchSize = Props.getInt("store.loadBatchSize", 10)
 
   private val productCacheSize = Props.getInt("product.cacheSize", 10000)
-  private val minStoreId = Props.getInt("store.minStoreId", 100)
-  private val maxStoreId = Props.getInt("store.maxStoreId", 700)
+  private val minStoreId = Props.getInt("store.minStoreId", 250)
+  private val maxStoreId = Props.getInt("store.maxStoreId", 500)
   private val synchEmptiesFirst = Props.getBool("store.synchEmptiesFirst", false)
 
 
@@ -335,7 +335,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     tryo { // we could get errors going to LCBO, this tryo captures those.
       cacheSuccess(storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         logger.warn(s"recommend cache miss for $storeId") // don't try to load it asynchronously as that's start up job to get going with it.
-        Future {loadCache(storeId)}
         val prods = productsByStoreCategory(storeId, category) // take a hit of one go to LCBO, no more.
         val indices = Random.shuffle[Int, IndexedSeq](0 until prods.size )
         // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
@@ -350,6 +349,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                  p = prods(idx);
                  lcbo_id = p.lcbo_id.get) yield (0, p)
         }
+        // we may have 0 inventory, browser should try to finish off that work not web server.
         seq.take(requestSize)
       }
     }
@@ -384,7 +384,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   // heavy long lasting, for now no thread inside, but clients call this asynchronously
   def loadCache(storeId: Int) = {
 
-    def getProductsOfStartPage: Iterable[Product] = {
+    def getProductsOfStartPage: Seq[Product] = {
       def loadAll(storeId: Int): Box[Map[EntityRecordState, IndexedSeq[Product]]] =
         tryo { getProductsByStore(storeId) }
 
@@ -392,7 +392,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         loadAll(storeId) match {
           case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
             // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
-            m.values.flatten // flatten the 3 lists
+            m.values.flatten.toSeq // flatten the 3 lists
           case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading products into cache for '$storeId' with message $m and exception error $ex")
             List[Product]()
@@ -403,20 +403,20 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    def getStoreProductsOfStartPage(): Vector[StoreProduct] = {
+    def getStoreProductsOfStartPage(): Seq[StoreProduct] = {
       def loadAllStoreProducts(): Box[Map[EntityRecordState, IndexedSeq[StoreProduct]]] =
         tryo { storeProductByStore(storeId) }
 
       inTransaction {
         loadAllStoreProducts() match {
           case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-            m.values.flatten.toVector // flatten the 3 lists
+            m.values.flatten.toSeq // flatten the 3 lists
           case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading inventories into cache for '$storeId' with message $m and exception error $ex")
-            Vector[StoreProduct]()
+            Seq[StoreProduct]()
           case Empty =>
             logger.error(s"Problem loading inventories into cache for '$storeId'")
-            Vector[StoreProduct]()
+            Seq[StoreProduct]()
         }
       }
     }
