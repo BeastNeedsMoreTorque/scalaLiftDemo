@@ -9,7 +9,7 @@ import scala.collection._
 import net.liftweb.record.field.{LongField,StringField,BooleanField,IntField}
 import net.liftweb.record.{Record, MetaRecord}
 import net.liftweb.common._
-import net.liftweb.util.{Props}
+import net.liftweb.util.Props
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.squerylrecord.KeyedRecord
 
@@ -195,9 +195,9 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       select(p.lcbo_id.get)) }.toSet
   }
 
-  def update(prods: Iterable[Product]) = {
+  def update(prods: Seq[Product]) = {
     val (existingProds, newProds) = prods.partition{ p: Product => productsCache.keySet.contains(p.lcbo_id.get) }
-    updateProducts(existingProds.toSet)
+    updateProducts(existingProds)
     insertProducts(newProds)
   }
 
@@ -206,7 +206,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   def cachedProductIds: Set[Int] = productsCache.keySet
 
   // @see http://squeryl.org/occ.html
-  def updateProducts(myProducts: Iterable[Product]): Unit = synchronized {
+  def updateProducts(myProducts: Seq[Product]): Unit = synchronized {
     myProducts.grouped(DBBatchSize).
       foreach { x =>
         try {
@@ -229,7 +229,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       }
   }
 
-  def insertProducts( myProducts: Iterable[Product]): Unit = {
+  def insertProducts( myProducts: Seq[Product]): Unit = {
     // Do special handling to filter out duplicate keys, which would throw.
     def insertBatch(filteredProds: Iterable[Product]): Unit = synchronized { // synchronize on object Product as clients are from different threads
         // insert them
@@ -253,8 +253,8 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     // Then, annoying filter to ensure uniqueness by lcbo_id, take the head of each set sharing same lcbo_id and then collect the values
     val entries = cachedProductIds // evaluate once
     val filteredForRI = myProducts.filterNot { p => entries.contains(p.lcbo_id.get) }
-    val filteredForUnique = filteredForRI.toVector.groupBy { p: Product => p.lcbo_id.get: Int}.
-      map { case (k,v) => v.head }
+    val filteredForUnique = filteredForRI.groupBy {_.lcbo_id.get}.
+      map { case (k,v) => v.last }
     // break it down and then serialize the work.
     filteredForUnique.grouped(DBBatchSize).foreach { insertBatch }
   }
