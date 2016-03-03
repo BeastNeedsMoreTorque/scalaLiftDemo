@@ -25,8 +25,8 @@ import java.text.NumberFormat
   */
 object ProductInteraction extends Loggable {
   case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
-  case class QuantityOfProduct(quantity: Int, product: Product)  // quantity available at the current store for a product (store is implied by context)
-  case class SelectedProduct(lcbo_id: Int, quantity: Int, cost: Double) // to capture user input via JS and JSON
+  case class QuantityOfProduct(quantity: Long, product: Product)  // quantity available at the current store for a product (store is implied by context)
+  case class SelectedProduct(lcbo_id: Long, quantity: Long, cost: Double) // to capture user input via JS and JSON
   case class SelectedProductFeedback(selectedProduct: SelectedProduct, feedback: Feedback)
   case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
 
@@ -101,10 +101,10 @@ object ProductInteraction extends Loggable {
         SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
       }
 
-      def maySelect(storeId: Int): JsCmd =
-        if (storeId > 0 ) {
+      def maySelect(lcbo_storeId: Int): JsCmd =
+        if (lcbo_storeId > 0 ) {
           // validate expected numeric input storeId then access LCBO data
-          val quantityProdSeq = Store.recommend(storeId, theCategory.is, theRecommendCount.is) match {
+          val quantityProdSeq = Store.recommend(lcbo_storeId, theCategory.is, theRecommendCount.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
             case Full(pairs) => Full(pairs) // returns prod and quantity in inventory normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
@@ -122,15 +122,15 @@ object ProductInteraction extends Loggable {
         }
 
       val json = jsStore.extractOpt[String].map( parse)
-      val storeId = json.fold(-1){ json =>  json.extract[Int]}
+      val lcbo_storeId = json.fold(-1){ json =>  json.extract[Int]}
       User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
-      { user => maySelect(storeId)} // normal processing
+      { user => maySelect(lcbo_storeId)} // normal processing
     }
 
     def consumeProducts(selection: JValue): JsCmd = {
       def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
         def getItem(item: PurchasedProductConfirmation): NodeSeq = {
-          def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Int): String =
+          def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Long): String =
             s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
 
           val formattedCost = formatter format item.selectedProduct.cost
@@ -150,7 +150,7 @@ object ProductInteraction extends Loggable {
       }
 
       def mayConsume(selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
-        def mayConsumeItem(p: Product, quantity: Int): Option[Feedback] = {
+        def mayConsumeItem(p: Product, quantity: Long): Option[Feedback] = {
           val x = UserProduct.consume(p, quantity) match {
             case Full((userName, count)) =>
               Feedback(userName, success=true, s"${p.name} $count unit(s) over the years")
