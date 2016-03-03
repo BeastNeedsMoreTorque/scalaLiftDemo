@@ -25,13 +25,27 @@ object MainSchema extends Schema {
   val userStores = table[UserStore]("userstore")
 
   val productToUserProducts = oneToManyRelation(products, userProducts).
-    via((p,u) => p.id === u.productid)
+    via((p,u) => p.id === u.productid) // WRONG! u.productid refers to p.lcbo_id
+  // Foreign-key constraints:
+  // "userproductFK1" FOREIGN KEY (productid) REFERENCES product(id)
+  //    alter table "userproduct" add constraint "userproductFK1" foreign key ("productid") references "product"("id");
 
   val storeToUserStores = oneToManyRelation(stores, userStores).
     via((s,u) => s.id === u.storeid)
+  // alter table "userstore" add constraint "userstoreFK2" foreign key ("storeid") references "store"("id");
+
 
   val productToStoreProducts = oneToManyRelation(products, storeProducts).
-    via((p,s) => p.id === s.productid)
+    via((p,s) => p.id === s.productid) // WRONG (productid is still LCBO type and not DB generated!
+  // alter table "storeproduct" add constraint "storeproductFK3" foreign key ("productid") references "product"("id"); WRONG!
+
+  val storeToStoreProducts = oneToManyRelation(stores, storeProducts).
+    via((s,sp) => s.id === sp.fk_storeid)
+  //alter table "storeproduct" add constraint "storeproductFK4" foreign key ("fk_storeid") references "store"("id");
+
+  // the default constraint for all foreign keys in this schema :
+ // override def applyDefaultForeignKeyPolicy(foreignKeyDeclaration: ForeignKeyDeclaration) =
+ // foreignKeyDeclaration.constrainReference
 
   on(stores) { s =>
     declare(
@@ -41,10 +55,9 @@ object MainSchema extends Schema {
   on(userProducts) { up =>
     declare(
       up.productid defineAs indexed("userproduct_product"),
-      up.user_c defineAs indexed("userproduct_user_c"),
-      columns(up.user_c, up.productid ) are(unique,indexed("user_prod_idx")))
-      // Foreign-key constraints:
-      // "userproductFK1" FOREIGN KEY (productid) REFERENCES product(id)
+      up.userid defineAs indexed("userproduct_user"),
+      columns(up.userid, up.productid ) are(unique,indexed("user_prod_idx")))
+
   }
 
   on(storeProducts) { sp =>
@@ -52,9 +65,6 @@ object MainSchema extends Schema {
       sp.productid defineAs indexed("product_idx"),
       sp.storeid defineAs indexed("store_idx"),
       columns(sp.storeid, sp.productid) are(unique, indexed("storeproduct_idx")))
-    //  alter table storeproduct add constraint storeproductFK1 foreign key (productid) references product (lcbo_id) match full;
-    //  alter table storeproduct add constraint storeproductFK2 foreign key (storeid) references store (lcbo_id) match full;
-
   }
 
   on(products) { p =>

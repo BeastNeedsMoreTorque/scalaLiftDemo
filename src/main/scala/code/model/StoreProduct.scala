@@ -46,11 +46,15 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
   @Column(name="id")
   override val idField = new LongField(this, 1)  // our own auto-generated id
 
-  lazy val product = MainSchema.productToStoreProducts.right(this)
+  //lazy val product = MainSchema.productToStoreProducts.right(this)
+  //lazy val store = MainSchema.storeToStoreProducts.right(this)
 
-  val storeid = new IntField(this)
-  val productid = new IntField(this)
-  val quantity = new IntField(this)
+  val storeid = new LongField(this)
+  val fk_storeid = new LongField(this)
+  val productid = new LongField(this)
+  //val fk_productid = new LongField(this)
+
+  val quantity = new LongField(this)
 
   def isDirty(inv: InventoryAsLCBOJson): Boolean =
     quantity.get != inv.quantity
@@ -65,43 +69,45 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   private val DBBatchSize = Props.getInt("inventory.DBWrite.BatchSize", 100)
   private implicit val formats = net.liftweb.json.DefaultFormats
 
-  // only update after confirmed to be in database!
-  private val allStoreProductsFromDB: concurrent.Map[Int, Map[Int, StoreProduct]] = TrieMap()
+  // only update after confirmed to be in database! Keyed by fk_storeid (no longer storeid)
+  private val allStoreProductsFromDB: concurrent.Map[Long, Map[Long, StoreProduct]] = TrieMap()
 
-  def getInventories(storeId: Int): Map[Int, StoreProduct] =
+  def getInventories(storeId: Long): Map[Long, StoreProduct] =
     allStoreProductsFromDB.get(storeId).getOrElse(Map())
 
-  def emptyInventoryForStore(storeId: Int): Boolean = {
+  def emptyInventoryForStore(storeId: Long): Boolean = {
     // if that store does not exist in cache, it's false.
     allStoreProductsFromDB.get(storeId).exists{ _.values.forall(_.quantity.get == 0 )}
   }
 
-  def getStoreProductQuantity(storeId: Int, prodId: Int): Option[Int] = {
+  def getStoreProductQuantity(storeId: Long, prodId: Long): Option[Long] = {
     val it: Iterable[Option[StoreProduct]] = allStoreProductsFromDB.get(storeId).map{ _.get(prodId) }
     it.headOption.getOrElse(None).map(_.quantity.get)
   }
 
-  def existsStoreProduct(storeId: Int, prodId: Int): Boolean = {
+  def existsStoreProduct(storeId: Long, prodId: Long): Boolean = {
     allStoreProductsFromDB.get(storeId).exists{ _.isDefinedAt(prodId) }
   }
 
-  def getProductIdsByStore: Map[Int, IndexedSeq[Int]] =
+  def getProductIdsByStore: Map[Long, IndexedSeq[Long]] =
     allStoreProductsFromDB.map { case (storeId, m) => storeId -> m.keys.toIndexedSeq }
 
-  def hasProductsByStoreCategory(storeId: Int, category: String) = {
+  def hasProductsByStoreCategory(storeId: Option[Long], category: String) = {
     // common English: There is the cached store such that it has a product key such that its product can be fetched
     // such that the product's primaryCategory is the requested category.
     // No attempt to obfuscate here, seriously!
-    allStoreProductsFromDB.get(storeId).exists {
-      _.keys.exists {
-        Product.getProduct(_).exists {
-          _.primaryCategory == category
+    storeId.exists { s =>
+      allStoreProductsFromDB.get(s).exists {
+        _.keys.exists {
+          Product.getProduct(_).exists {
+            _.primaryCategory == category
+          }
         }
       }
     }
   }
 
-  def getProductIdsByStoreCategory(storeId: Int, category: String): IndexedSeq[Int] = {
+  def getProductIdsByStoreCategory(storeId: Long, category: String): IndexedSeq[Long] = {
     {
       for (storeMap <- allStoreProductsFromDB.get(storeId).toSeq; // toSeq is to make what follows work on sequences rather than options, as first guy dictates interface
            storeProdId <- storeMap.keys;
@@ -110,23 +116,23 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     }.toIndexedSeq
   }
 
-  def storeIdsWithCachedProducts: Set[Int] =
+  def storeIdsWithCachedProducts: Set[Long] =
     allStoreProductsFromDB.filter{ case(k,m) => m.nonEmpty }.keySet
 
-  def hasCachedProducts(storeId: Int): Boolean =
+  def hasCachedProducts(storeId: Long): Boolean =
     allStoreProductsFromDB.get(storeId).exists{ _.nonEmpty }
 
-  def init(availableStores: Set[Int]): Unit = { // done on single thread on start up.
-    def loadBatch(storeId: Int): Iterable[StoreProduct] =
+  def init(availableStores: Set[Long]): Unit = { // done on single thread on start up.
+    def loadBatch(storeId: Long): Iterable[StoreProduct] =
       from(storeProducts)(sp =>
-        where(sp.storeid === storeId)
+        where(sp.fk_storeid === storeId)
         select(sp))
 
     inTransaction {
       for (storeId <- availableStores;
            inventories = loadBatch(storeId))
       {
-        val m: Map[Int, StoreProduct] = inventories.groupBy { _.productid.get}.
+        val m = inventories.groupBy { _.productid.get}.
           map{ case (k,v) => k -> v.last } // groupBy gives us all the required prod keys and once we have a key, we retain only one StoreProduct to avoid duplicates
         allStoreProductsFromDB.putIfAbsent(storeId, m)
       }
@@ -134,20 +140,21 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     }
   }
 
-  def update(storeId: Int, theStores: Seq[StoreProduct]) = {
+  def update(storeId: Long, theStores: Seq[StoreProduct]) = {
     val (existingInventories, newInventories) = theStores.partition { sp => existsStoreProduct(storeId, sp.productid.get) }
     updateStoreProducts(storeId, existingInventories)
     insertStoreProducts(storeId, newInventories)
   }
 
-  def create(inv: InventoryAsLCBOJson): StoreProduct =
+  def create(inv: InventoryAsLCBOJson, id: Long): StoreProduct =
     createRecord.
+      fk_storeid(id).
       storeid(inv.store_id).
       productid(inv.product_id).
       quantity(inv.quantity)
 
   // @see http://squeryl.org/occ.html
-  private def updateStoreProducts(storeId: Int, myStoreProducts: Seq[StoreProduct]): Unit = {
+  private def updateStoreProducts(storeId: Long, myStoreProducts: Seq[StoreProduct]): Unit = {
     myStoreProducts.grouped(DBBatchSize).
       foreach { x =>
         inTransaction { storeProducts.forceUpdate(x) }
@@ -157,7 +164,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         val oldVal = allStoreProductsFromDB.putIfAbsent(storeId, inventoriesByProdId)
         oldVal.map { oldInventories => // if we did put when absent, we're not coming here! Lock-free rules!
           val (dirty, clean) = oldInventories.partition( {p => inventoriesByProdId.keySet.contains(p._1) })
-          val replaced: Map[Int, StoreProduct] = dirty.map{case (k,v) => (k, inventoriesByProdId(k))}
+          val replaced = dirty.map{case (k,v) => (k, inventoriesByProdId(k))}
           val completelyNew = inventoriesByProdId.filterKeys{ id => !oldInventories.keySet.contains(id) }
           allStoreProductsFromDB.put(storeId,  clean ++ replaced ++ completelyNew)
         }
@@ -165,14 +172,14 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   }
 
   // this does not check for database, so it's assumed caller is from this class and will have the "sense" to call it only once for a given object.
-  private def insertStoreProducts(storeId: Int, myStoreProducts: Seq[StoreProduct]): Unit = {
+  private def insertStoreProducts(storeId: Long, myStoreProducts: Seq[StoreProduct]): Unit = {
     // Do special handling to filter out duplicate keys, which would throw.
     def insertBatch(filtered: Iterable[StoreProduct]): Unit = {
       try {
         // the DB could fail for PK or whatever other reason.
         inTransaction { storeProducts.insert(filtered) }
         // update in memory for next caller who should be blocked, also in chunks to be conservative.
-        val prodsWithInventory: Map[Int, StoreProduct] = filtered.map { sp => sp.productid.get -> sp }(collection.breakOut): Map[Int, StoreProduct]
+        val prodsWithInventory = filtered.map { sp => sp.productid.get -> sp }(collection.breakOut): Map[Long, StoreProduct]
         val oldVal = allStoreProductsFromDB.putIfAbsent(storeId, prodsWithInventory)
         oldVal.map { oldInventories => // if we did put when absent, we're not coming here! Lock-free rules!
           allStoreProductsFromDB.put(storeId, oldInventories ++ prodsWithInventory)

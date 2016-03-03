@@ -20,7 +20,7 @@ class UserProduct private() extends Record[UserProduct] with KeyedRecord[Long] w
 
   lazy val product = MainSchema.productToUserProducts.right(this)
 
-  val user_c = new LongField(this)
+  val userid = new LongField(this)
   val productid = new LongField(this)
   val selectionscount = new LongField(this) {
     override def defaultValue = 1
@@ -39,7 +39,7 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
     * @return the user who requested the product and the number of times the user has purchased this product as a pair/tuple.
     *         May throw but would be caught as a Failure within Box to be consumed higher up.
     */
-  def consume(p: Product, quantity: Int): Box[(String, Long)] = {
+  def consume(p: Product, quantity: Long): Box[(String, Long)] = {
     User.currentUser.dmap { Failure("unable to store transaction, Login first!").asA[(String, Long)] }
     { user => // normal case
       // update it with new details; we could verify that there is a difference between LCBO and our version first...
@@ -55,13 +55,13 @@ object UserProduct extends UserProduct with MetaRecord[UserProduct] {
           val updatedCount = prod.fold {
             // we never saw that product before and user shows interest, store both. It could theoretically happen if user selects a product with many new products and cache warm up is especially slow.
             p.save
-            UserProduct.createRecord.user_c(user.id.get).productid(p.id).selectionscount(quantity).save // cascade save dependency.
+            UserProduct.createRecord.userid(user.id.get).productid(p.id).selectionscount(quantity).save // cascade save dependency.
             quantity.toLong
           } { q =>
-            val userProd = userProducts.where(u => u.user_c === user.id.get and u.productid === q.id).forUpdate.headOption
+            val userProd = userProducts.where(u => u.userid === user.id.get and u.productid === q.id).forUpdate.headOption
             userProd.fold {
               // (Product would be stored in DB with no previous user interest)
-              UserProduct.createRecord.user_c(user.id.get).productid(q.id).selectionscount(quantity).save // cascade save dependency.
+              UserProduct.createRecord.userid(user.id.get).productid(q.id).selectionscount(quantity).save // cascade save dependency.
               quantity.toLong
             } { u: UserProduct=>
                 val newCount = u.selectionscount.get + quantity
