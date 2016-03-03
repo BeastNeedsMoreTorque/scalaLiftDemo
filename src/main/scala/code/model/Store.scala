@@ -493,18 +493,21 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private def productsByStoreCategory(storeId: Long, category: String): IndexedSeq[Product] = {
     if (MaxSampleSize <= 0) Vector()
     else {
-      val url = s"$LcboDomainURL/products?store_id=$storeId" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
-      val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
-        !p.is_discontinued
-      } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
-      val items = collectItemsOnAPage(
-        Map[EntityRecordState, IndexedSeq[Product]](New -> Vector(), Dirty -> Vector(), Clean -> Vector()),
-        url,
-        MaxSampleSize,
-        pageNo = 1,
-        pageDelta = 1,
-        reconWithDB = false)
-      items.values.take(MaxSampleSize).flatten.toVector // we don't care about Clean/New/Dirty state here so flatten values.
+      val lcboStoreId = storeIdToLcboId(storeId)
+      lcboStoreId.fold(IndexedSeq[Product]()) { s =>
+        val url = s"$LcboDomainURL/products?store_id=$s" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
+        val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
+          !p.is_discontinued
+        } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
+        val items = collectItemsOnAPage(
+          Map[EntityRecordState, IndexedSeq[Product]](New -> Vector(), Dirty -> Vector(), Clean -> Vector()),
+          url,
+          MaxSampleSize,
+          pageNo = 1,
+          pageDelta = 1,
+          reconWithDB = false)
+        items.values.take(MaxSampleSize).flatten.toVector // we don't care about Clean/New/Dirty state here so flatten values.
+      }
     }
   }
 
@@ -568,6 +571,17 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         mapVector.getOrElse(state, Vector()).flatMap { p => f(p) } // remove the Option in Option[Product]
       }
 
+      def stateOfProduct(item: InventoryAsLCBOJson): EntityRecordState = {
+        val qtyOption = for (dbProductId <- lcboidToDBId(item.product_id);
+             q <- StoreProduct.getStoreProductQuantity(storeId, dbProductId)
+        ) yield q
+        qtyOption  match {
+          case None  => New
+          case Some(quantity) if item.quantity != quantity => Dirty
+          case _ => Clean
+        }
+      }
+
       if (requiredSize <= 0) return accumItems
       // specify the URI for the LCBO api url for liquor selection
       val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
@@ -584,17 +598,21 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
 
       // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-      val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.groupBy {
-        i => StoreProduct.getStoreProductQuantity(storeId, i.product_id) match {
-          case None  => New
-          case Some(quantity) if i.quantity != quantity => Dirty
-          case _ => Clean
-        }
-      }
+      val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.groupBy( stateOfProduct )
+
       val storeInventories = StoreProduct.getInventories(storeId)
-      val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, storeProductsByState, {inv => storeInventories.get(inv.product_id )})
-      val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => storeInventories.get(inv.product_id ).map { _.copyAttributes( inv)} } )
-      val newProducts = accumItems(New) ++ storeProductsByState.getOrElse(New, Nil).map { sp => StoreProduct.create(sp, storeId) }
+      def inventoryForStoreAndLCBOProd(lcboProdID: Int): Option[StoreProduct] = {
+        val dbProdId = Product.lcboidToDBId(lcboProdID )
+        dbProdId.map{ id: Long => storeInventories.get(id) }.getOrElse(None)
+      }
+
+      val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, storeProductsByState, {inv => inventoryForStoreAndLCBOProd(inv.product_id) })
+      val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => inventoryForStoreAndLCBOProd(inv.product_id).map { _.copyAttributes( inv)} } )
+      // get the New partition, returning Nil if we don't have any, and open up option for a match on the productID in database from the LCBO ID.
+      // finally fetch a StoreProduct that is created with specified productId, quantity, and storeId.
+      val newProducts:IndexedSeq[StoreProduct] = accumItems(New).++(storeProductsByState.getOrElse(New, Nil).
+                flatMap { inv => lcboidToDBId(inv.product_id).
+              map { dbProductId: Long => StoreProduct.create(inv.quantity, storeId, dbProductId) } })(collection.breakOut)
       val revisedAccumItems: Map[EntityRecordState, IndexedSeq[StoreProduct]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
 
       if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) {

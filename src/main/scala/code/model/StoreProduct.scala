@@ -50,7 +50,6 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
   //lazy val store = MainSchema.storeToStoreProducts.right(this)
 
   val storeid = new LongField(this)
-  val fk_storeid = new LongField(this)
   val productid = new LongField(this)
   //val fk_productid = new LongField(this)
 
@@ -69,7 +68,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   private val DBBatchSize = Props.getInt("inventory.DBWrite.BatchSize", 100)
   private implicit val formats = net.liftweb.json.DefaultFormats
 
-  // only update after confirmed to be in database! Keyed by fk_storeid (no longer storeid)
+  // only update after confirmed to be in database! Keyed by storeid
   private val allStoreProductsFromDB: concurrent.Map[Long, Map[Long, StoreProduct]] = TrieMap()
 
   def getInventories(storeId: Long): Map[Long, StoreProduct] =
@@ -125,7 +124,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
   def init(availableStores: Set[Long]): Unit = { // done on single thread on start up.
     def loadBatch(storeId: Long): Iterable[StoreProduct] =
       from(storeProducts)(sp =>
-        where(sp.fk_storeid === storeId)
+        where(sp.storeid === storeId)
         select(sp))
 
     inTransaction {
@@ -146,12 +145,11 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     insertStoreProducts(storeId, newInventories)
   }
 
-  def create(inv: InventoryAsLCBOJson, id: Long): StoreProduct =
+  def create(qty: Long, sid: Long, pid: Long): StoreProduct =
     createRecord.
-      fk_storeid(id).
-      storeid(inv.store_id).
-      productid(inv.product_id).
-      quantity(inv.quantity)
+      quantity(qty).
+      storeid(sid).
+      productid(pid)
 
   // @see http://squeryl.org/occ.html
   private def updateStoreProducts(storeId: Long, myStoreProducts: Seq[StoreProduct]): Unit = {
