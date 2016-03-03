@@ -176,10 +176,14 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB!
   def getProducts: Map[Long, Product] = productsCache
 
+  private val lcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
+  def lcboidToDBId(l: Int): Option[Long] = lcboIdsToDBIds.get(l)
+  def DBIdToLcboId(d: Long): Option[Long] = productsCache.get(d).map(_.lcboId)
+
   def init(): Unit = inTransaction {
-    val prods = from(products)(p =>
-      select(p))
+    val prods = from(products)(p => select(p))
     productsCache ++= prods.map { p => p.lcboId -> p }.toMap
+    lcboIdsToDBIds ++= prods.map{ p => p.lcboId -> p.id }
   }
 
   def getProductIds: Set[Long] = inTransaction {

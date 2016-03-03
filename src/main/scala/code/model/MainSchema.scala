@@ -25,7 +25,7 @@ object MainSchema extends Schema {
   val userStores = table[UserStore]("userstore")
 
   val productToUserProducts = oneToManyRelation(products, userProducts).
-    via((p,u) => p.id === u.productid) // WRONG! u.productid refers to p.lcbo_id
+    via((p,u) => p.id === u.productid)
   // Foreign-key constraints:
   // "userproductFK1" FOREIGN KEY (productid) REFERENCES product(id)
   //    alter table "userproduct" add constraint "userproductFK1" foreign key ("productid") references "product"("id");
@@ -40,7 +40,7 @@ object MainSchema extends Schema {
   // alter table "storeproduct" add constraint "storeproductFK3" foreign key ("productid") references "product"("id"); WRONG!
 
   val storeToStoreProducts = oneToManyRelation(stores, storeProducts).
-    via((s,sp) => s.id === sp.fk_storeid)
+    via((s,sp) => s.id === sp.storeid)
   //alter table "storeproduct" add constraint "storeproductFK4" foreign key ("fk_storeid") references "store"("id");
 
   // the default constraint for all foreign keys in this schema :
