@@ -167,7 +167,7 @@ object ProductInteraction extends Loggable {
                            product <- Product.getProduct(sp.lcbo_id);
                            f <- mayConsumeItem(product, sp.quantity)) yield SelectedProductFeedback(sp, f)
         val partition = feedback.groupBy(_.feedback.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
-        partition.getOrElse(false, Nil).map{ _.feedback.message}.map(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
+        partition.getOrElse(false, Nil).map( _.feedback.message).foreach(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
         val goodConfirmations = partition.getOrElse(true, Nil) // select those for which we have success and positive message
         if (goodConfirmations.isEmpty) {
           S.error("Make sure you select a product if you want to consume") // they all failed!

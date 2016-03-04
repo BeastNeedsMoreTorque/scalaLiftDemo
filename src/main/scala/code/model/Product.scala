@@ -37,7 +37,7 @@ case class ProductAsLCBOJson(id: Int,
                              price_in_cents: Int,
                              alcohol_content: Int,
                              volume_in_milliliters: Int) {
-  def removeNulls(): ProductAsLCBOJson = { // remove LCBO's poisoned null strings
+  def removeNulls: ProductAsLCBOJson = { // remove LCBO's poisoned null strings
     def notNull(s: String) = if (s eq null) "" else s
 
     ProductAsLCBOJson(id,
@@ -173,7 +173,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
 
   // thread-safe lock free objects
-  private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB!
+  private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   def getProducts: Map[Long, Product] = productsCache
 
   private val lcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
@@ -182,7 +182,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   def init(): Unit = inTransaction {
     val prods = from(products)(p => select(p))
-    productsCache ++= prods.map { p => p.lcboId -> p }.toMap
+    productsCache ++= prods.map { p => p.id -> p }.toMap
     lcboIdsToDBIds ++= prods.map{ p => p.lcboId -> p.id }
   }
 
@@ -192,14 +192,15 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   }
 
   def update(prods: Seq[Product]) = {
-    val (existingProds, newProds) = prods.partition{ p: Product => productsCache.keySet.contains(p.lcboId) }
+    val (existingProds, newProds) = prods.partition{ p: Product => productsCache.keySet.contains(p.id) }
     updateProducts(existingProds)
     insertProducts(newProds)
   }
 
-  def getProduct(prodId: Long): Option[Product] = productsCache get prodId
+  def getProduct(dbId: Long): Option[Product] = productsCache get dbId
 
-  def cachedProductIds: Set[Long] = productsCache.keySet
+  def cachedProductIds: Set[Long] = productsCache.keySet  // by PK id.
+  def cachedLcboProductIds: Set[Long] = cachedProductIds.flatMap(DBIdToLcboId)
 
   // @see http://squeryl.org/occ.html
   def updateProducts(myProducts: Seq[Product]): Unit = synchronized {
@@ -213,15 +214,15 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
         } catch {
           case se: SQLException =>
             logger.error("SQLException ")
-            logger.error("Code: " + se.getErrorCode())
-            logger.error("SqlState: " + se.getSQLState())
-            logger.error("Error Message: " + se.getMessage())
-            logger.error("NextException:" + se.getNextException())
+            logger.error("Code: " + se.getErrorCode)
+            logger.error("SqlState: " + se.getSQLState)
+            logger.error("Error Message: " + se.getMessage)
+            logger.error("NextException:" + se.getNextException)
           case e: Exception =>
             logger.error("General exception caught: " + e+ " " + x)
         }
         // update in memory for next caller who should be blocked
-        productsCache ++= x.map { p => p.lcboId -> p }.toMap
+        productsCache ++= x.map { p => p.id -> p }.toMap
       }
   }
 
@@ -232,22 +233,22 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       try { // the DB could fail for PK or whatever other reason.
         inTransaction { products.insert(filteredProds) }
         // update in memory for next caller who should be blocked
-        productsCache ++= filteredProds.map { p => p.lcboId -> p }.toMap
+        productsCache ++= filteredProds.map { p => p.id -> p }.toMap
       } catch {
         case se: SQLException =>
           logger.error("SQLException ")
-          logger.error("Code: " + se.getErrorCode())
-          logger.error("SqlState: " + se.getSQLState())
-          logger.error("Error Message: " + se.getMessage())
-          logger.error("NextException:" + se.getNextException())
+          logger.error("Code: " + se.getErrorCode)
+          logger.error("SqlState: " + se.getSQLState)
+          logger.error("Error Message: " + se.getMessage)
+          logger.error("NextException:" + se.getNextException)
         case e: Exception =>
           logger.error("General exception caught: " + e)
       }
 
     }
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
-    // Then, annoying filter to ensure uniqueness by lcbo_id, take the head of each set sharing same lcbo_id and then collect the values
-    val entries = cachedProductIds // evaluate once
+    // Then, annoying filter to ensure uniqueness by lcbo_id, take the last of each set sharing same lcbo_id and then collect the values
+    val entries = cachedLcboProductIds // evaluate once
     val filteredForRI = myProducts.filterNot { p => entries.contains(p.lcboId) }
     val filteredForUnique = filteredForRI.groupBy {_.lcboId}.
       map { case (k,v) => v.last }

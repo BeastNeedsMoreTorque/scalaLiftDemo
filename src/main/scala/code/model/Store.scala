@@ -98,7 +98,7 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
                                  city: String = "") {
 
   def getStore(dbStores: Map[Long, Store]): Option[Store] = {
-    for (storeId <- Store.lcbo_idToId(id);
+    for (storeId <- Store.lcboIdToDBId(id);
          s <- dbStores.get(storeId)
     ) yield s
   }
@@ -153,14 +153,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val maxStoreId = Props.getInt("store.maxStoreId", 500)
   private val synchEmptiesFirst = Props.getBool("store.synchEmptiesFirst", false)
 
-
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
   private val storesCache: concurrent.Map[Long, Store] = TrieMap[Long, Store]()
-  private val lcbo_idsToIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
+  private val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
   def availableStores: Set[Long] = storesCache.toMap.keySet
-  def lcbo_idToId(l: Int): Option[Long] = lcbo_idsToIds.get(l)
+  def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
   def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)
 
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
@@ -173,6 +172,24 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     dummy = body
     val end = System.nanoTime
     ((end - start) / 1000) / 1000.0
+  }
+
+  def hasProductsByStoreCategory(dbStoreId: Option[Long], category: String): Boolean = {
+    val res =
+      for (s <- dbStoreId.toSeq;
+         store <- storesCache.get(s).toSeq;
+         inv <- transaction { store.inventories };
+         prod <- Product.getProduct(inv.productid.get) if prod.primaryCategory == category
+    ) yield inv
+    res.nonEmpty
+  }
+
+  def getProductIdsByStoreCategory(dbStoreId: Long, category: String): IndexedSeq[Long] = {
+    storesCache.get(dbStoreId).fold(IndexedSeq[Long]()) { s: Store =>
+      for (inv <- transaction {s.inventories.toIndexedSeq};
+           prod <- Product.getProduct(inv.productid.get) if prod.primaryCategory == category
+      ) yield inv.productid.get
+    }
   }
 
   def fetchItems(state: EntityRecordState,
@@ -223,7 +240,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
           // range of storeMinStoreId and storeMaxStoreId serve to constrain GC in tight memory environment, so we don't cache/synch with those outside of range.
           val storesByState: Map[EntityRecordState, IndexedSeq[PlainStoreAsLCBOJson]] = pageStores.groupBy {
-            s =>  ( lcbo_idsToIds.get(s.id).flatMap( dbStores.get ), s)  match {
+            s =>  ( LcboIdsToDBIds.get(s.id).flatMap( dbStores.get ), s)  match {
               case (None, _) if (s.id >= minStoreId) && (s.id <= maxStoreId) => New
               case (Some(store), lcboStore) if store.isDirty(lcboStore) => Dirty
               case (_ , _) => Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
@@ -268,10 +285,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
             } catch {
               case se: SQLException =>
                 logger.error(s"SQLException")
-                logger.error("Code: " + se.getErrorCode())
-                logger.error("SqlState: " + se.getSQLState())
-                logger.error("Error Message: " + se.getMessage())
-                logger.error("NextException:" + se.getNextException())
+                logger.error("Code: " + se.getErrorCode)
+                logger.error("SqlState: " + se.getSQLState)
+                logger.error("Error Message: " + se.getMessage)
+                logger.error("NextException:" + se.getNextException)
               case e: Exception =>
                 logger.error("General exception caught: " + e)
             }
@@ -300,7 +317,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           where ((s.lcboId gte minStoreId) and (s.lcboId lte maxStoreId))
           select (s)).map(s => s.id -> s)(breakOut)
     }  // queries store table and throw it into map
-    lcbo_idsToIds ++= dbStores.map{ case (k,v) => v.lcboId -> k }
+    LcboIdsToDBIds ++= dbStores.map{ case (k,v) => v.lcboId -> k }
     storesCache ++= getStores(dbStores)
 
     StoreProduct.init(availableStores)
@@ -341,13 +358,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // note: cacheSuccess (top level code) grabs a lock
     def cacheSuccess(storeId: Option[Long], lcbo_storeId: Long, category: String): Option[Iterable[(Long, Product)]] = {
       // note: we never delete from cache, so we don't worry about data disappearing in a potential race condition
-      if ( StoreProduct.hasProductsByStoreCategory(storeId, category) )
-        storeId.map(s => (randomSampler(s, StoreProduct.getProductIdsByStoreCategory(s, category))))
+      if ( hasProductsByStoreCategory(storeId, category) ) {
+        storeId.map(s => randomSampler(s, getProductIdsByStoreCategory(s, category)))
+      }
       else None
     }
 
     tryo { // we could get errors going to LCBO, this tryo captures those.
-      val storeId: Option[Long] = lcbo_idsToIds.get(lcbo_storeId)
+      val storeId: Option[Long] = LcboIdsToDBIds.get(lcbo_storeId)
       cacheSuccess(storeId, lcbo_storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         logger.warn(s"recommend cache miss for $storeId") // don't try to load it asynchronously as that's start up job to get going with it.
         val prods: IndexedSeq[Product] = storeId.map(s => productsByStoreCategory(s, category)).
@@ -420,7 +438,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    def getStoreProductsOfStartPage(): Seq[StoreProduct] = {
+    def getStoreProductsOfStartPage: Seq[StoreProduct] = {
       def loadAllStoreProducts(): Box[Map[EntityRecordState, IndexedSeq[StoreProduct]]] =
         tryo { storeProductByStore(storeId) }
 
@@ -438,17 +456,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    def lookupStore(s: Long) = transaction {
-      from(stores)(row => where(row.id === s) select(row)).toIndexedSeq
-    }
-
     logger.debug(s"loadCache start $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
-  //  count = count + 1
-  //  if ( count < 2 ) {
-  //    val curStore = lookupStore(storeId)
-  //    val invs = transaction { curStore.headOption.map{ _.inventories.toIndexedSeq } }
-   //   logger.debug(s"big trace on inventories for $storeId $curStore $invs")
-   // }
     if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {
       // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
       // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
@@ -610,7 +618,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => inventoryForStoreAndLCBOProd(inv.product_id).map { _.copyAttributes( inv)} } )
       // get the New partition, returning Nil if we don't have any, and open up option for a match on the productID in database from the LCBO ID.
       // finally fetch a StoreProduct that is created with specified productId, quantity, and storeId.
-      val newProducts:IndexedSeq[StoreProduct] = accumItems(New).++(storeProductsByState.getOrElse(New, Nil).
+      val newProducts:IndexedSeq[StoreProduct] = accumItems(New) ++ (storeProductsByState.getOrElse(New, Nil).
                 flatMap { inv => lcboidToDBId(inv.product_id).
               map { dbProductId: Long => StoreProduct.create(inv.quantity, storeId, dbProductId) } })(collection.breakOut)
       val revisedAccumItems: Map[EntityRecordState, IndexedSeq[StoreProduct]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)

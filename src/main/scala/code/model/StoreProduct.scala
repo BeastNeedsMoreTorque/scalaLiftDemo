@@ -186,10 +186,10 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
         case se: SQLException =>
           val prodIds = filtered.map{sp => sp.productid.get}
           logger.error(s"SQLException $prodIds")
-          logger.error("Code: " + se.getErrorCode())
-          logger.error("SqlState: " + se.getSQLState())
-          logger.error("Error Message: " + se.getMessage())
-          logger.error("NextException:" + se.getNextException())
+          logger.error("Code: " + se.getErrorCode)
+          logger.error("SqlState: " + se.getSQLState)
+          logger.error("Error Message: " + se.getMessage)
+          logger.error("NextException:" + se.getNextException)
         case e: Exception =>
           logger.error("General exception caught: " + e)
       }
@@ -199,13 +199,13 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
       return
     } // store does not even exist! Forget about it. Apology for being imperative with "return" ...
 
-    val productIds = Product.cachedProductIds // evaluate once
+    val DBProductIds = Product.cachedProductIds // evaluate once
     // synchronize on object StoreProduct as clients are from different threads
     // first evaluate against cache (assumed in synch with DB) what's genuinely new, by satisfying ref. integrity constraints.
     // Then, annoying filter to ensure uniqueness (see Product, it's easier), preventing duplicate key violation
     def referentialIntegrity(sp: StoreProduct): Boolean = {
       val p = sp.productid.get
-      productIds.contains(p) && !allStoreProductsFromDB(storeId).contains(p)
+      DBProductIds.contains(p) && !allStoreProductsFromDB(storeId).contains(p)
     }
 
     // filter on expected store, sequence it for efficient groupBy, then group by product to filter out duplicates as we'll select only
@@ -219,7 +219,7 @@ object StoreProduct extends StoreProduct with MetaRecord[StoreProduct] with page
     val filteredForRI: Set[StoreProduct] = {
       if (allStoreProductsFromDB.contains(storeId))
         filteredForUnique.filter { referentialIntegrity }
-      else filteredForUnique.filter {sp => productIds.contains(sp.productid.get) }
+      else filteredForUnique.filter {sp => DBProductIds.contains(sp.productid.get) }
     }
     // break it down in chunks
     filteredForRI.grouped(DBBatchSize).foreach { insertBatch }
