@@ -26,7 +26,7 @@ import java.text.NumberFormat
 object ProductInteraction extends Loggable {
   case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
   case class QuantityOfProduct(quantity: Long, product: Product)  // quantity available at the current store for a product (store is implied by context)
-  case class SelectedProduct(lcbo_id: Long, quantity: Long, cost: Double) // to capture user input via JS and JSON
+  case class SelectedProduct(id: Long, quantity: Long, cost: Double) // to capture user input via JS and JSON
   case class SelectedProductFeedback(selectedProduct: SelectedProduct, feedback: Feedback)
   case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
 
@@ -72,11 +72,11 @@ object ProductInteraction extends Loggable {
             }
           </table>
 
-          val lcbo_id = prod.lcbo_id.toString
+          val id = prod.id.toString
           val name = prod.name.get
-          // create a checkBox with value being product lcbo_id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
+          // create a checkBox with value being product id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
           val checkBoxNS = <label>
-            <input type="checkbox" class="prodSelectInput" value={lcbo_id}/>
+            <input type="checkbox" class="prodSelectInput" value={id}/>
             {name}
           </label><br/>
           val quantityNS = <label>Item Quantity:
@@ -164,7 +164,7 @@ object ProductInteraction extends Loggable {
 
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
         val feedback = for(sp <- selectedProds;
-                           product <- Product.getProduct(sp.lcbo_id);
+                           product <- Product.getProduct(sp.id);
                            f <- mayConsumeItem(product, sp.quantity)) yield SelectedProductFeedback(sp, f)
         val partition = feedback.groupBy(_.feedback.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
         partition.getOrElse(false, Nil).map( _.feedback.message).foreach(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error

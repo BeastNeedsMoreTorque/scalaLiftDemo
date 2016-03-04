@@ -30,7 +30,7 @@ var prodSelection = (function() {
     currentProds: function(data) {
       var selectedItems = [];
       $("div.prodContainer").find("input:checked").each(function() {
-        var lcbo_id = parseInt(this.value) || 0;
+        var id = parseInt(this.value) || 0;
 
         var siblings = $(this).parent().siblings();
 
@@ -41,7 +41,7 @@ var prodSelection = (function() {
         var cost = quantity * parseCurrency($(fixedCostEl).val());
 
         var data = {
-          lcbo_id: lcbo_id,
+          id: id,
           quantity: quantity,
           cost: cost
         };
