@@ -70,8 +70,10 @@ var storeFinder = (function() {
     theSelectedStore = closestStore(userLatLng);
     if (theSelectedStore != null) {
       var closestLatLng = new google.maps.LatLng(theSelectedStore.latitude, theSelectedStore.longitude)
-      var closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:"Closest store",icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
-      closestMarker.addListener('click', storeFinder.storeClickCB);
+      if (storeSelectedByApp == true) {
+        var closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:"Closest store",icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
+      }
+
       evaluateDistance(closestLatLng);
       getDirections(closestLatLng);
 

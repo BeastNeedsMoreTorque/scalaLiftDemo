@@ -197,6 +197,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   }
 
   def getProduct(dbId: Long): Option[Product] = productsCache get dbId
+  def getProductByLcboId(id: Int): Option[Product] = lcboidToDBId(id).flatMap(  productsCache.get )
 
   def cachedProductIds: Set[Long] = productsCache.keySet  // by PK id.
   def cachedLcboProductIds: Set[Long] = cachedProductIds.flatMap(DBIdToLcboId)
