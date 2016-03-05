@@ -2,7 +2,12 @@
 
 // Global variable, singleton prodSelection
 var inventory = (function() {
-  var prodIdCheckboxes = [];
+
+  var prodNodeKey = function(prod){
+    return prod.value;
+  };
+  var prodIdCheckboxes = {}; // map of prodId to html checkbox elements having the name containing the prodId <input type=checkbox... name=prodId ...>
+
 
   var ajaxFetchInventory = function(storeId, productId) {
       var uri = "http://lcboapi.com/stores/" + storeId + "/products/" + productId + "/inventory"
@@ -12,9 +17,7 @@ var inventory = (function() {
         type: 'GET',
         success: function(data, status){
           var currProdId = data.result.product_id;
-          var theCheckBox = prodIdCheckboxes.find(function(elt) {
-                                                   return elt.value == currProdId;
-                                               });
+          var theCheckBox = prodIdCheckboxes[currProdId];
           if (theCheckBox != undefined) {
             var quantity = data.result.quantity;
             prodIdCBQuantityBuddy($(theCheckBox), currProdId).html(quantity);
@@ -33,10 +36,10 @@ var inventory = (function() {
 
   return {
     fetchInventories: function() {
-      prodIdCheckboxes = []; // reset it. Too bad, if there was an earlier request. Just take current user input.
+      prodIdCheckboxes = {}; // reset it. Too bad, if there was an earlier request. Just take current user input.
       var storeId = storeFinder.getTheSelectedStore();
       $("div.prodContainer").find("input:checkbox").each(function() {
-        prodIdCheckboxes.push(this);
+        prodIdCheckboxes[prodNodeKey(this)] = this;
         var productId = parseInt(this.value) || 0;
         var quantityEl = prodIdCBQuantityBuddy($(this), productId);
         var quantity = parseInt($(quantityEl).val()) || 0;
