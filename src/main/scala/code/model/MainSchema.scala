@@ -20,7 +20,7 @@ object MainSchema extends Schema {
   // In Postgres: CREATE SEQUENCE s_userproduct_id;
   // alter table userproduct alter column id set default nextval('s_userproduct_id');
 
-  val storeProducts = table[StoreProduct]("storeproduct")
+  val inventories = table[Inventory]("storeproduct")
 
   val userStores = table[UserStore]("userstore")
 
@@ -35,12 +35,12 @@ object MainSchema extends Schema {
   // alter table "userstore" add constraint "userstoreFK2" foreign key ("storeid") references "store"("id");
 
 
-  val productToStoreProducts = oneToManyRelation(products, storeProducts).
+  val productToStoreProducts = oneToManyRelation(products, inventories).
     via((p,s) => p.id === s.productid) // WRONG (productid is still LCBO type and not DB generated!
   // alter table "storeproduct" add constraint "storeproductFK3" foreign key ("productid") references "product"("id"); WRONG!
 
-  val storeToStoreProducts = oneToManyRelation(stores, storeProducts).
-    via((s,sp) => s.id === sp.storeid)
+  val storeToInventories = oneToManyRelation(stores, inventories).
+    via((s,inv) => s.id === inv.storeid)
   //alter table "storeproduct" add constraint "storeproductFK4" foreign key ("fk_storeid") references "store"("id");
 
   // the default constraint for all foreign keys in this schema :
@@ -60,11 +60,11 @@ object MainSchema extends Schema {
 
   }
 
-  on(storeProducts) { sp =>
+  on(inventories) { inv =>
     declare(
-      sp.productid defineAs indexed("product_idx"),
-      sp.storeid defineAs indexed("store_idx"),
-      columns(sp.storeid, sp.productid) are(unique, indexed("storeproduct_idx")))
+      inv.productid defineAs indexed("product_idx"),
+      inv.storeid defineAs indexed("store_idx"),
+      columns(inv.storeid, inv.productid) are(unique, indexed("storeproduct_idx")))
   }
 
   on(products) { p =>
