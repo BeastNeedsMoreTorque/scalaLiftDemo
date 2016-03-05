@@ -215,6 +215,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       { _.inventories.toSeq.map (inv => inv.productid.get -> inv ) (breakOut) }
   }
 
+  def getInventory(dbStoreId: Long, prodId: Long): Option[StoreProduct] = {
+    for (s <- storesCache.get(dbStoreId);
+         inv <- s.inventoriesInStore.get(prodId))
+      yield inv
+  }
+
   def getStoreProductQuantity(dbStoreId: Long, prodId: Long): Option[Long] = {
     for (s <- storesCache.get(dbStoreId);
          inv <- s.inventoriesInStore.get(prodId))
@@ -347,7 +353,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     LcboIdsToDBIds ++= dbStores.map{ case (k,v) => v.lcboId -> k }
     storesCache ++= getStores(dbStores)
 
-    StoreProduct.init(availableStores)
     logger.info("Store.init end")
   }
 
@@ -598,12 +603,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
 
       def stateOfProduct(item: InventoryAsLCBOJson): EntityRecordState = {
-        val qtyOption =
+        val invOption =
           for (dbProductId <- lcboidToDBId(item.product_id);
-             q <- getStoreProductQuantity(storeId, dbProductId)) yield q
-        qtyOption  match {
+             i <- getInventory(storeId, dbProductId)) yield i
+        invOption  match {
           case None  => New
-          case Some(quantity) if item.quantity != quantity => Dirty
+          case Some(inv) if inv.isDirty(item) => Dirty
           case _ => Clean
         }
       }
