@@ -25,28 +25,11 @@ product.interactionsImageMap={"recommend":"/images/recommend.jpg","cancel":"/ima
 #No order on a map, so we impose an order on the keys
 product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
 product.Category=wine
-product.load.workers=1
 product.DBBatchSize=512
-
 product.cacheSize=20000
 
 store.maxSampleSize=150
 store.lcboMaxPerPage=100
 store.lcboMinPerPage=10
 store.DBBatchSize=256
-store.load.workers=1
 store.loadBatchSize=16
-
-# if true, we synch with LCBO stores for which we have nothing in DB first, if false we go with those for which we already have data.
-# This parameter would be useful if we're constrained by size and cannot load them all and then we'd select a tighter range than full range of stores
-# for minStoreId and maxStoreId (300 or 400 stores range seems to be too much on my computer as of Feb 28, but 200 stores was fine and 250 a bit limit)
-# limit is around StoreProduct.init with its initial map load from DB.
-store.synchEmptiesFirst=false
-store.minStoreId=200
-store.maxStoreId=400
-
-inventory.DBWrite.BatchSize=512
-
-
-
-

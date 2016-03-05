@@ -535,7 +535,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           url,
           MaxSampleSize,
           pageNo = 1,
-          pageDelta = 1,
           reconWithDB = false)
         items.values.take(MaxSampleSize).flatten.toVector // we don't care about Clean/New/Dirty state here so flatten values.
       }
@@ -572,7 +571,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           url,
           productCacheSize,
           1, // programmer client is assumed to know we use this as a page.
-          prodLoadWorkers,
           filter).take(productCacheSize)
       }
     }
@@ -593,9 +591,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                                     urlRoot: String,
                                     requiredSize: Int,
                                     pageNo: Int,
-                                    pageDelta: Int = 1,
                                     myFilter: InventoryAsLCBOJson => Boolean = { sp: InventoryAsLCBOJson => true }): Map[EntityRecordState, IndexedSeq[StoreProduct]] = {
-      def nextPage = pageNo + prodLoadWorkers
+      def nextPage = pageNo + 1  // used to be consideration for parallelism on requests to LCBO with overlay of calls
       def fetchItems(state: EntityRecordState,
                      mapVector: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]],
                      f: InventoryAsLCBOJson => Option[StoreProduct] ): IndexedSeq[StoreProduct] = {
@@ -659,7 +656,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         urlRoot,
         outstandingSize,
         nextPage,
-        pageDelta,
         myFilter) // union of this page with next page when we are asked for a full sample
     }
 
@@ -676,7 +672,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           url,
           productCacheSize,
           1, // programmer client is assumed to know we use this as a page.
-          prodLoadWorkers,
           filter).take(productCacheSize)
       }
     }
@@ -713,10 +708,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                                         urlRoot: String,
                                         requiredSize: Int,
                                         pageNo: Int,
-                                        pageDelta: Int = 1,
                                         myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true },
                                         reconWithDB: Boolean = true): Map[EntityRecordState, IndexedSeq[Product]] = {
-    def nextPage = pageNo + prodLoadWorkers
+    def nextPage = pageNo + 1
     def fetchItems(state: EntityRecordState,
                    productsByState: Map[EntityRecordState, IndexedSeq[ProductAsLCBOJson]],
                    f: ProductAsLCBOJson => Option[Product] ): IndexedSeq[Product] = {
@@ -766,7 +760,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       urlRoot,
       outstandingSize,
       nextPage,
-      pageDelta,
       myFilter,
       reconWithDB) // union of this page with next page when we are asked for a full sample
   }
