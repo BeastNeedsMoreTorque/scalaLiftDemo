@@ -27,7 +27,7 @@ var prodSelection = (function() {
       $(effectiveCostEl).val(formatAsCurrency(cost * qty));
     },
 
-    currentProds: function(data) {
+    currentProds: function() {
       var selectedItems = [];
       $("div.prodContainer").find("input:checked").each(function() {
         var id = parseInt(this.value) || 0;
