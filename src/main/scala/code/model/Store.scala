@@ -230,7 +230,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val fut = Future { storeIds.foreach(loadCache)}
     fut foreach {
       case m =>
-        logger.debug(s"loadCache succeeded for ${storeIds.mkString(" ")}")
+        logger.debug(s"loadCache succeeded or previously requested on other thread for ${storeIds.mkString(" ")}")
         storeIds.foreach { s =>
           if (emptyInventoryForStore(s)) {
             logger.warn(s"got NO product inventory for storeId $s !")
