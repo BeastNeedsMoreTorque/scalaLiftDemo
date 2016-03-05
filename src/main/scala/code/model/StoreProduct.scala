@@ -46,13 +46,11 @@ class StoreProduct private() extends Record[StoreProduct] with KeyedRecord[Long]
   @Column(name="id")
   override val idField = new LongField(this, 1)  // our own auto-generated id
 
-  //lazy val product = MainSchema.productToStoreProducts.right(this)
-  //lazy val store = MainSchema.storeToStoreProducts.right(this)
+  lazy val product = MainSchema.productToStoreProducts.rightStateful(this)
+  lazy val store = MainSchema.storeToStoreProducts.rightStateful(this)
 
   val storeid = new LongField(this)
   val productid = new LongField(this)
-  //val fk_productid = new LongField(this)
-
   val quantity = new LongField(this)
 
   def isDirty(inv: InventoryAsLCBOJson): Boolean =
