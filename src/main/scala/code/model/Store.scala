@@ -109,13 +109,13 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
 
 class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedUpdated[Store]  {
   lazy val userStores = MainSchema.storeToUserStores.leftStateful(this)
-  lazy val inventories: StatefulOneToMany[StoreProduct] = MainSchema.storeToStoreProducts.leftStateful(this)
-  lazy val inventoriesByCategory: Map[String, IndexedSeq[StoreProduct]] = inventories.toIndexedSeq.
-    groupBy { inv: StoreProduct =>
+  lazy val inventories: StatefulOneToMany[Inventory] = MainSchema.storeToInventories.leftStateful(this)
+  lazy val inventoriesByCategory: Map[String, IndexedSeq[Inventory]] = inventories.toIndexedSeq.
+    groupBy { inv: Inventory =>
               inv.product.relation.headOption.fold("")(_.primaryCategory)
     }  // technically the inventory could be a dangling reference to invalid product, so need fold("") here.
 
-  def inventoriesInStore: Map[Long, StoreProduct] = inventories.toIndexedSeq.map ( inv =>
+  def inventoriesInStore: Map[Long, Inventory] = inventories.toIndexedSeq.map ( inv =>
      inv.productid.get -> inv ) (breakOut)
 
 
@@ -209,19 +209,19 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       transaction { s.inventories }.forall(_.quantity.get == 0 )}
 
 
-  def getInventories(dbStoreId: Long): Map[Long, StoreProduct] = {
+  def getInventories(dbStoreId: Long): Map[Long, Inventory] = {
     storesCache.get(dbStoreId).
-      fold( Map[Long, StoreProduct]() )
+      fold( Map[Long, Inventory]() )
       { _.inventories.toSeq.map (inv => inv.productid.get -> inv ) (breakOut) }
   }
 
-  def getInventory(dbStoreId: Long, prodId: Long): Option[StoreProduct] = {
+  def getInventory(dbStoreId: Long, prodId: Long): Option[Inventory] = {
     for (s <- storesCache.get(dbStoreId);
          inv <- s.inventoriesInStore.get(prodId))
       yield inv
   }
 
-  def getStoreProductQuantity(dbStoreId: Long, prodId: Long): Option[Long] = {
+  def getInventoryQuantity(dbStoreId: Long, prodId: Long): Option[Long] = {
     for (s <- storesCache.get(dbStoreId);
          inv <- s.inventoriesInStore.get(prodId))
       yield inv.quantity.get
@@ -242,10 +242,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       fut foreach {
         case m =>
           logger.debug(s"loadCache succeeded for $storeId")
-            if (emptyInventoryForStore(storeId)) {
-              logger.warn(s"got NO product inventory for storeId $storeId !") // No provision for retrying.
-            }
-
+          if (emptyInventoryForStore(storeId)) {
+            logger.warn(s"got NO product inventory for storeId $storeId !") // No provision for retrying.
+          }
       }
       fut.failed foreach {
         case f =>
@@ -371,7 +370,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val seq =
         for ( id <- prodIds;
               p <- Product.getProduct(id);
-              qty <- getStoreProductQuantity(storeId, id) if qty > 0 ) yield (qty, p)
+              qty <- getInventoryQuantity(storeId, id) if qty > 0 ) yield (qty, p)
       seq.take(requestSize)
     }
 
@@ -452,20 +451,20 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    def getStoreProductsOfStartPage: Seq[StoreProduct] = {
-      def loadAllStoreProducts(): Box[Map[EntityRecordState, IndexedSeq[StoreProduct]]] =
+    def getInventorysOfStartPage: Seq[Inventory] = {
+      def loadAllInventorys(): Box[Map[EntityRecordState, IndexedSeq[Inventory]]] =
         tryo { storeProductByStore(storeId) }
 
       inTransaction {
-        loadAllStoreProducts() match {
+        loadAllInventorys() match {
           case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
             m.values.flatten.toSeq // flatten the 3 lists
           case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading inventories into cache for '$storeId' with message $m and exception error $ex")
-            Seq[StoreProduct]()
+            Seq[Inventory]()
           case Empty =>
             logger.error(s"Problem loading inventories into cache for '$storeId'")
-            Seq[StoreProduct]()
+            Seq[Inventory]()
         }
       }
     }
@@ -474,7 +473,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
     storesCache.get(storeId).foreach { s =>
       Product.update(getProductsOfStartPage) // refresh product cache, still explicit, not Squeryl way.
-      val invs = getStoreProductsOfStartPage
+      val invs = getInventorysOfStartPage
       inTransaction {
         invs.foreach(inv => s.inventories.associate(inv))
         s.inventories.refresh
@@ -572,22 +571,22 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def storeProductByStore(storeId: Long): Map[EntityRecordState, IndexedSeq[StoreProduct]] = {
+  private def storeProductByStore(storeId: Long): Map[EntityRecordState, IndexedSeq[Inventory]] = {
     @throws(classOf[net.liftweb.json.MappingException])
     @throws(classOf[net.liftweb.json.JsonParser.ParseException])
     @throws(classOf[java.io.IOException])
     @throws(classOf[java.net.SocketTimeoutException])
     @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
     @tailrec
-    def collectStoreProductsOnAPage(accumItems: Map[EntityRecordState, IndexedSeq[StoreProduct]],
+    def collectInventorysOnAPage(accumItems: Map[EntityRecordState, IndexedSeq[Inventory]],
                                     urlRoot: String,
                                     requiredSize: Int,
                                     pageNo: Int,
-                                    myFilter: InventoryAsLCBOJson => Boolean = { sp: InventoryAsLCBOJson => true }): Map[EntityRecordState, IndexedSeq[StoreProduct]] = {
+                                    myFilter: InventoryAsLCBOJson => Boolean = { sp: InventoryAsLCBOJson => true }): Map[EntityRecordState, IndexedSeq[Inventory]] = {
       def nextPage = pageNo + 1  // used to be consideration for parallelism on requests to LCBO with overlay of calls
       def fetchItems(state: EntityRecordState,
                      mapVector: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]],
-                     f: InventoryAsLCBOJson => Option[StoreProduct] ): IndexedSeq[StoreProduct] = {
+                     f: InventoryAsLCBOJson => Option[Inventory] ): IndexedSeq[Inventory] = {
         mapVector.getOrElse(state, Vector()).flatMap { p => f(p) } // remove the Option in Option[Product]
       }
 
@@ -621,7 +620,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.groupBy( stateOfProduct )
 
       val storeInventories = getInventories(storeId)
-      def inventoryForStoreAndLCBOProd(lcboProdID: Int): Option[StoreProduct] = {
+      def inventoryForStoreAndLCBOProd(lcboProdID: Int): Option[Inventory] = {
         val dbProdId = Product.lcboidToDBId(lcboProdID )
         dbProdId.map{ id: Long => storeInventories.get(id) }.getOrElse(None)
       }
@@ -629,11 +628,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, storeProductsByState, {inv => inventoryForStoreAndLCBOProd(inv.product_id) })
       val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, storeProductsByState, {inv => inventoryForStoreAndLCBOProd(inv.product_id).map { _.copyAttributes( inv)} } )
       // get the New partition, returning Nil if we don't have any, and open up option for a match on the productID in database from the LCBO ID.
-      // finally fetch a StoreProduct that is created with specified productId, quantity, and storeId.
-      val newProducts:IndexedSeq[StoreProduct] = accumItems(New) ++ (storeProductsByState.getOrElse(New, Nil).
+      // finally fetch a Inventory that is created with specified productId, quantity, and storeId.
+      val newProducts:IndexedSeq[Inventory] = accumItems(New) ++ (storeProductsByState.getOrElse(New, Nil).
                 flatMap { inv => lcboidToDBId(inv.product_id).
-              map { dbProductId: Long => StoreProduct.create(inv.quantity, storeId, dbProductId) } })(collection.breakOut)
-      val revisedAccumItems: Map[EntityRecordState, IndexedSeq[StoreProduct]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
+              map { dbProductId: Long => Inventory.create(inv.quantity, storeId, dbProductId) } })(collection.breakOut)
+      val revisedAccumItems: Map[EntityRecordState, IndexedSeq[Inventory]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
 
       if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) {
         logger.info(uri) // log only last one to be less verbose
@@ -643,7 +642,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       // Similarly having reached our required size,we can stop.
 
       // tail recursion enforced.
-      collectStoreProductsOnAPage(
+      collectInventorysOnAPage(
         revisedAccumItems,
         urlRoot,
         outstandingSize,
@@ -654,12 +653,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     if (productCacheSize <= 0) Map()
     else {
       val lcboStoreId = storeIdToLcboId(storeId)
-      val initMap = Map[EntityRecordState, IndexedSeq[StoreProduct]](New -> Vector(), Dirty -> Vector(), Clean -> Vector())
+      val initMap = Map[EntityRecordState, IndexedSeq[Inventory]](New -> Vector(), Dirty -> Vector(), Clean -> Vector())
       lcboStoreId.fold(initMap) { s =>
         val url = s"$LcboDomainURL/inventories?store_id=$s"
         val filter = { p: InventoryAsLCBOJson => !p.is_dead } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
 
-        collectStoreProductsOnAPage(
+        collectInventorysOnAPage(
           initMap,
           url,
           productCacheSize,
