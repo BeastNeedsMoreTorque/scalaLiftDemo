@@ -232,29 +232,29 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
                  f: PlainStoreAsLCBOJson => Option[Store] ): IndexedSeq[Store] =
     storesByState.getOrElse(state, Vector()).flatMap{ f(_)}
 
-  def dbLoadCache(storeIds: Iterable[Long]): Future[ Unit] = {
-    val fut = Future { storeIds.foreach(loadCache)}
-    fut foreach {
-      case m =>
-        logger.debug(s"loadCache succeeded or previously requested on other thread for ${storeIds.mkString(" ")}")
-        storeIds.foreach { s =>
-          if (emptyInventoryForStore(s)) {
-            logger.warn(s"got NO product inventory for storeId $s !")
-          }
-        }
+  def asyncLoadCache(storeId: Long): Unit = {
+    // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
+    // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
+    // we impose referential integrity so we MUST get products and build on that to get inventories that refer to products
+    // Note: we may execute this function, get nothing back from LCBO (e.g. website down) and still provide user data because of our db store.
+    if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {
+      val fut = Future { loadCache(storeId) }
+      fut foreach {
+        case m =>
+          logger.debug(s"loadCache succeeded for $storeId")
+            if (emptyInventoryForStore(storeId)) {
+              logger.warn(s"got NO product inventory for storeId $storeId !") // No provision for retrying.
+            }
+
+      }
+      fut.failed foreach {
+        case f =>
+          logger.info(s"loadCache explicitly failed for $storeId cause $f")
+      }
     }
-    fut.failed foreach {
-      case f =>
-        logger.info(s"asyncLoadStores explicitly failed for ${storeIds.mkString(":")} cause $f")
-    }
-    fut
   }
 
   def init() = {
-
-    def asyncLoadStores(storeIds: Iterable[Long]): Unit = {
-      storeIds.grouped(storeLoadBatchSize).foreach { dbLoadCache }
-    }
 
     def getStores(dbStores: Map[Long, Store]): Map[Long, Store] = {
       def synchronizeData(dbStores: Map[Long, Store]): Box[Map[Long, Store]] = {
@@ -378,7 +378,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // note: cacheSuccess (top level code) grabs a lock
     def cacheSuccess(storeId: Option[Long], lcbo_storeId: Long, category: String): Option[Iterable[(Long, Product)]] = {
       // note: we never delete from cache, so we don't worry about data disappearing in a potential race condition
-      if ( hasProductsByStoreCategory(storeId, category) ) {
+
+      if ( storeId.exists{ s => storeProductsLoaded.contains(s)} && hasProductsByStoreCategory(storeId, category) ) {
         storeId.map(s => randomSampler(s, getProductIdsByStoreCategory(s, category)))
       }
       else None
@@ -388,7 +389,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val storeId: Option[Long] = LcboIdsToDBIds.get(lcbo_storeId)
       cacheSuccess(storeId, lcbo_storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         logger.warn(s"recommend cache miss for $storeId") // don't try to load it asynchronously as that's start up job to get going with it.
-        storeId.map(id => dbLoadCache(Seq(id)) )  // async load cache.
+        storeId.map(id => asyncLoadCache(id) )
         val prods: IndexedSeq[Product] = storeId.map(s => productsByStoreCategory(s, category)).
             fold(IndexedSeq[Product]()){identity} // take a hit of one go to LCBO, no more.
         val indices = Random.shuffle[Int, IndexedSeq](prods.indices )
@@ -430,10 +431,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       foreach{ stores.insert }
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
-  // lock free. For correctness, we use putIfAbsent to get some atomicity when we do complex read-write at once (complex linearizable operations).
-  // For now, we call this lazily for first user having an interaction with a particular store and not before.
-  // heavy long lasting, for now no thread inside, but clients call this asynchronously
-  def loadCache(storeId: Long) = {
+  def loadCache(storeId: Long): Unit = {
 
     def getProductsOfStartPage: Seq[Product] = {
       def loadAll(storeId: Long): Box[Map[EntityRecordState, IndexedSeq[Product]]] =
@@ -472,23 +470,17 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    logger.debug(s"loadCache start $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
-    if ( storeProductsLoaded.putIfAbsent(storeId, Unit).isEmpty) {
-      // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
-      // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
-      // we impose referential integrity so we MUST get products and build on that to get inventories that refer to products
-
-      // fetch and then make sure model classes update to DB and their cache synchronously, so we can use their caches.
-      val s = storesCache.get(storeId)
-      s.foreach { s =>
-        Product.update(getProductsOfStartPage) // refresh product cache, still explicit, not Squeryl way.
-        val invs = getStoreProductsOfStartPage
-        inTransaction {
-          invs.foreach(inv => s.inventories.associate(inv))
-          s.inventories.refresh
-        }
+    logger.debug(s"loadCache start $storeId")
+    // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
+    storesCache.get(storeId).foreach { s =>
+      Product.update(getProductsOfStartPage) // refresh product cache, still explicit, not Squeryl way.
+      val invs = getStoreProductsOfStartPage
+      inTransaction {
+        invs.foreach(inv => s.inventories.associate(inv))
+        s.inventories.refresh
       }
     }
+    logger.debug(s"loadCache ended $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
   }
 
   import java.net.SocketTimeoutException

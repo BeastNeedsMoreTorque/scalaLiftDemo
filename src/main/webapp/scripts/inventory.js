@@ -3,11 +3,10 @@
 // Global variable, singleton prodSelection
 var inventory = (function() {
 
-  var prodNodeKey = function(prod){
-    return prod.value;
+  var prodNodeKey = function(prodNodeElt){
+    return prodNodeElt.value;
   };
   var prodIdCheckboxes = {}; // map of prodId to html checkbox elements having the name containing the prodId <input type=checkbox... name=prodId ...>
-
 
   var ajaxFetchInventory = function(storeId, productId) {
       var uri = "http://lcboapi.com/stores/" + storeId + "/products/" + productId + "/inventory"
@@ -30,7 +29,7 @@ var inventory = (function() {
     };
 
   var prodIdCBQuantityBuddy = function(el, prodId) {
-    // server sets name to prodId for easy look up and pairing.
+    // server (ProductInteraction) sets name to prodId for easy look up and pairing.
     return el.parents().find("td[name=" + prodId + "]");
   };
 
