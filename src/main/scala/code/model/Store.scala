@@ -433,14 +433,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def loadCache(storeId: Long): Unit = {
 
     def getProductsOfStartPage: Seq[Product] = {
-      def loadAll(storeId: Long): Box[Map[EntityRecordState, IndexedSeq[Product]]] =
+      def loadAll(storeId: Long): Box[IndexedSeq[Product]] =
         tryo { getProductsByStore(storeId) }
 
       inTransaction {
         loadAll(storeId) match {
-          case Full(m) => // Used to be 10 seconds to get here after last URL query, down to 0.046 sec
-            // 5 seconds per thread (pre Jan 23 with individual db writes). Now 1.5 secs for a total of 2-3 secs, compared to at least 15 secs.
-            m.values.flatten.toSeq // flatten the 3 lists
+          case Full(m) => m
           case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading products into cache for '$storeId' with message $m and exception error $ex")
             List[Product]()
@@ -515,13 +513,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
           !p.is_discontinued
         } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
-        val items = collectItemsOnAPage(
-          Map[EntityRecordState, IndexedSeq[Product]](New -> Vector(), Dirty -> Vector(), Clean -> Vector()),
+        collectItemsOnAPage(
+          IndexedSeq[Product](),
           url,
           MaxSampleSize,
           pageNo = 1,
           reconWithDB = false)
-        items.values.take(MaxSampleSize).flatten.toVector // we don't care about Clean/New/Dirty state here so flatten values.
       }
     }
   }
@@ -542,17 +539,17 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def getProductsByStore(store: Long): Map[EntityRecordState, IndexedSeq[Product]] = {
-    if (productCacheSize <= 0) Map()
+  private def getProductsByStore(store: Long): IndexedSeq[Product] = {
+    if (productCacheSize <= 0) IndexedSeq()
     else {
-      val initMap = Map[EntityRecordState, IndexedSeq[Product]](New -> Vector(), Dirty -> Vector(), Clean -> Vector())
+      val initSeq = IndexedSeq[Product]()
       val lcbo_storeId = storeIdToLcboId(store)
-      lcbo_storeId.fold(initMap) { s =>
+      lcbo_storeId.fold(initSeq) { s =>
         val url = s"$LcboDomainURL/products?store_id=$s"
         val filter = { p: ProductAsLCBOJson => !p.is_discontinued } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
 
         collectItemsOnAPage(
-          initMap,
+          initSeq,
           url,
           productCacheSize,
           1, // programmer client is assumed to know we use this as a page.
@@ -687,12 +684,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   @throws(classOf[java.net.SocketTimeoutException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @tailrec
-  private final def collectItemsOnAPage(accumItems: Map[EntityRecordState, IndexedSeq[Product]],
+  private final def collectItemsOnAPage(accumItems: IndexedSeq[Product],
                                         urlRoot: String,
                                         requiredSize: Int,
                                         pageNo: Int,
                                         myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true },
-                                        reconWithDB: Boolean = true): Map[EntityRecordState, IndexedSeq[Product]] = {
+                                        reconWithDB: Boolean = true): IndexedSeq[Product] = {
     def nextPage = pageNo + 1
     def fetchItems(state: EntityRecordState,
                    productsByState: Map[EntityRecordState, IndexedSeq[ProductAsLCBOJson]],
@@ -725,10 +722,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       }
     }
 
-    val cleanProducts = accumItems(Clean) ++ fetchItems(Clean, productsByState, {p => p.getProduct(dbProducts)})
-    val dirtyProducts = accumItems(Dirty) ++ fetchItems(Dirty, productsByState, {p => p.getProduct(dbProducts).map({ _.copyAttributes( p)})})
-    val newProducts = accumItems(New) ++ productsByState.getOrElse(New, Nil).map{ p => Product.create(p) }
-    val revisedAccumItems: Map[EntityRecordState, IndexedSeq[Product]] = Map(New -> newProducts, Dirty -> dirtyProducts, Clean -> cleanProducts)
+    val dirtyProducts = fetchItems(Dirty, productsByState, {p => p.getProduct(dbProducts).map({ _.copyAttributes( p)})})
+    val newProducts = productsByState.getOrElse(New, Nil).map{ p => Product.create(p) }
+    val revisedAccumItems =  accumItems ++ newProducts ++ dirtyProducts
 
     if (outstandingSize <= 0 || isFinalPage || totalPages < nextPage) {
       logger.info(uri) // log only the last one, less chatty
