@@ -1,10 +1,25 @@
 package code.model
-import org.squeryl.Schema
+
+import org.squeryl.dsl.CompositeKey2
+
+import org.squeryl.{KeyedEntity, ForeignKeyDeclaration, Schema}
 import net.liftweb.squerylrecord.RecordTypeMode._
 
+class Inventory(val storeid: Long, val productid: Long, var quantity: Long) extends KeyedEntity[CompositeKey2[Long,Long]] {
+  def id = compositeKey(storeid, productid)
+
+  def isDirty(inv: InventoryAsLCBOJson): Boolean =
+    quantity != inv.quantity
+
+  def copyAttributes(inv: InventoryAsLCBOJson): Inventory = {
+    quantity = inv.quantity
+    this
+  }
+}
 /**
   * Created by philippederome on 2016-01-01.
   *   // References:
+  *
   * @see http://stackoverflow.com/questions/12794427/squeryl-and-postgresqls-autoincrement/12876399#12876399
   * @see http://stackoverflow.com/questions/28859798/in-scala-how-can-i-get-plays-models-and-forms-to-play-nicely-with-squeryl-and?answertab=active#tab-top
   */
@@ -16,13 +31,12 @@ object MainSchema extends Schema {
   // alter table product alter column id set default nextval('s_product_id');
   // String columns are typically nullable.
 
+  val inventories = manyToManyRelation(stores, products).
+    via[Inventory]((s,p,inv) => (inv.storeid === s.id, p.id === inv.productid))
+
   val userProducts = table[UserProduct]("userproduct")
   // In Postgres: CREATE SEQUENCE s_userproduct_id;
   // alter table userproduct alter column id set default nextval('s_userproduct_id');
-
-  val inventories = table[Inventory]("storeproduct")
-
-  val userStores = table[UserStore]("userstore")
 
   val productToUserProducts = oneToManyRelation(products, userProducts).
     via((p,u) => p.id === u.productid)
@@ -30,22 +44,18 @@ object MainSchema extends Schema {
   // "userproductFK1" FOREIGN KEY (productid) REFERENCES product(id)
   //    alter table "userproduct" add constraint "userproductFK1" foreign key ("productid") references "product"("id");
 
-  val storeToUserStores = oneToManyRelation(stores, userStores).
-    via((s,u) => s.id === u.storeid)
-  // alter table "userstore" add constraint "userstoreFK2" foreign key ("storeid") references "store"("id");
-
-
-  val productToStoreProducts = oneToManyRelation(products, inventories).
-    via((p,s) => p.id === s.productid) // WRONG (productid is still LCBO type and not DB generated!
-  // alter table "storeproduct" add constraint "storeproductFK3" foreign key ("productid") references "product"("id"); WRONG!
+  val productToInventories = oneToManyRelation(products, inventories).
+    via((p,s) => p.id === s.productid)
+  // alter table "inventory" add constraint "inventoryFK2" foreign key ("productid") references "product"("id")
 
   val storeToInventories = oneToManyRelation(stores, inventories).
     via((s,inv) => s.id === inv.storeid)
-  //alter table "storeproduct" add constraint "storeproductFK4" foreign key ("fk_storeid") references "store"("id");
+  //alter table "inventory" add constraint "inventoryFK3" foreign key ("storeid") references "store"("id");
+
 
   // the default constraint for all foreign keys in this schema :
- // override def applyDefaultForeignKeyPolicy(foreignKeyDeclaration: ForeignKeyDeclaration) =
- // foreignKeyDeclaration.constrainReference
+  override def applyDefaultForeignKeyPolicy(foreignKeyDeclaration: ForeignKeyDeclaration) =
+  foreignKeyDeclaration.constrainReference
 
   on(stores) { s =>
     declare(
@@ -58,13 +68,6 @@ object MainSchema extends Schema {
       up.userid defineAs indexed("userproduct_user"),
       columns(up.userid, up.productid ) are(unique,indexed("user_prod_idx")))
 
-  }
-
-  on(inventories) { inv =>
-    declare(
-      inv.productid defineAs indexed("product_idx"),
-      inv.storeid defineAs indexed("store_idx"),
-      columns(inv.storeid, inv.productid) are(unique, indexed("storeproduct_idx")))
   }
 
   on(products) { p =>
