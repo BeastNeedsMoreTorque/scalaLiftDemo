@@ -3,8 +3,6 @@ package code.model
 import java.io.IOException
 import java.sql.SQLException
 
-import org.squeryl.Query
-
 import scala.annotation.tailrec
 import scala.collection._
 import scala.language.implicitConversions
@@ -109,18 +107,15 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
 
 class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedUpdated[Store]  {
   //products is a ManyToMany[Product,Inventory], it extends Query[Product]
-  lazy val storeProducts = MainSchema.inventories.left(this)
+  lazy val storeProducts = MainSchema.inventories.leftStateful(this)
   def productsByCategory: Map[String, IndexedSeq[Product]] = storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
-  lazy val inventories: Query[Inventory] = storeProducts.associations
-
-  def inventoriesByCategory: Map[String, IndexedSeq[Inventory]] = inventories.toIndexedSeq.
-    groupBy { inv: Inventory =>
-      val p = storeProducts.where(p => p.id === inv.productid).headOption
-      p.fold("") { p: Product => p.primaryCategory }
-    }
+  def inventories = storeProducts.associations
 
   def inventoriesPerProductInStore: Map[Long, Inventory] = inventories.toIndexedSeq.
     map { inv: Inventory => inv.productid -> inv } (breakOut)
+
+  def emptyInventory: Boolean =
+    inventories.toIndexedSeq.forall(_.quantity == 0)
 
 
   @Column(name="id")
@@ -189,27 +184,24 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     val res =
       for (s <- dbStoreId.toSeq;
            store <- storesCache.get(s).toSeq;
-           inv <- transaction { store.inventories};
-           prod <- Product.getProduct(inv.productid) if prod.primaryCategory == category
-      ) yield inv
+           prod <- store.storeProducts if prod.primaryCategory == category
+      ) yield prod
     res.nonEmpty
   }
 
   def hasCachedProducts(dbStoreId: Long): Boolean =
-    storesCache.get(dbStoreId).exists { id => id.inventories.nonEmpty }
+    storesCache.get(dbStoreId).exists { store => store.storeProducts.nonEmpty }
 
   def getProductIdsByStoreCategory(dbStoreId: Long, category: String): IndexedSeq[Long] = {
     storesCache.get(dbStoreId).fold(IndexedSeq[Long]()) { s: Store =>
-      for (inv <- transaction {s.inventories.toIndexedSeq};
-           prod <- Product.getProduct(inv.productid) if prod.primaryCategory == category
-      ) yield inv.productid
+      for ( prod <- s.storeProducts.toIndexedSeq if prod.primaryCategory == category
+      ) yield prod.id
     }
   }
 
   def emptyInventoryForStore(dbStoreId: Long): Boolean =
     // if that store does not exist in cache, it's false.
-    storesCache.get(dbStoreId).exists { s =>
-      transaction { s.inventories }.forall(_.quantity == 0 )}
+    storesCache.get(dbStoreId).exists { s => s.emptyInventory }
 
 
   def getInventories(dbStoreId: Long): Map[Long, Inventory] = {
@@ -244,9 +236,12 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val fut = Future { loadCache(storeId) }
       fut foreach {
         case m =>
-          logger.debug(s"loadCache succeeded for $storeId")
-          if (emptyInventoryForStore(storeId)) {
-            logger.warn(s"got NO product inventory for storeId $storeId !") // No provision for retrying.
+          inTransaction { // we're in async callback, need to acquire a valid session for our refresh and our query to DB on store's inventory.
+            storesCache.get(storeId).map {s => s.storeProducts.refresh} // key for whole inventory caching to work!
+            logger.debug(s"loadCache succeeded for $storeId")
+            if (emptyInventoryForStore(storeId)) {
+              logger.warn(s"got NO product inventory for storeId $storeId !") // No provision for retrying.
+            }
           }
       }
       fut.failed foreach {
@@ -380,7 +375,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     // note: cacheSuccess (top level code) grabs a lock
     def cacheSuccess(storeId: Option[Long], lcbo_storeId: Long, category: String): Option[Iterable[(Long, Product)]] = {
       // note: we never delete from cache, so we don't worry about data disappearing in a potential race condition
-
       if ( storeId.exists{ s => storeProductsLoaded.contains(s)} && hasProductsByStoreCategory(storeId, category) ) {
         storeId.map(s => randomSampler(s, getProductIdsByStoreCategory(s, category)))
       }
@@ -391,11 +385,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val storeId: Option[Long] = LcboIdsToDBIds.get(lcbo_storeId)
       cacheSuccess(storeId, lcbo_storeId, LiquorCategory.toPrimaryCategory(category)).map { identity} getOrElse {
         logger.warn(s"recommend cache miss for $storeId") // don't try to load it asynchronously as that's start up job to get going with it.
-        storeId.map(id => asyncLoadCache(id) )
         val prods: IndexedSeq[Product] = storeId.map(s => productsByStoreCategory(s, category)).
             fold(IndexedSeq[Product]()){identity} // take a hit of one go to LCBO, no more.
         val ids: Set[Long] = Product.cachedLcboProductIds
         Product.insertProducts ( prods.filterNot (p => ids.contains(p.lcboId)) )
+        storeId.map(id => asyncLoadCache(id) ) // above insert is synchronous; this one is asynch.
         val indices = Random.shuffle[Int, IndexedSeq](prods.indices )
         // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
         storeId.fold(Seq[(Long, Product)]()) { s: Long =>
@@ -479,9 +473,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     storesCache.get(storeId).foreach { s =>
       Product.update(getProductsOfStartPage) // refresh product cache, still explicit, not Squeryl way.
       val invs = getInventoriesOfStartPage
-      inTransaction {
-        invs.foreach(inv => MainSchema.inventories.insert(inv))
-      }
+      inTransaction { invs.foreach{inv => MainSchema.inventories.insert(inv)} }
     }
     logger.debug(s"loadCache ended $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
   }
