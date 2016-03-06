@@ -52,7 +52,6 @@ object MainSchema extends Schema {
     via((s,inv) => s.id === inv.storeid)
   //alter table "inventory" add constraint "inventoryFK3" foreign key ("storeid") references "store"("id");
 
-
   // the default constraint for all foreign keys in this schema :
   override def applyDefaultForeignKeyPolicy(foreignKeyDeclaration: ForeignKeyDeclaration) =
   foreignKeyDeclaration.constrainReference
