@@ -44,14 +44,6 @@ object MainSchema extends Schema {
   // "userproductFK1" FOREIGN KEY (productid) REFERENCES product(id)
   //    alter table "userproduct" add constraint "userproductFK1" foreign key ("productid") references "product"("id");
 
-  val productToInventories = oneToManyRelation(products, inventories).
-    via((p,s) => p.id === s.productid)
-  // alter table "inventory" add constraint "inventoryFK2" foreign key ("productid") references "product"("id")
-
-  val storeToInventories = oneToManyRelation(stores, inventories).
-    via((s,inv) => s.id === inv.storeid)
-  //alter table "inventory" add constraint "inventoryFK3" foreign key ("storeid") references "store"("id");
-
   // the default constraint for all foreign keys in this schema :
   override def applyDefaultForeignKeyPolicy(foreignKeyDeclaration: ForeignKeyDeclaration) =
   foreignKeyDeclaration.constrainReference
@@ -66,7 +58,6 @@ object MainSchema extends Schema {
       up.productid defineAs indexed("userproduct_product"),
       up.userid defineAs indexed("userproduct_user"),
       columns(up.userid, up.productid ) are(unique,indexed("user_prod_idx")))
-
   }
 
   on(products) { p =>

@@ -3,7 +3,7 @@ package code.model
 import java.io.IOException
 import java.sql.SQLException
 
-import org.squeryl.dsl.StatefulOneToMany
+import org.squeryl.Query
 
 import scala.annotation.tailrec
 import scala.collection._
@@ -111,7 +111,8 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   //products is a ManyToMany[Product,Inventory], it extends Query[Product]
   lazy val storeProducts = MainSchema.inventories.left(this)
   def productsByCategory: Map[String, IndexedSeq[Product]] = storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
-  lazy val inventories: StatefulOneToMany[Inventory] = MainSchema.storeToInventories.leftStateful(this)
+  lazy val inventories: Query[Inventory] = storeProducts.associations
+
   def inventoriesByCategory: Map[String, IndexedSeq[Inventory]] = inventories.toIndexedSeq.
     groupBy { inv: Inventory =>
       val p = storeProducts.where(p => p.id === inv.productid).headOption
@@ -393,13 +394,16 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         storeId.map(id => asyncLoadCache(id) )
         val prods: IndexedSeq[Product] = storeId.map(s => productsByStoreCategory(s, category)).
             fold(IndexedSeq[Product]()){identity} // take a hit of one go to LCBO, no more.
+        val ids: Set[Long] = Product.cachedLcboProductIds
+        Product.insertProducts ( prods.filterNot (p => ids.contains(p.lcboId)) )
         val indices = Random.shuffle[Int, IndexedSeq](prods.indices )
         // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
         storeId.fold(Seq[(Long, Product)]()) { s: Long =>
           val seq: IndexedSeq[(Long, Product)] = {
             // just use 0 as placeholder for inventory for now as we don't have this info yet.
             for (idx <- indices;
-                 p = prods(idx)) yield (0.toLong, p)
+                 lcbo_id = prods(idx).lcboId.toInt;
+                 prod <- Product.getProductByLcboId(lcbo_id)) yield (0.toLong, prod)
           }
           // we may have 0 inventory, browser should try to finish off that work not web server.
           seq.take(requestSize)
@@ -476,8 +480,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       Product.update(getProductsOfStartPage) // refresh product cache, still explicit, not Squeryl way.
       val invs = getInventoriesOfStartPage
       inTransaction {
-        invs.foreach(inv => s.inventories.associate(inv))
-        s.inventories.refresh
+        invs.foreach(inv => MainSchema.inventories.insert(inv))
       }
     }
     logger.debug(s"loadCache ended $storeId") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
