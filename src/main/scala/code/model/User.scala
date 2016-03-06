@@ -31,7 +31,7 @@ class User extends MegaProtoUser[User] {
 /**
   * The singleton that has methods for accessing the database
   */
-object User extends User with MetaMegaProtoUser[User] {
+object User extends User with MetaMegaProtoUser[User] with Loggable  {
   override def dbTableName = "users"
 
   // define the DB table name
@@ -64,14 +64,9 @@ object User extends User with MetaMegaProtoUser[User] {
       DB.use(DefaultConnectionIdentifier) { connection =>
         // avoids two/three round-trips to store to DB.
         val prod = Product.getProduct(p.id)
-        // Assumes it has been synched up elsewhere if needed, not our business here (or go directly to cache).
-
         val updatedCount = prod.fold {
-          // we never saw that product before and user shows interest (because we hurry to present products we have not had time to store, prior to cache being ready)
-          // Store both. It can definitely happen. Our cache should not have it if we don't have it in DB.
-          Product.insertProducts(Seq(p)) // updates cache as well
-          UserProduct.createRecord.userid(user.id.get).productid(p.id).selectionscount(quantity).save // cascade save dependency.
-          quantity.toLong
+          logger.error(s"User.consume on unsaved product $p")
+          0.toLong  // this is an error, the product should have been in cache.
         } { q =>
             val userProd = userProducts.where(u => u.userid === user.id.get and u.productid === q.id).forUpdate.headOption
             userProd.fold {

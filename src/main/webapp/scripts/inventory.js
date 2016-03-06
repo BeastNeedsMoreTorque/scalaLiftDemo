@@ -1,9 +1,12 @@
 "use strict";
 
-// Global variable, singleton prodSelection
+// Global variable, singleton inventory
+// Tasked to obtain inventory of products at LCBO site when offered from back end a list of products with inventories
+// some of which could be stale, most notably when it's stated as 0, the only condition for which we update with a new value
+// from LCBO (otherwise we trust back end and reduce load on queries to LCBO).
 var inventory = (function() {
 
-  var prodNodeKey = function(prodNodeElt){
+  var prodIdNodeKey = function(prodNodeElt){
     return prodNodeElt.value;
   };
   var prodIdCheckboxes = {}; // map of prodId to html checkbox elements having the name containing the prodId <input type=checkbox... name=prodId ...>
@@ -38,7 +41,7 @@ var inventory = (function() {
       prodIdCheckboxes = {}; // reset it. Too bad, if there was an earlier request. Just take current user input.
       var storeId = storeFinder.getTheSelectedStore();
       $("div.prodContainer").find("input:checkbox").each(function() {
-        prodIdCheckboxes[prodNodeKey(this)] = this;
+        prodIdCheckboxes[prodIdNodeKey(this)] = this;
         var productId = parseInt(this.value) || 0;
         var quantityEl = prodIdCBQuantityBuddy($(this), productId);
         var quantity = parseInt($(quantityEl).val()) || 0;

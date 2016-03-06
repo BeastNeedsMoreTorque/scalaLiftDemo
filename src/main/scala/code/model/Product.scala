@@ -230,10 +230,16 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     // Do special handling to filter out duplicate keys, which would throw.
     def insertBatch(filteredProds: Iterable[Product]): Unit = synchronized { // synchronize on object Product as clients are from different threads
         // insert them
-      try { // the DB could fail for PK or whatever other reason.
-        inTransaction { products.insert(filteredProds) }
-        // update in memory for next caller who should be blocked
-        productsCache ++= filteredProds.map { p => p.id -> p }.toMap
+      def newProd(lcbo_id: Int) =  from(products)(p => where(p.lcbo_id === lcbo_id) select(p))
+      try {
+        // the DB could fail for PK or whatever other reason.
+        inTransaction {
+          products.insert(filteredProds) // refresh them with PKs assigned by DB server.
+          val filteredProdsWithPKs = filteredProds.flatMap(p => newProd(p.lcbo_id.get.toInt))
+          // update in memory for next caller who should be blocked
+          productsCache ++= filteredProdsWithPKs.map { p => p.id -> p }.toMap
+          lcboIdsToDBIds ++= filteredProdsWithPKs.map { p => p.lcboId -> p.id }
+        }
       } catch {
         case se: SQLException =>
           logger.error("SQLException ")
