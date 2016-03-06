@@ -155,15 +155,18 @@ object ProductInteraction extends Loggable {
 
       def mayConsume(selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
         def mayConsumeItem(p: Product, quantity: Long): Option[Feedback] = {
-          val x = UserProduct.consume(p, quantity) match {
-            case Full((userName, count)) =>
-              Feedback(userName, success=true, s"${p.name} $count unit(s) over the years")
-            case Failure(e, ex, _) =>
-              Feedback(userName="", success=false, s"Unable to sell you product ${p.name} with error $e and exception '$ex'")
-            case Empty =>
-              Feedback(userName="", success=false, s"Unable to sell you product ${p.name}")
+          User.currentUser.dmap { Option(Feedback(userName="", success=false, "unable to process transaction, Login first!")) }
+          { user =>
+            val x = User.consume(user, p, quantity) match {
+              case Full((userName, count)) =>
+                Feedback(userName, success = true, s"${p.name} $count unit(s) over the years")
+              case Failure(e, ex, _) =>
+                Feedback(userName = "", success = false, s"Unable to sell you product ${p.name} with error $e and exception '$ex'")
+              case Empty =>
+                Feedback(userName = "", success = false, s"Unable to sell you product ${p.name}")
+            }
+            Option(x)
           }
-          Option(x)
         }
 
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
