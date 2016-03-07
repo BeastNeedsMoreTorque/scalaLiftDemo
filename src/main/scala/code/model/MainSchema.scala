@@ -34,6 +34,7 @@ object MainSchema extends Schema {
   val inventories = manyToManyRelation(stores, products).
     via[Inventory]((s,p,inv) => (inv.storeid === s.id, p.id === inv.productid))
   //"Mysteriously", the table in database apparently needs to be called "Inventory" with QUOTES!! otherwise it complains it will fail.
+  // Max Levesque on the support group had indicated willingness to provide a name here, but unfortunately it didn't come to be.
   // I guess it must be a very specific name since it's not spelled out outright anywhere in the code.
 
   val userProducts = table[UserProduct]("userproduct")
