@@ -429,13 +429,13 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
           MainSchema.inventories.update(CompKeyFilterDirtyInventories)
         }
       } catch {
-          case se: SQLException =>
+          case se: SQLException =>  // the bad
             logger.error(s"SQLException New Invs $CompKeyFilterNewInventories Dirty Invs $CompKeyFilterDirtyInventories")
             logger.error("Code: " + se.getErrorCode)
             logger.error("SqlState: " + se.getSQLState)
             logger.error("Error Message: " + se.getMessage)
-            logger.error("NextException:" + se.getNextException)
-          case e: Exception =>
+            logger.error("NextException:" + se.getNextException)  // the "good".
+          case e: Exception =>  // the UGLY!
             logger.error("General exception caught: " + e)
         }
 
