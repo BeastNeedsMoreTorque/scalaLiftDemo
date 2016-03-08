@@ -115,6 +115,7 @@ class Boot {
         }
       }
     })
+    Product.init()
     Store.init() // would be useful to cache in stores if browsing around maps and selecting alternative stores by id rather than user location.
   }
 }

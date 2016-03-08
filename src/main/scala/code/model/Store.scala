@@ -142,37 +142,32 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
       address_line_1.get != s.address_line_1
   }
 
-  def productsById: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.id).mapValues(_.head)
-  def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.lcbo_id.get).mapValues(_.head)
+  private def productsById: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.id).mapValues(_.head)
+  private def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.lcbo_id.get).mapValues(_.head)
 
-  def productsByCategory: Map[String, IndexedSeq[Product]] = storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
-  def inventories = storeProducts.associations
+  private def productsByCategory: Map[String, IndexedSeq[Product]] = storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
+  private def inventories = storeProducts.associations
 
-  def inventoriesPerProductInStore: Map[Long, Inventory] =
+  private def inventoriesPerProductInStore: Map[Long, Inventory] =
     inventories.toIndexedSeq.map { inv: Inventory => inv.productid -> inv } (breakOut)
 
-  def emptyInventory: Boolean =
+  private def emptyInventory: Boolean =
     inventories.toIndexedSeq.forall(_.quantity == 0)
 
-  def getInventory(prodId: Long): Option[Inventory] =
+  private def getInventory(prodId: Long): Option[Inventory] =
     inventoriesPerProductInStore.get(prodId)
 
-  def getInventoryQuantity(prodId: Long): Option[Long] = {
+  private def getInventoryQuantity(prodId: Long): Option[Long] =
     inventoriesPerProductInStore.get(prodId).map( _.quantity)
-  }
 
-  def getProductIdsByStoreCategory(category: String): IndexedSeq[Long] =
+  private def getProductIdsByStoreCategory(category: String): IndexedSeq[Long] =
     storeProducts.toIndexedSeq.filter(_.primaryCategory == category).map(_.id)
 
-  def hasProductsByStoreCategory(category: String): Boolean =
+  private def hasProductsByStoreCategory(category: String): Boolean =
     storeProducts.exists{ _.primaryCategory == category }
 
-  def hasCachedProducts: Boolean =
-    storeProducts.nonEmpty
-
-  def getInventories(dbStoreId: Long): Map[Long, Inventory] = {
+  private def getInventories(dbStoreId: Long): Map[Long, Inventory] =
     inventories.toSeq.map (inv => inv.productid -> inv ) (breakOut)
-  }
 
   /**
     * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
@@ -183,42 +178,32 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
     * @return
     */
   def recommend(category: String, requestSize: Int): Box[Iterable[(Long, Product)]] = {
-    def randomSampler(prodKeys: IndexedSeq[Long]) = {
-      val prodIds = Random.shuffle(prodKeys)
-      // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
-      val seq = for (id <- prodIds;
-                     p <- Product.getProduct(id)) yield p
-      // generate double the keys and hope it's enough to find enough products with positive inventory as a result
-      // checking quantity in for comprehension above is cost prohibitive.
-      seq.take(2 * requestSize).map { p: Product =>
-        (getInventoryQuantity(p.id).fold(0.toLong) {
-        identity}, p)
-      }.filter { _._1 > 0 }.take(requestSize)
-    }
-
-    // note: cacheSuccess (top level code) grabs a lock
-    def cacheSuccess(category: String): Iterable[(Long, Product)] = {
-      // note: we never delete from cache, so we don't worry about data disappearing in a potential race condition
-      if (hasProductsByStoreCategory(category))
-        randomSampler(getProductIdsByStoreCategory(category))
-      else Nil
-    }
-
     tryo {
       // we could get errors going to LCBO, this tryo captures those.
-      val x = cacheSuccess(LiquorCategory.toPrimaryCategory(category))
-      if (x.nonEmpty) x
+      if (hasProductsByStoreCategory(category)) {
+        // get some random sampling.
+        val prodIds = Random.shuffle(getProductIdsByStoreCategory(category))
+        // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
+        val seq = for (id <- prodIds;
+                       p <- Product.getProduct(id)) yield p
+        // generate double the keys and hope it's enough to find enough products with positive inventory as a result
+        // checking quantity in for comprehension above is cost prohibitive.
+        seq.take(2 * requestSize).map { p: Product =>
+          (getInventoryQuantity(p.id).fold(0.toLong) {
+            identity}, p)
+        }.filter { _._1 > 0 }.take(requestSize)
+      }
       else {
         logger.warn(s"recommend cache miss for $id") // don't try to load it asynchronously as that's start up job to get going with it.
-        val prods: IndexedSeq[Product] = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
+        val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
         asyncLoadCache()
         val indices = Random.shuffle[Int, IndexedSeq](prods.indices)
-        val seq: IndexedSeq[(Long, Product)] = {
+        val seq =
           // just use 0 as placeholder for inventory for now as we don't have this info yet.
           for (idx <- indices;
                lcbo_id = prods(idx).lcboId.toInt;
                prod <- Product.getProductByLcboId(lcbo_id)) yield (0.toLong, prod)
-        }
+
         // we may have 0 inventory, browser should try to finish off that work not web server.
         seq.take(requestSize)
       }
@@ -452,7 +437,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   }
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
-  def loadCache(): Unit = {
+  private def loadCache(): Unit = {
     def fetchProducts(): Unit = {
       inTransaction {
         tryo { fetchProductsByStore() } match {
@@ -635,7 +620,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     }
 
     logger.info(s"Store.init start")
-    Product.init()
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     val dbStores: Map[Long, Store] = inTransaction {
       from(stores)(s =>
