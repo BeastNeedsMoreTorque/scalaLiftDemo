@@ -109,8 +109,39 @@ case class PlainStoreAsLCBOJson (id: Int = 0,
 class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedUpdated[Store] with Loggable  {
   private implicit val formats = net.liftweb.json.DefaultFormats
 
+  @Column(name="id")
+  override val idField = new LongField(this, 1)  // our own auto-generated id
+  val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
+  def lcboId: Long = lcbo_id.get
+  val is_dead = new BooleanField(this, false)
+  val latitude = new DoubleField(this)
+  val longitude = new DoubleField(this)
+  val name = new StringField(this, 200) {
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
+  val address_line_1 = new StringField(this, 200) {
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
+  val city = new StringField(this, 30) {
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
+
   //products is a ManyToMany[Product,Inventory], it extends Query[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)
+
+  def meta = Store
+
+  def copyAttributes(my: Store, s: PlainStoreAsLCBOJson): Store = {
+    my.is_dead.set(s.is_dead)
+    my.address_line_1.set(s.address_line_1)
+    my
+  }
+
+  def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
+    is_dead.get != s.is_dead ||
+      address_line_1.get != s.address_line_1
+  }
+
   def productsById: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.id).mapValues(_.head)
   def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.lcbo_id.get).mapValues(_.head)
 
@@ -142,6 +173,58 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   def getInventories(dbStoreId: Long): Map[Long, Inventory] = {
     inventories.toSeq.map (inv => inv.productid -> inv ) (breakOut)
   }
+
+  /**
+    * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
+    * Select a random product that matches the parameters subject to a max sample size.
+    *
+    * @param store a String representing a numeric code of a LCBO store
+    * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category.
+    * @return
+    */
+  def recommend(category: String, requestSize: Int): Box[Iterable[(Long, Product)]] = {
+    def randomSampler(prodKeys: IndexedSeq[Long]) = {
+      val prodIds = Random.shuffle(prodKeys)
+      // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
+      val seq = for (id <- prodIds;
+                     p <- Product.getProduct(id)) yield p
+      // generate double the keys and hope it's enough to find enough products with positive inventory as a result
+      // checking quantity in for comprehension above is cost prohibitive.
+      seq.take(2 * requestSize).map { p: Product =>
+        (getInventoryQuantity(p.id).fold(0.toLong) {
+        identity}, p)
+      }.filter { _._1 > 0 }.take(requestSize)
+    }
+
+    // note: cacheSuccess (top level code) grabs a lock
+    def cacheSuccess(category: String): Iterable[(Long, Product)] = {
+      // note: we never delete from cache, so we don't worry about data disappearing in a potential race condition
+      if (hasProductsByStoreCategory(category))
+        randomSampler(getProductIdsByStoreCategory(category))
+      else Nil
+    }
+
+    tryo {
+      // we could get errors going to LCBO, this tryo captures those.
+      val x = cacheSuccess(LiquorCategory.toPrimaryCategory(category))
+      if (x.nonEmpty) x
+      else {
+        logger.warn(s"recommend cache miss for $id") // don't try to load it asynchronously as that's start up job to get going with it.
+        val prods: IndexedSeq[Product] = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
+        asyncLoadCache()
+        val indices = Random.shuffle[Int, IndexedSeq](prods.indices)
+        val seq: IndexedSeq[(Long, Product)] = {
+          // just use 0 as placeholder for inventory for now as we don't have this info yet.
+          for (idx <- indices;
+               lcbo_id = prods(idx).lcboId.toInt;
+               prod <- Product.getProductByLcboId(lcbo_id)) yield (0.toLong, prod)
+        }
+        // we may have 0 inventory, browser should try to finish off that work not web server.
+        seq.take(requestSize)
+      }
+    }
+  }
+
 
   /**
     * LCBO client JSON query handler. So naturally, the code is specifically written with the structure of LCBO documents in mind, with tokens as is.
@@ -260,7 +343,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def getProductsByStore(): Unit = {
+  private def fetchProductsByStore(): Unit = {
     if (Store.productCacheSize > 0) {
       val initSeq = IndexedSeq[Product]()
 
@@ -280,7 +363,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   @throws(classOf[IOException])
   @throws(classOf[ParseException])
   @throws(classOf[MappingException])
-  private def inventoriesByStore(): Unit = {
+  private def fetchInventoriesByStore(): Unit = {
     @throws(classOf[net.liftweb.json.MappingException])
     @throws(classOf[net.liftweb.json.JsonParser.ParseException])
     @throws(classOf[java.io.IOException])
@@ -316,6 +399,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
       // Collects into our list of inventories the attributes we care about (extract[InventoryAsLCBOJson]). Then filter out unwanted data.
 
       // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
+      storeProducts.refresh // make sure we're synched up with DB for the store.
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfProduct )
 
       val storeInventories = getInventories(id)
@@ -331,9 +415,30 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
         flatMap { inv => lcboidToDBId(inv.product_id).
           map { dbProductId: Long => new Inventory(id, dbProductId, inv.quantity ) } } (collection.breakOut)
 
-      inTransaction { (newInventories ++ dirtyInventories).foreach{inv => MainSchema.inventories.insert(inv)} }
+      // God forbid, we might supply ourselves data that violates composite key. Weed it out!
+      def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]): Iterable[Inventory] = {
+        invs.groupBy(x => (x.productid, x.storeid)).map{case (k,v) => v.last}
+      }
+      val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
+      val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories)
 
-      // fyi: throws Mapping exception.
+      try {  // getNextException in catch is why we want to try catch here.
+        inTransaction {
+          // we refresh just before splitting the inventories into clean, dirty, new classes.
+          MainSchema.inventories.insert(CompKeyFilterNewInventories)
+          MainSchema.inventories.update(CompKeyFilterDirtyInventories)
+        }
+      } catch {
+          case se: SQLException =>
+            logger.error(s"SQLException New Invs $CompKeyFilterNewInventories Dirty Invs $CompKeyFilterDirtyInventories")
+            logger.error("Code: " + se.getErrorCode)
+            logger.error("SqlState: " + se.getSQLState)
+            logger.error("Error Message: " + se.getMessage)
+            logger.error("NextException:" + se.getNextException)
+          case e: Exception =>
+            logger.error("General exception caught: " + e)
+        }
+
       //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
       val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
       val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
@@ -341,8 +446,6 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
         logger.info(uri) // log only last one to be less verbose
         return
       }
-      // Deem as last page only if  LCBO tells us it's final page
-      // tail recursion enforced.
       collectInventoriesOnAPage( urlRoot, pageNo + 1) // union of this page with next page when we are asked for a full sample
     }
     collectInventoriesOnAPage(s"$LcboDomainURL/inventories?store_id=${lcboId}", 1) // programmer client is assumed to know we use this as a page.
@@ -350,12 +453,9 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
 
   // may have side effect to update database with more up to date from LCBO's content (if different)
   def loadCache(): Unit = {
-    def getProductsOfStartPage(): Unit = {
-      def loadAll(): Box[Unit] =
-        tryo { getProductsByStore() }
-
+    def fetchProducts(): Unit = {
       inTransaction {
-        loadAll() match {
+        tryo { fetchProductsByStore() } match {
           case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading products into cache for '${lcboId}' with message $m and exception error $ex")
           case Empty =>
@@ -365,12 +465,9 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
       }
     }
 
-    def getInventoriesOfStartPage(): Unit = {
-      def loadAllInventories(): Box[Unit] =
-        tryo { inventoriesByStore() }
-
+    def fetchInventories(): Unit = {
       inTransaction {
-        loadAllInventories() match {
+        tryo { fetchInventoriesByStore() } match {
           case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading inventories into cache for '${lcboId}' with message $m and exception error $ex")
           case Empty =>
@@ -380,11 +477,11 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
       }
     }
 
-    logger.debug(s"loadCache start ${lcboId}")
+    logger.info(s"loadCache start ${lcboId}")
     // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
-    getProductsOfStartPage() // updates products on each query if something new comes up.
-    getInventoriesOfStartPage() // and similarly for inventories
-    logger.debug(s"loadCache ended ${lcboId}") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
+    fetchProducts() // updates products on each query if something new comes up.
+    fetchInventories() // and similarly for inventories
+    logger.info(s"loadCache ended ${lcboId}") // 30 seconds from last LCBO query to completing the cache update (Jan 23). Needs to be better.
   }
 
   def asyncLoadCache(): Unit = {
@@ -399,48 +496,19 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
           inTransaction {
             // we're in async callback, need to acquire a valid session for our refresh and our query to DB on store's inventory.
             storeProducts.refresh  // key for whole inventory caching to work! We've persisted along the way for each LCBO page
-            logger.debug(s"loadCache succeeded for ${lcbo_id}")
+            logger.debug(s"loadCache succeeded for ${lcboId}")
             if (emptyInventory) {
-              logger.warn(s"got NO product inventory for storeId ${lcbo_id} !") // No provision for retrying.
+              logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
             }
           }
       }
       fut.failed foreach {
         case f =>
-          logger.info(s"loadCache explicitly failed for ${lcbo_id} cause $f")
+          logger.info(s"loadCache explicitly failed for ${lcboId} cause $f")
       }
     }
   }
 
-  @Column(name="id")
-  override val idField = new LongField(this, 1)  // our own auto-generated id
-  val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
-  def lcboId: Long = lcbo_id.get
-  val is_dead = new BooleanField(this, false)
-  val latitude = new DoubleField(this)
-  val longitude = new DoubleField(this)
-  val name = new StringField(this, 200) {
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
-  val address_line_1 = new StringField(this, 200) {
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
-  val city = new StringField(this, 30) {
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
-
-  def meta = Store
-
-  def copyAttributes(my: Store, s: PlainStoreAsLCBOJson): Store = {
-    my.is_dead.set(s.is_dead)
-    my.address_line_1.set(s.address_line_1)
-    my
-  }
-
-  def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
-    is_dead.get != s.is_dead ||
-    address_line_1.get != s.address_line_1
-  }
 }
 
 object Store extends Store with MetaRecord[Store] with pagerRestClient with Loggable {
@@ -461,6 +529,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def availableStores: Set[Long] = storesCache.toMap.keySet
   def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
   def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)
+  def getStoreByLcboId(l: Int): Option[Store] = LcboIdsToDBIds.get(l).flatMap(storesCache.get)
 
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
@@ -481,12 +550,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
   def init() = {
     def getStores(dbStores: Map[Long, Store]): Map[Long, Store] = {
-      def synchronizeData(dbStores: Map[Long, Store]): Box[Map[Long, Store]] = {
+      def synchronizeData(): Box[Map[Long, Store]] = {
         // collects stores individually from LCBO REST as PlainStoreAsLCBOJson on all pages starting from a pageNo.
         // we declare types fairly often in the following because it's not trivial to follow otherwise
         @tailrec
-        def collectStoresOnAPage(dbStores: Map[Long, Store],
-                                 accumItems: Map[EntityRecordState, IndexedSeq[Store]],
+        def collectStoresOnAPage(accumItems: Map[EntityRecordState, IndexedSeq[Store]],
                                  urlRoot: String,
                                  pageNo: Int): Map[EntityRecordState, IndexedSeq[Store]] = {
           val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)
@@ -520,7 +588,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
             return revisedAccumItems // no need to look at more pages
           }
           collectStoresOnAPage(
-            dbStores,
             revisedAccumItems,
             urlRoot,
             pageNo + 1) // union of this page with next page when we are asked for a full sample
@@ -531,7 +598,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         tryo {
           // gather stores on this page (url) with classification as to whether they are new, dirty or clean
           val initMap = Map[EntityRecordState, IndexedSeq[Store]](New -> Vector(), Dirty -> Vector(), Clean -> Vector())
-          val lcboStores = collectStoresOnAPage(dbStores, initMap, url, 1)
+          val lcboStores = collectStoresOnAPage(initMap, url, 1)
           logger.debug(s"done loading to LCBO")
 
           // identify the dirty and new stores for batch update and then retain all of them as the requested set
@@ -556,10 +623,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         }
       }
 
-      import net.liftweb.common.Failure
-      synchronizeData( dbStores) match {
+      synchronizeData() match {
           case Full(m) => m
-          case Failure(m, ex, _) =>
+          case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'")
             dbStores
           case Empty =>
@@ -580,57 +646,6 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     logger.info("Store.init end")
   }
 
-  /**
-    * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
-    * Select a random product that matches the parameters subject to a max sample size.
-    *
-    * @param store a String representing a numeric code of a LCBO store
-    * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category.
-    * @return
-    */
-  def recommend(lcbo_storeId: Long, category: String, requestSize: Int): Box[Iterable[(Long, Product)]] = {
-    def randomSampler(s: Store, prodKeys: IndexedSeq[Long]) = {
-      val prodIds = Random.shuffle(prodKeys)
-      // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
-      val seq = for (id <- prodIds;
-                     p <- Product.getProduct(id)) yield (p)
-      // generate double the keys and hope it's enough to find enough products with positive inventory as a result
-      // checking quantity in for comprehension above is cost prohibitive.
-      seq.take(2 * requestSize).map { p: Product => (s.getInventoryQuantity(p.id).fold(0.toLong) {identity}, p)}.
-        filter { pair: (Long, Product) => pair._1 > 0 }.take(requestSize)
-    }
-
-    // note: cacheSuccess (top level code) grabs a lock
-    def cacheSuccess(currStore: Option[Store], category: String): Option[Iterable[(Long, Product)]] = {
-      // note: we never delete from cache, so we don't worry about data disappearing in a potential race condition
-      currStore.
-        filter(_.hasProductsByStoreCategory(category)).
-        map { s => randomSampler(s, s.getProductIdsByStoreCategory(category)) }
-    }
-
-    tryo {
-      // we could get errors going to LCBO, this tryo captures those.
-      val storeId = LcboIdsToDBIds.get(lcbo_storeId)
-      val sOption: Option[Store] = storeId.flatMap { id: Long => storesCache.get(id) }
-      cacheSuccess(sOption, LiquorCategory.toPrimaryCategory(category)).map {identity} getOrElse {
-        logger.warn(s"recommend cache miss for $storeId") // don't try to load it asynchronously as that's start up job to get going with it.
-        sOption.fold(IndexedSeq[(Long, Product)]()) { s =>
-          val prods: IndexedSeq[Product] = s.productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
-          s.asyncLoadCache()
-          val indices = Random.shuffle[Int, IndexedSeq](prods.indices)
-          val seq: IndexedSeq[(Long, Product)] = {
-            // just use 0 as placeholder for inventory for now as we don't have this info yet.
-            for (idx <- indices;
-                 lcbo_id = prods(idx).lcboId.toInt;
-                 prod <- Product.getProductByLcboId(lcbo_id)) yield (0.toLong, prod)
-          }
-          // we may have 0 inventory, browser should try to finish off that work not web server.
-          seq.take(requestSize)
-        }
-      }
-    }
-  }
-
   def create(s: PlainStoreAsLCBOJson): Store = {
     // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
     createRecord.
@@ -643,6 +658,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       longitude(s.longitude)
   }
 
+  // TODO code smell: should not we be able to send over a bona fide Store??
   def findAll(): Iterable[StoreAsLCBOJson] =
     storesCache.values.map( StoreAsLCBOJson(_))
 
@@ -654,10 +670,4 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     myStores.grouped(DBBatchSize).
       foreach{ stores.insert }
 
-  // for reflection and generating documentation
-  private final def getSingleStore( uri: String): PlainStoreAsLCBOJson = {
-    logger.debug(uri)
-    val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
-    (parse(pageContent) \ "result").extract[PlainStoreAsLCBOJson] // more throws
-  }
 }

@@ -175,6 +175,8 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   private val lcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
 
+  def getProduct(dbId: Long): Option[Product] = productsCache get dbId
+  def getProductByLcboId(id: Int): Option[Product] = lcboidToDBId(id).flatMap(  productsCache.get )
   def lcboidToDBId(l: Int): Option[Long] = lcboIdsToDBIds.get(l)
 
   def create(p: ProductAsLCBOJson): Product = {
@@ -222,19 +224,15 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
     // if there is nothing in map productsByState for New as original ProductAsLCBOJson, return empty IndexedSeq. Then take that IndexedSeq and map it to a created Product.
     // This yields indexedseq of products.
+    val cleanProducts = fetchItems(Clean, productsByState, {p => p.getProduct(prods)})
     val newProducts = productsByState.get(New).fold(IndexedSeq[ProductAsLCBOJson]()){identity}.map { Product.create }
     insertProducts(newProducts)
 
     val dirtyProducts = fetchItems(Dirty, productsByState, {p => p.getProduct(prods).map { _.copyAttributes( p)} })
     updateProducts(dirtyProducts)
 
-    val cleanProducts = fetchItems(Clean, productsByState, {p => p.getProduct(prods)})
-
     cleanProducts ++ newProducts ++ dirtyProducts // client wants full set, meanwhile we store and cache those that represent changes.
   }
-
-  def getProduct(dbId: Long): Option[Product] = productsCache get dbId
-  def getProductByLcboId(id: Int): Option[Product] = lcboidToDBId(id).flatMap(  productsCache.get )
 
   // @see http://squeryl.org/occ.html
   private def updateProducts(myProducts: Seq[Product]): Unit = synchronized {
@@ -289,14 +287,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
     }
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
-    // Then, annoying filter to ensure uniqueness by lcbo_id, take the last of each set sharing same lcbo_id and then collect the values
     val LcboIDs = productsCache.keySet.flatMap(DBIdToLcboId) // evaluate once
     val filteredForRI = myProducts.filterNot { p => LcboIDs.contains(p.lcboId) }
+    // you never know... Our input could have the same product twice in the collection with the same lcbo_id and we have unique index in DB against that.
     val filteredForUnique = filteredForRI.groupBy {_.lcboId}.
       map { case (k,v) => v.last }
     // break it down and then serialize the work.
     filteredForUnique.grouped(DBBatchSize).foreach { insertBatch }
   }
-
-
 }
