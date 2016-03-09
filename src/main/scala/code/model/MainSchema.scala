@@ -8,7 +8,7 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 class Inventory(val storeid: Long, val productid: Long, var quantity: Long) extends KeyedEntity[CompositeKey2[Long,Long]] {
   def id = compositeKey(storeid, productid)
 
-  def isDirty(inv: InventoryAsLCBOJson): Boolean =
+  def dirty_?(inv: InventoryAsLCBOJson): Boolean =
     quantity != inv.quantity
 
   def copyAttributes(inv: InventoryAsLCBOJson): Inventory = {

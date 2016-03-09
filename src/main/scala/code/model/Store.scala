@@ -137,7 +137,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
     my
   }
 
-  def isDirty(s: PlainStoreAsLCBOJson): Boolean = {
+  def dirty_?(s: PlainStoreAsLCBOJson): Boolean = {
     is_dead.get != s.is_dead ||
       address_line_1.get != s.address_line_1
   }
@@ -369,7 +369,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
                i <- getInventory(dbProductId)) yield i
         invOption  match {
           case None  => New
-          case Some(inv) if inv.isDirty(item) => Dirty
+          case Some(inv) if inv.dirty_?(item) => Dirty
           case _ => Clean
         }
       }
@@ -557,7 +557,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           val storesByState: Map[EntityRecordState, IndexedSeq[PlainStoreAsLCBOJson]] = pageStores.groupBy {
             s =>  ( LcboIdsToDBIds.get(s.id).flatMap( dbStores.get ), s)  match {
               case (None, _) => New
-              case (Some(store), lcboStore) if store.isDirty(lcboStore) => Dirty
+              case (Some(store), lcboStore) if store.dirty_?(lcboStore) => Dirty
               case (_ , _) => Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
             }
           }

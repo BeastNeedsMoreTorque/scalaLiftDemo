@@ -150,7 +150,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
       Attribute ("Origin:", origin.get) ::
       Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
 
-  def isDirty(p: ProductAsLCBOJson): Boolean = {
+  def dirty_?(p: ProductAsLCBOJson): Boolean = {
     price_in_cents.get != p.price_in_cents ||
       image_thumb_url.get != p.image_thumb_url
   }
@@ -217,7 +217,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val productsByState: Map[EntityRecordState, IndexedSeq[ProductAsLCBOJson]] = items.groupBy {
       p => (prods.get(p.id.toLong), p) match {
         case (None, _) => New
-        case (Some(product), lcboProduct) if product.isDirty(lcboProduct) => Dirty
+        case (Some(product), lcboProduct) if product.dirty_?(lcboProduct) => Dirty
         case (_ , _) => Clean
       }
     }
