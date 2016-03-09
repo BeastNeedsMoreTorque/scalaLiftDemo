@@ -105,8 +105,8 @@ object ProductInteraction extends Loggable {
         SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
       }
 
-      def maySelect(lcbo_storeId: Int): JsCmd =
-        Store.getStoreByLcboId(lcbo_storeId).fold {
+      def maySelect(storeId: Int): JsCmd =
+        Store.getStoreById(storeId).fold {
           S.error("We need to establish your local store first, please wait for local geo to become available")
           Noop
         }{ s: Store =>
@@ -125,9 +125,9 @@ object ProductInteraction extends Loggable {
         }
 
       val json = jsStore.extractOpt[String].map( parse)
-      val lcbo_storeId = json.fold(-1){ json =>  json.extract[Int]}
+      val storeId = json.fold(-1){ json =>  json.extract[Int]}
       User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
-      { user => maySelect(lcbo_storeId)} // normal processing
+      { user => maySelect(storeId)} // normal processing
     }
 
     def consumeProducts(selection: JValue): JsCmd = {

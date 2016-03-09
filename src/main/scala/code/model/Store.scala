@@ -514,10 +514,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def availableStores: Set[Long] = storesCache.toMap.keySet
   def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
   def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)
-  def getStoreByLcboId(l: Int): Option[Store] = LcboIdsToDBIds.get(l).flatMap(storesCache.get)
+  def getStoreById(s: Long): Option[Store] = storesCache.get(s)
 
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
   override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
+
+    /* Convert a store to XML */
+  implicit def toXml(st: Store): Node =
+    <store>{Xml.toXml(st.asJValue)}</store>
 
   @volatile
   var dummy: Any = _
@@ -642,9 +646,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       longitude(s.longitude)
   }
 
-  // TODO code smell: should not we be able to send over a bona fide Store??
-  def findAll(): Iterable[StoreAsLCBOJson] =
-    storesCache.values.map( StoreAsLCBOJson(_))
+  def findAllAsLCBO(): Iterable[StoreAsLCBOJson] =
+    storesCache.values.map(StoreAsLCBOJson(_))
+
+  def findAll(): Iterable[Store] =
+    storesCache.values
 
   def updateStores(myStores: Iterable[Store]) =
     myStores.grouped(DBBatchSize).

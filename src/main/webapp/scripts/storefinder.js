@@ -168,7 +168,7 @@ var storeFinder = (function() {
 
     getTheSelectedStore: function() {
       if (theSelectedStore == null) return -1;
-      return theSelectedStore.id;
+      return theSelectedStore.idField;
     },
 
     fetchAllStores: function() {
