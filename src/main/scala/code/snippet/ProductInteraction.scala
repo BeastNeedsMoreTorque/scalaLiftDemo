@@ -18,8 +18,8 @@ import java.text.NumberFormat
 
 /**
   * This snippet contains state only via HTTP session (A Liftweb snippet is a web page fragment that has autonomous existence
-  * equivalent to a page with framework
-  * responsible to render all snippets on a page and to handle events between snippets and corresponding html div elements)
+  * equivalent to a page with lift framework
+  * being responsible to render all snippets on a page and to handle events between snippets and corresponding html div elements)
   * Much html and Javascript is generated here thanks to the capabilities of liftweb.
   * Created by philippederome on 15-10-26.
   */
@@ -56,48 +56,60 @@ object ProductInteraction extends Loggable {
     def recommend(jsStore: JValue): JsCmd = {
       def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd = {
         def getDiv(qOfProd: QuantityOfProduct): NodeSeq = {
+          import code.model.Attribute
           // layout description:
-          // attributes in center column (Blueprint class span-8, width 8 not to side) and to its right (Blueprint classes span-8 last) other data.
-          // Other data is top to bottom: image, then checkbox, quantity and cost input text fields right justified (CSS class prodSelectInput).
+          // attributes in center column (Blueprint class span-8, width 8 not to side) as attributesMarkup
+          // and to its right (Blueprint classes span-8 last) other data containing img and selection details as selectionMarkup.
+          // selectionMarkup is top to bottom: image, then checkbox, quantity and cost input text fields right justified (CSS class prodSelectInput).
           // We also add a hiddenCost, so that the cost per item is always available for our calculation (visible to user in attributes in any event, but harder for us to get at for computation)
-          val quantity = qOfProd.quantity
-          val prod = qOfProd.product
-          val id = prod.lcbo_id.get.toString
-          val quantityAttribute = code.model.Attribute("Quantity:", quantity.toString)
-          val fullAttributes = prod.createProductElemVals ++ Vector(quantityAttribute)
-          def setProdIdName(attr: code.model.Attribute) =
-            if (attr == quantityAttribute) id else ""
+          def attributesMarkup(prod: Product, quantityAttr: Attribute, attrs: IndexedSeq[Attribute]): NodeSeq = {
+            def setProdIdName( attr: Attribute) =
+              if (attr == quantityAttr) prod.lcbo_id.get.toString else ""
 
-          val attributesNS = <table>
-            { for (attr <- fullAttributes )
-              yield <tr>
-                <td class="prodAttrHead">{attr.key}</td>
-                <td class="prodAttrContent" name={setProdIdName(attr)}>{attr.value}</td>
-              </tr>
+            val x = {
+              for (attr <- attrs)
+                yield <tr>
+                  <td class="prodAttrHead">
+                    {attr.key}
+                  </td>
+                  <td class="prodAttrContent" name={setProdIdName(attr)}>
+                    {attr.value}
+                  </td>
+                </tr>
             }
-          </table>
+            <div class="span-8"><table>{x}</table></div>
+          }
 
-          val name = prod.name.get
-          // create a checkBox with value being product id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
-          val checkBoxNS = <label>
-            <input type="checkbox" class="prodSelectInput" value={id}/>
-            {name}
-          </label><br/>
-          val quantityNS = <label>Item Quantity:
-            <input type="text" class="prodQty prodSelectInput" onchange="prodSelection.updateQtyItem(this);" value="1"/>
-          </label><br/>
-          // read-only costNS, so user can see it clearly but cannot update it.
-          val costNS = <label>Cost:
-            <input type="text" class="prodCost prodSelectInput" value={prod.price} readonly="readonly"/>
-          </label>
-          val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"/>
+          def selectionMarkup(prod: Product) = {
+            val imgNS = <img src={prod.imageThumbUrl}/>
 
-          val imgNS = <img src={prod.imageThumbUrl}/>
-          val ns: NodeSeq =  <div>
-            <div class="span-8">{attributesNS}</div>
-            <div class="span-8 last">{imgNS}<br></br>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div>
-          </div><hr/>
-          ns
+            // create a checkBox with value being product id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
+            val checkBoxNS = <label>
+              <input type="checkbox" class="prodSelectInput" value={prod.lcbo_id.get.toString}/>
+              {prod.name.get}
+            </label><br/>
+
+            val quantityNS = <label>Item Quantity:
+              <input type="text" class="prodQty prodSelectInput" onchange="prodSelection.updateQtyItem(this);" value="1"/>
+            </label><br/>
+
+            // read-only costNS, so user can see it clearly but cannot update it.
+            val costNS = <label>Cost:
+              <input type="text" class="prodCost prodSelectInput" value={prod.price} readonly="readonly"/>
+            </label>
+
+            val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"/>
+
+            val ns: NodeSeq =  <div class="span-8 last">{imgNS}<br/>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div>
+            ns
+          }
+
+          val prod = qOfProd.product
+          val quantityAttribute = Attribute("Quantity:", qOfProd.quantity.toString)
+          val allAttributes = prod.createProductElemVals ++ Vector(quantityAttribute)
+
+          <div>{attributesMarkup(prod, quantityAttribute, allAttributes)}{selectionMarkup(prod)}</div><hr/>
+
         }
 
         // for each element of qOfProds, build a Div as NodeSeq and concatenate them as a NodeSeq for the several divs
@@ -187,7 +199,7 @@ object ProductInteraction extends Loggable {
       }
 
       val jsonOpt = selection.extractOpt[String].map( parse)
-      val selectedProducts: Option[Vector[SelectedProduct]] = jsonOpt.map(json => {for (p <- json.children.toVector) yield p.extractOpt[SelectedProduct]}.flatten )
+      val selectedProducts = jsonOpt.map(json => {for (p <- json.children.toVector) yield p.extractOpt[SelectedProduct]}.flatten )
       selectedProducts.fold {
         S.warning("Select some recommended products before attempting to consume")
         Noop

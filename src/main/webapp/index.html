@@ -41,24 +41,37 @@
         <div id="prodDisplay" hidden >
             <div id="prodContainer" class="prodContainer">
                 <!-- There will be several of these that would be generated for each product-->
-                <div>  <!-- a container for layout-->
-                    <div class="span-8"> <!--generate other product items on the fly as table with tr and td elements-->
-                        <table>
-                            <tr>
-                                <td class="prodAttrHead">some attribute</td>
-                                <td class="prodAttrContent">some value</td>
-                            </tr>
-                        </table>
-                    </div>
-                    <div class="span-8 last">  <!-- generate img with URL inside this div on the fly-->
-                        <img src="#"/><br>
-                        <input type="text" class="hiddenProdCost" value="" hidden> <!-- to keep the unit cost as a reference for JS-->
-                        <label><input type="checkbox" class="prodSelectInput" value="123456">Some Name</label>
-                        <label class="prodSelectLbl">Quantity:<input type="text" class="prodQty prodSelectInput" value="1"/></label>
-                        <label class="prodSelectLbl">Cost:<input type="text" class="prodCost prodSelectInput" value="" readonly/></label> <!-- running cost of product times quantity, or cost when qty N/A-->
-                    </div>
+                <div> <!-- a container for layout-->
+                <!-- attributesMarkup -->
+                <div class="span-8">
+                    <table>
+                        <tr>
+                            <td class="prodAttrHead">
+                                Some attribute's name
+                            </td>
+                            <td class="prodAttrContent" name={setProdIdName(attr)}>
+                                Some attribute's value
+                            </td>
+                        </tr>
+                    </table>
                 </div>
-                <hr>
+                <!-- selectionMarkup -->
+                <div class="span-8 last"> <!-- generate img with URL inside this div on the fly-->
+                    <img src="#"/><br> <!-- img of product here -->
+                    <label>
+                        <input type="checkbox" class="prodSelectInput" value="prod.lcbo_id.get.toString"/>
+                        product name
+                    </label><br/>
+                    <label>Item Quantity:
+                        <input type="text" class="prodQty prodSelectInput" onchange="prodSelection.updateQtyItem(this);" value="1"/>
+                    </label><br/>
+                    <label>Cost:
+                        <input type="text" class="prodCost prodSelectInput" value="prod.price" readonly="readonly"/>
+                    </label>
+                    <input type="text" class="hiddenProdCost" value="prod.price" hidden="hidden"/>
+                </div>
+
+                </div><hr/>
             </div>
         </div>
 
