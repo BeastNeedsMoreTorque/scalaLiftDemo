@@ -9,6 +9,9 @@ import scala.xml.Node
 /**
   * Created by philippederome on 2015-12-19.
   *
+  * we use attach point stores JSON way (XML available for completeness)
+  * Also we show storesAsLCBO, which have a more compact representation, but requires translation from Store to StoreAsLCBOJson.
+  *
   * @see http://simply.liftweb.net/index-5.3.html#prev
   */
 object AppRest extends RestHelper {
@@ -23,8 +26,16 @@ object AppRest extends RestHelper {
    * @see https://www.assembla.com/spaces/liftweb/wiki/REST_Web_Services
    */
   serve {
+    case "storesAsLCBO" :: Nil JsonGet _ =>
+      val stores = Store.findAllAsLCBO()
+      Extraction.decompose(stores) // a JValue, allowing servlet to return some JSon, this is a collection.
+
+    case "storesAsLCBO" :: Nil XmlGet _ =>
+      val stores = Store.findAllAsLCBO()
+      <stores>{stores.map(s => {s:Node})}</stores>
+
     case "stores" :: Nil JsonGet _ =>
-      val stores = Store.findAll()
+      val stores = Store.findAll().map{_.asJValue}
       Extraction.decompose(stores) // a JValue, allowing servlet to return some JSon, this is a collection.
 
     case "stores" :: Nil XmlGet _ =>
