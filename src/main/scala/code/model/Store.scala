@@ -160,11 +160,11 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   private def getInventoryQuantity(prodId: Long): Option[Long] =
     inventoriesPerProductInStore.get(prodId).map( _.quantity)
 
-  private def getProductIdsByStoreCategory(category: String): IndexedSeq[Long] =
-    storeProducts.toIndexedSeq.filter(_.primaryCategory == category).map(_.id)
+  private def getProductIdsByStoreCategory(lcboCategory: String): IndexedSeq[Long] =
+    storeProducts.toIndexedSeq.filter(_.primaryCategory == lcboCategory).map(_.id)
 
-  private def hasProductsByStoreCategory(category: String): Boolean =
-    storeProducts.exists{ _.primaryCategory == category }
+  private def hasProductsByStoreCategory(lcboCategory: String): Boolean =
+    storeProducts.exists{ _.primaryCategory == lcboCategory }
 
   private def getInventories(dbStoreId: Long): Map[Long, Inventory] =
     inventories.toSeq.map (inv => inv.productid -> inv ) (breakOut)
@@ -174,15 +174,19 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
     * Select a random product that matches the parameters subject to a max sample size.
     *
     * @param store a String representing a numeric code of a LCBO store
-    * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category.
+    * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category (for query only not to compare results and filter!).
     * @return
     */
   def recommend(category: String, requestSize: Int): Box[Iterable[(Long, Product)]] = {
+    // we could get errors going to LCBO, this tryo captures those.
     tryo {
-      // we could get errors going to LCBO, this tryo captures those.
-      if (hasProductsByStoreCategory(category)) {
+      asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
+      // because our data could be stale. In a finished commercial product, we'd check how old our last cache is and if old enough, go for it, since we could be up
+      // for days and inventory info would be really stale.
+      val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results
+      if (hasProductsByStoreCategory(lcboProdCategory)) {
         // get some random sampling.
-        val prodIds = Random.shuffle(getProductIdsByStoreCategory(category))
+        val prodIds = Random.shuffle(getProductIdsByStoreCategory(lcboProdCategory))
         // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
         val seq = for (id <- prodIds;
                        p <- Product.getProduct(id)) yield p
@@ -196,7 +200,6 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
       else {
         logger.warn(s"recommend cache miss for $id") // don't try to load it asynchronously as that's start up job to get going with it.
         val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
-        asyncLoadCache()
         val indices = Random.shuffle[Int, IndexedSeq](prods.indices)
         val seq =
           // just use 0 as placeholder for inventory for now as we don't have this info yet.
@@ -620,14 +623,17 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private def addNewStoresToCaches(seq: Iterable[Store]): Unit = {
     storesCache ++= seq.map(s => s.id -> s)(breakOut)
     LcboIdsToDBIds ++= storesCache.map { case(k,v) => v.lcboId -> k }
+    inTransaction { seq.foreach { s => s.storeProducts.refresh } } // ensure inventories are refreshed INCLUDING on start up.
   }
 
   def init() = {
     logger.info(s"Store.init start")
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
-    val dbStores = inTransaction { from(stores)(s => select (s)) }
-    addNewStoresToCaches(dbStores)
-    asyncGetStores(dbStores.map {s => s.id -> s }(breakOut))
+    inTransaction {
+      val dbStores = from(stores)(s => select(s))
+      addNewStoresToCaches(dbStores)
+      asyncGetStores(dbStores.map { s => s.id -> s }(breakOut))
+    }
   }
 
   def asyncGetStores(x: Map[Long, Store]): Unit = {

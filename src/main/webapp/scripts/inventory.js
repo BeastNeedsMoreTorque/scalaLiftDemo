@@ -39,7 +39,7 @@ var inventory = (function() {
   return {
     fetchInventories: function() {
       prodIdCheckboxes = {}; // reset it. Too bad, if there was an earlier request. Just take current user input.
-      var storeId = storeFinder.getTheSelectedStore();
+      var storeId = storeFinder.getTheSelectedLcboStoreId();
       $("div.prodContainer").find("input:checkbox").each(function() {
         prodIdCheckboxes[prodIdNodeKey(this)] = this;
         var productId = parseInt(this.value) || 0;

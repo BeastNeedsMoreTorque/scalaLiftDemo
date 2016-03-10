@@ -206,8 +206,10 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   def init(): Unit = {
     logger.info(s"Product.init start")
-    val prods = inTransaction { from(products)(p => select(p)) }
-    addNewProductsToCaches(prods)
+    inTransaction {
+      val prods = from(products)(p => select(p))
+      addNewProductsToCaches(prods)
+    }
     logger.info(s"Product.init end")
   }
 
