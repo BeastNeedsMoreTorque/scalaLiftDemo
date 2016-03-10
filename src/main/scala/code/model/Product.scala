@@ -173,11 +173,11 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
-  private val lcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
+  private val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
 
   def getProduct(dbId: Long): Option[Product] = productsCache get dbId
   def getProductByLcboId(id: Int): Option[Product] = lcboidToDBId(id).flatMap(  productsCache.get )
-  def lcboidToDBId(l: Int): Option[Long] = lcboIdsToDBIds.get(l)
+  def lcboidToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
 
   def create(p: ProductAsLCBOJson): Product = {
     // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
@@ -199,10 +199,16 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       serving_suggestion(p.serving_suggestion)
   }
 
-  def init(): Unit = inTransaction {
-    val prods = from(products)(p => select(p))
-    productsCache ++= prods.map { p => p.id -> p }.toMap
-    lcboIdsToDBIds ++= prods.map{ p => p.lcboId -> p.id }
+  private def addNewProductsToCaches(prods: Iterable[Product]): Unit = {
+    productsCache ++= prods.map { p => p.id -> p }(breakOut)
+    LcboIdsToDBIds ++= productsCache.map { case(k,v) => v.lcboId -> k }
+  }
+
+  def init(): Unit = {
+    logger.info(s"Product.init start")
+    val prods = inTransaction { from(products)(p => select(p)) }
+    addNewProductsToCaches(prods)
+    logger.info(s"Product.init end")
   }
 
   def reconcile(items: IndexedSeq[ProductAsLCBOJson]) :  IndexedSeq[Product] = {
@@ -271,8 +277,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
           val ids = filteredProds.map(_.lcbo_id)
           val filteredProdsWithPKs = from(products)(p => where( p.lcbo_id in ids) select(p))
           // update in memory for next caller who should be blocked (insertProducts is synchronized)
-          productsCache ++= filteredProdsWithPKs.map { p => p.id -> p }.toMap
-          lcboIdsToDBIds ++= filteredProdsWithPKs.map { p => p.lcboId -> p.id }
+          addNewProductsToCaches(filteredProdsWithPKs)
         }
       } catch {
         case se: SQLException =>
