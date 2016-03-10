@@ -171,6 +171,11 @@ var storeFinder = (function() {
       return theSelectedStore.idField;
     },
 
+    getTheSelectedLcboStoreId: function() {
+      if (theSelectedStore == null) return -1;
+      return theSelectedStore.lcbo_id;
+    },
+
     fetchAllStores: function() {
       $.ajax({
         url: '/stores',
