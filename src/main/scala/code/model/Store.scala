@@ -33,87 +33,11 @@ import code.model.Product._
 import code.Rest.pagerRestClient
 import MainSchema._
 
-/**
-  * Created by philippederome on 15-11-01.
-  * This is captured from JSON parsing.
-  */
-case class StoreAsLCBOJson (id: Int = 0,
-                 is_dead: Boolean = true,
-                 latitude: Double = 0.0,
-                 longitude: Double = 0.0,
-                 name: String = "",
-                 address_line_1: String = "",
-                 city: String = "",
-                 distance_in_meters: Int = 0) {
-  def this(s: Store) = this(s.lcboId.toInt, false, s.latitude.get, s.longitude.get, s.name.get, s.address_line_1.get, s.city.get  )
 
-  // intentional aliasing allowing more standard naming convention.
-  def isDead = is_dead
-
-  override def toString = s"$id, name: $name, Address: $address_line_1, city: $city, distance is:$distanceInKMs"
-
-  // intentional change of scale from metres to kilometres, using String representation instead of integer and keeping 3 decimals (0.335 ml for beer)
-  def distanceInKMs: String = {
-    val d = distance_in_meters / 1000.0
-    f"$d%1.1f KM(s)"
-  }
-
-  /**
-    *
-    * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
-    */
-  def createProductElemVals: IndexedSeq[Attribute] =
-    (Attribute("Name: ", name) ::
-     Attribute ("Primary Address: ", address_line_1) ::
-     Attribute("City: ", city) ::
-     Attribute("Your Distance: ", distanceInKMs) ::
-     Attribute("Latitude: ", latitude.toString) ::
-     Attribute("Longitude: ", longitude.toString) ::
-     Nil).filterNot{ attr =>  attr.value == "null" || attr.value.isEmpty }.toVector
-
-}
-
-object StoreAsLCBOJson {
+class Store  private() extends Record[Store] with KeyedRecord[Long] with CreatedUpdated[Store] with Loggable  {
   private implicit val formats = net.liftweb.json.DefaultFormats
 
-  def apply(s: Store) = new StoreAsLCBOJson(s)
-
-  /**
-    * Convert a store to XML
-    */
-  implicit def toXml(st: StoreAsLCBOJson): Node =
-    <store>{Xml.toXml(st)}</store>
-
-  /**
-    * Convert the store to JSON format.  This is
-    * implicit and in the companion object, so
-    * a Store can be returned easily from a JSON call
-    */
-  implicit def toJson(st: StoreAsLCBOJson): JValue =
-    Extraction.decompose(st)
-
-}
-
-case class PlainStoreAsLCBOJson (id: Int = 0,
-                                 is_dead: Boolean = true,
-                                 latitude: Double = 0.0,
-                                 longitude: Double = 0.0,
-                                 name: String = "",
-                                 address_line_1: String = "",
-                                 city: String = "") {
-
-  def getStore(dbStores: Map[Long, Store]): Option[Store] = {
-    for (storeId <- Store.lcboIdToDBId(id);
-         s <- dbStores.get(storeId)
-    ) yield s
-  }
-
-}
-
-class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedUpdated[Store] with Loggable  {
-  private implicit val formats = net.liftweb.json.DefaultFormats
-
-  @Column(name="id")
+  @Column(name="pkid")
   override val idField = new LongField(this, 1)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   def lcboId: Long = lcbo_id.get
@@ -135,19 +59,13 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
 
   def meta = Store
 
-  def copyAttributes(my: Store, s: PlainStoreAsLCBOJson): Store = {
-    my.is_dead.set(s.is_dead)
-    my.address_line_1.set(s.address_line_1)
-    my
+  def isDirty(s: Store): Boolean = {
+    is_dead.get != s.is_dead.get ||
+      address_line_1.get != s.address_line_1.get
   }
 
-  def dirty_?(s: PlainStoreAsLCBOJson): Boolean = {
-    is_dead.get != s.is_dead ||
-      address_line_1.get != s.address_line_1
-  }
-
-  private def productsById: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.id).mapValues(_.head)
-  private def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.lcbo_id.get).mapValues(_.head)
+  private def productsByPKId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.id).mapValues(_.head)
+  private def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.id).mapValues(_.head)
 
   private def productsByCategory: Map[String, IndexedSeq[Product]] = storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
   private def inventories = storeProducts.associations
@@ -170,7 +88,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
   private def hasProductsByStoreCategory(lcboCategory: String): Boolean =
     storeProducts.exists{ _.primaryCategory == lcboCategory }
 
-  private def getInventories(dbStoreId: Long): Map[Long, Inventory] =
+  private def getInventories: Map[Long, Inventory] =
     inventories.toSeq.map (inv => inv.productid -> inv ) (breakOut)
 
   /**
@@ -394,7 +312,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
       storeProducts.refresh // make sure we're synched up with DB for the store.
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfProduct )
 
-      val storeInventories = getInventories(id)
+      val storeInventories = getInventories
       def inventoryForStoreAndLCBOProd(lcboProdID: Int): Option[Inventory] = {
         val dbProdId = Product.lcboidToDBId(lcboProdID )
         dbProdId.map{ id: Long => storeInventories.get(id) }.getOrElse(None)
@@ -405,7 +323,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
       // finally fetch a Inventory that is created with specified productId, quantity, and storeId.
       val newInventories = storeProductsByState.getOrElse(New, Nil).
         flatMap { inv => lcboidToDBId(inv.product_id).
-          map { dbProductId: Long => new Inventory(id, dbProductId, inv.quantity ) } } (collection.breakOut)
+          map { dbProductId: Long => new Inventory(idField.get, dbProductId, inv.quantity ) } } (collection.breakOut)
 
       // God forbid, we might supply ourselves data that violates composite key. Weed it out!
       def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]): Iterable[Inventory] = {
@@ -481,7 +399,7 @@ class Store private() extends Record[Store] with KeyedRecord[Long] with CreatedU
     // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
     // we impose referential integrity so we MUST get products and build on that to get inventories that refer to products
     // Note: we may execute this function, get nothing back from LCBO (e.g. website down) and still provide user data because of our db store.
-    if (Store.storeProductsLoaded.putIfAbsent(id, Unit).isEmpty) {
+    if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) {
       val fut = Future { loadCache() }
       fut foreach {
         case m =>
@@ -543,13 +461,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
     def synchronizeData(): Box[Unit] = {
-      def fetchItems(state: EntityRecordState,
-                     storesByState: Map[EntityRecordState, IndexedSeq[PlainStoreAsLCBOJson]],
-                     f: PlainStoreAsLCBOJson => Option[Store] ): IndexedSeq[Store] =
-        storesByState.getOrElse(state, Vector()).flatMap{ f(_)}
-
-      // collects stores individually from LCBO REST as PlainStoreAsLCBOJson on all pages starting from a pageNo.
-      // we declare types fairly often in the following because it's not trivial to follow otherwise
+      // collects stores individually from LCBO REST as Store on all pages starting from a pageNo.
       @tailrec
       def collectStoresOnAPage(urlRoot: String,
                                pageNo: Int): Unit = {
@@ -558,35 +470,28 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val jsonRoot = parse(pageContent) // fyi: throws ParseException
         val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
 
-
-//        var items = ArrayBuffer[Store]() Experiment aiming at getting rid of PlainStoreAsLCBOJson and
-  //      for (p <- itemNodes) {
-   //       var item = Store.createRecord
-   //       val key = (p \ "id" ).extractOrElse[Int](0)
-    //      if (key > 0) {
-     //       item.idField.set(key)
-      //      setFieldsFromJValue(item, p)
-       //     items += item
-        //  }
-       // }
-
-
-          // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
-
-        val pageStores = {for (p <- itemNodes) yield p.extractOpt[PlainStoreAsLCBOJson]}.flatten
+        var items = ArrayBuffer[Store]()
+        for (p <- itemNodes) {
+          var item = Store.createRecord
+          val key = (p \ "id" ).extractOrElse[Int](0)
+          if (key > 0) {
+            item.lcbo_id.set(key) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
+            setFieldsFromJValue(item, p)
+            items += item
+          }
+        }
 
         // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-        val storesByState: Map[EntityRecordState, IndexedSeq[PlainStoreAsLCBOJson]] = pageStores.groupBy {
-          s =>  ( LcboIdsToDBIds.get(s.id).flatMap( dbStores.get ), s)  match {
+        val storesByState: Map[EntityRecordState, IndexedSeq[Store]] = items.groupBy {
+          s =>  ( LcboIdsToDBIds.get(s.lcbo_id.get).flatMap( dbStores.get ), s)  match {
             case (None, _) => New
-            case (Some(store), lcboStore) if store.dirty_?(lcboStore) => Dirty
+            case (Some(store), item) if store.isDirty(item) => Dirty
             case (_ , _) => Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
           }
         }
 
-        val dirtyStores = fetchItems(Dirty, storesByState, s => s.getStore(dbStores).map(copyAttributes(_, s) ))
-        val newStores = storesByState.getOrElse(New, IndexedSeq[PlainStoreAsLCBOJson]()).
-          map{ create }
+        val dirtyStores =  storesByState.getOrElse(Dirty, IndexedSeq[Store]())
+        val newStores = storesByState.getOrElse(New, IndexedSeq[Store]())
 
         def removeDupeKeys(seq: IndexedSeq[Store]): Iterable[Store] = { // you never know what bad inputs you might get.
           seq.groupBy(s => s.lcboId).map{case (k,v) => v.last}
@@ -614,7 +519,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         }
         val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
 
-        if (pageStores.isEmpty || isFinalPage) {
+        if (items.isEmpty || isFinalPage) {
           logger.info(uri) // log only last one to be less verbose
           return // no need to look at more pages
         }
@@ -640,7 +545,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   }
 
   private def addNewStoresToCaches(seq: Iterable[Store]): Unit = {
-    storesCache ++= seq.map(s => s.id -> s)(breakOut)
+    storesCache ++= seq.map(s => s.idField.get -> s)(breakOut)
     LcboIdsToDBIds ++= storesCache.map { case(k,v) => v.lcboId -> k }
     inTransaction { seq.foreach { s => s.storeProducts.refresh } } // ensure inventories are refreshed INCLUDING on start up.
   }
@@ -651,7 +556,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     inTransaction {
       val dbStores = from(stores)(s => select(s))
       addNewStoresToCaches(dbStores)
-      asyncGetStores(dbStores.map { s => s.id -> s }(breakOut))
+      asyncGetStores(dbStores.map { s => s.idField.get -> s }(breakOut))
     }
   }
 
@@ -667,29 +572,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     }
   }
 
-  private def create(s: PlainStoreAsLCBOJson): Store = {
-    // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
-    createRecord.
-      lcbo_id(s.id).
-      name(s.name).
-      is_dead(s.is_dead).
-      address_line_1(s.address_line_1).
-      city(s.city).
-      latitude(s.latitude).
-      longitude(s.longitude)
-  }
-
-  def findAllAsLCBO(): Iterable[StoreAsLCBOJson] =
-    storesCache.values.map(StoreAsLCBOJson(_))
-
-  def findAll(): Iterable[Store] =
+ def findAll(): Iterable[Store] =
     storesCache.values
-
 
   private def updateStores(myStores: Iterable[Store]) = {
     myStores.grouped(DBBatchSize).
       foreach { stores.update }
-    storesCache ++= myStores.map{s => s.id -> s} (breakOut)
+    storesCache ++= myStores.map{s => s.idField.get -> s} (breakOut)
   }
 
   private def insertStores( newStores: Iterable[Store]) = {

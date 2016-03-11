@@ -25,8 +25,9 @@ class Inventory(val storeid: Long, val productid: Long, var quantity: Long) exte
   */
 object MainSchema extends Schema {
   val stores = table[Store]("store")
-  // CREATE SEQUENCE s_store_id;
-  // alter table store alter column id set default nextval('s_store_id');
+  // CREATE SEQUENCE s_store_pkid;
+  // alter table store alter column pkid set default nextval('s_store_pkid');
+
 
   val products = table[Product]("product")
   // in Postgres:  CREATE SEQUENCE s_product_id;  See output from printDdl in Boot.
