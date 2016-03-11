@@ -4,8 +4,12 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.sql.SQLException
 
+import net.liftweb.json.JValue
+import net.liftweb.json.JsonAST.JValue
+
 import scala.annotation.tailrec
 import scala.collection._
+import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
 import scala.util.Random
 import scala.xml.Node
@@ -553,7 +557,22 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
         val jsonRoot = parse(pageContent) // fyi: throws ParseException
         val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
-        // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
+
+
+//        var items = ArrayBuffer[Store]() Experiment aiming at getting rid of PlainStoreAsLCBOJson and
+  //      for (p <- itemNodes) {
+   //       var item = Store.createRecord
+   //       val key = (p \ "id" ).extractOrElse[Int](0)
+    //      if (key > 0) {
+     //       item.idField.set(key)
+      //      setFieldsFromJValue(item, p)
+       //     items += item
+        //  }
+       // }
+
+
+          // get all the stores from JSON itemNodes, extract them and map them to usable Store class after synching it with our view of same record in database.
+
         val pageStores = {for (p <- itemNodes) yield p.extractOpt[PlainStoreAsLCBOJson]}.flatten
 
         // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.

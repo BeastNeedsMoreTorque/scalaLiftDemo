@@ -199,13 +199,10 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       serving_suggestion(p.serving_suggestion)
   }
 
-  private def addNewProductsToCaches(prods: Iterable[Product]): Unit = {
-    productsCache ++= prods.map { p => p.id -> p }(breakOut)
-    LcboIdsToDBIds ++= productsCache.map { case(k,v) => v.lcboId -> k }
-  }
+
 
   def init(): Unit = {
-    logger.info(s"Product.init start")
+    logger.info(s"Product.init start") // potentially slow if products select is big
     inTransaction {
       val prods = from(products)(p => select(p))
       addNewProductsToCaches(prods)
@@ -217,10 +214,10 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     def fetchItems(state: EntityRecordState,
                    productsByState: Map[EntityRecordState, IndexedSeq[ProductAsLCBOJson]],
                    f: ProductAsLCBOJson => Option[Product] ): IndexedSeq[Product] = {
-      productsByState.getOrElse(state, Vector()).flatMap { p => f(p) } // remove the Option in Option[Product]
+      productsByState.getOrElse(state, Vector()).flatMap { f(_) } // remove the Option in Option[Product]
     }
 
-    val prods: Map[Long, Product] = productsCache
+    val prods = productsCache.toMap
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val productsByState: Map[EntityRecordState, IndexedSeq[ProductAsLCBOJson]] = items.groupBy {
       p => (prods.get(p.id.toLong), p) match {
@@ -230,8 +227,6 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       }
     }
 
-    // if there is nothing in map productsByState for New as original ProductAsLCBOJson, return empty IndexedSeq. Then take that IndexedSeq and map it to a created Product.
-    // This yields indexedseq of products.
     val cleanProducts = fetchItems(Clean, productsByState, {p => p.getProduct(prods)})
     val newProducts = productsByState.get(New).fold(IndexedSeq[ProductAsLCBOJson]()){identity}.map { Product.create }
     insertProducts(newProducts)
@@ -239,7 +234,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val dirtyProducts = fetchItems(Dirty, productsByState, {p => p.getProduct(prods).map { _.copyAttributes( p)} })
     updateProducts(dirtyProducts)
 
-    cleanProducts ++ newProducts ++ dirtyProducts // client wants full set, meanwhile we store and cache those that represent changes.
+    cleanProducts ++ newProducts ++ dirtyProducts // client wants full set, meanwhile we store and cache those that represent changes from what we knew.
+  }
+
+  private def addNewProductsToCaches(prods: Iterable[Product]): Unit = {
+    productsCache ++= prods.map { p => p.id -> p }(breakOut)
+    LcboIdsToDBIds ++= productsCache.map { case(k,v) => v.lcboId -> k }
   }
 
   // @see http://squeryl.org/occ.html
@@ -253,7 +253,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
           // However, there are other situations where we might well care.
         } catch {
           case se: SQLException =>
-            logger.error("SQLException ")
+            logger.error(s"SQLException $prods")
             logger.error("Code: " + se.getErrorCode)
             logger.error("SqlState: " + se.getSQLState)
             logger.error("Error Message: " + se.getMessage)
@@ -267,8 +267,6 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   }
 
   private def insertProducts( myProducts: IndexedSeq[Product]): Unit = synchronized {
-    def DBIdToLcboId(id: Long): Option[Long] = productsCache.get(id).map(_.lcboId)
-
     // Do special handling to filter out duplicate keys, which would throw.
     def insertBatch(filteredProds: Iterable[Product]): Unit = synchronized { // synchronize on object Product as clients are from different threads
         // insert them
@@ -283,7 +281,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
         }
       } catch {
         case se: SQLException =>
-          logger.error("SQLException ")
+          logger.error(s"SQLException $filteredProds")
           logger.error("Code: " + se.getErrorCode)
           logger.error("SqlState: " + se.getSQLState)
           logger.error("Error Message: " + se.getMessage)
@@ -294,7 +292,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
     }
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
-    val LcboIDs = productsCache.keySet.flatMap(DBIdToLcboId) // evaluate once
+    val LcboIDs = productsCache.map{ case (id, p) => p.lcboId}.toSet // evaluate once
     val filteredForRI = myProducts.filterNot { p => LcboIDs.contains(p.lcboId) }
     // you never know... Our input could have the same product twice in the collection with the same lcbo_id and we have unique index in DB against that.
     val filteredForUnique = filteredForRI.groupBy {_.lcboId}.
