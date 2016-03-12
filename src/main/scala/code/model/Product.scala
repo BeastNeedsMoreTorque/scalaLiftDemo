@@ -3,8 +3,6 @@ package code.model
 import java.text.NumberFormat
 import java.sql.SQLException
 
-import net.liftweb.json.JsonAST
-
 import scala.collection.concurrent.TrieMap
 import scala.collection._
 
@@ -14,6 +12,7 @@ import net.liftweb.common._
 import net.liftweb.util.Props
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.squerylrecord.KeyedRecord
+import net.liftweb.json.JsonAST
 
 import org.squeryl.annotations._
 
@@ -30,7 +29,7 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   def meta = Product
 
   @Column(name="pkid")
-  override val idField = new LongField(this, 1)  // our own auto-generated id
+  override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   def lcboId = lcbo_id.get
 
@@ -116,10 +115,8 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
 }
 
 /**
-  * object Product: supports persist that does insert or update, depending whether we already have a copy of LCBO product in our database
-  * Takes care of a dependency when persisting with assumption that this is always bound to a valid user request, so will attempt to store
-  * to UserProducts as well.
-  * Errors are possible if data is too large to fit. tryo will catch those and report them.
+  * object Product: supports reconcile that does insert or update on items needing updating, and refresh caches
+  * supports JSON parsing a list of LCBO products with extractFromJValueSeq, which has a peculiarity to deal with special "id" field from LCBO.
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
@@ -146,9 +143,9 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     import scala.collection.mutable.ArrayBuffer
     var items = ArrayBuffer[Product]()
     for (p <- itemNodes) {
-      var item: Product = Product.createRecord
       val key = (p \ "id").extractOrElse[Int](0)
       if (key > 0) {
+        var item: Product = Product.createRecord
         item.lcbo_id.set(key) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
         setFieldsFromJValue(item, p)
         items += item
@@ -168,6 +165,9 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       }
     }
 
+    // architectural note: ORM supports a notion of Dirty with ability to distinguish for us Clean, Dirty and whether
+    // to insert/update. However, that's useful if we commit to update our cached of products unconditionally based on
+    // received input. There's no intent to use it now. Reconsider, it might be smarter to exploit it.
     val cleanProducts = productsByState.getOrElse(Clean, IndexedSeq[Product]()).
       flatMap{p => lcboidToDBId(p.lcbo_id.get).flatMap { productsCache.get} }
     val newProducts = productsByState.getOrElse(New, IndexedSeq[Product]())
