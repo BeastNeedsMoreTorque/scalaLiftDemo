@@ -35,7 +35,7 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
   private implicit val formats = net.liftweb.json.DefaultFormats
 
   @Column(name="pkid")
-  override val idField = new LongField(this, 1)  // our own auto-generated id
+  override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   def lcboId: Long = lcbo_id.get
   val is_dead = new BooleanField(this, false)
