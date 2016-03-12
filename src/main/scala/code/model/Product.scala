@@ -182,11 +182,11 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   }
 
   // @see http://squeryl.org/occ.html
-  private def updateProducts(myProducts: Seq[Product]): Unit = {
+  private def updateProducts(myProducts: Seq[Product]): Unit = synchronized {
     myProducts.grouped(DBBatchSize).
       foreach { prods =>
         try {
-          inTransaction { products.forceUpdate(prods) }  // @see http://squeryl.org/occ.html.
+          inTransaction { products.forceUpdate(prods) } // @see http://squeryl.org/occ.html.
           // regular call as update throws.
           // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
           // However, there are other situations where we might well care.
@@ -200,7 +200,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
           case e: Exception =>
             logger.error("General exception caught: " + e+ " " + prods)
         }
-        // update in memory for next caller who should be blocked (updateProducts is synchronized)
+        // update in memory for next caller who should be blocked (updateProducts is synchronized, helping DB and cache to be in synch)
         productsCache ++= prods.map { p => p.id -> p }.toMap
       }
   }
@@ -211,13 +211,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
         // insert them
       try {  // getNextException in catch is why we want to try catch here.
         // the DB could fail for PK or whatever other reason.
-        inTransaction {
-          products.insert(filteredProds) // refresh them with PKs assigned by DB server.
-          val ids = filteredProds.map(_.lcbo_id)
-          val filteredProdsWithPKs = from(products)(p => where( p.lcbo_id in ids) select(p))
-          // update in memory for next caller who should be blocked (insertProducts is synchronized)
-          addNewProductsToCaches(filteredProdsWithPKs)
-        }
+        inTransaction { products.insert(filteredProds) } // refresh them with PKs assigned by DB server.
       } catch {
         case se: SQLException =>
           logger.error(s"SQLException $filteredProds")
@@ -228,7 +222,10 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
         case e: Exception =>
           logger.error("General exception caught: " + e)
       }
-
+      val ids = filteredProds.map(_.lcbo_id)
+      val filteredProdsWithPKs = from(products)(p => where( p.lcbo_id in ids) select(p))
+      // update in memory for next caller who should be blocked
+      addNewProductsToCaches(filteredProdsWithPKs)
     }
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
     val LcboIDs = productsCache.map{ case (id, p) => p.lcboId}.toSet // evaluate once
