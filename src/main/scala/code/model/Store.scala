@@ -4,9 +4,6 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.sql.SQLException
 
-import net.liftweb.json.JValue
-import net.liftweb.json.JsonAST.JValue
-
 import scala.annotation.tailrec
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -103,13 +100,10 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
     // we could get errors going to LCBO, this tryo captures those.
     tryo {
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      // because our data could be stale. In a finished commercial product, we'd check how old our last cache is and if old enough, go for it, since we could be up
-      // for days and inventory info would be really stale.
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results
       if (hasProductsByStoreCategory(lcboProdCategory)) {
         // get some random sampling.
         val prodIds = Random.shuffle(getProductIdsByStoreCategory(lcboProdCategory))
-        // generate double the keys and hope it's enough to have nearly no 0 inventory as a result
         val seq = for (id <- prodIds;
                        p <- Product.getProduct(id)) yield p
         // generate double the keys and hope it's enough to find enough products with positive inventory as a result
@@ -124,7 +118,7 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
         val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
         val indices = Random.shuffle[Int, IndexedSeq](prods.indices)
         val seq =
-          // just use 0 as placeholder for inventory for now as we don't have this info yet.
+        // just use 0 as placeholder for inventory for now as we don't have this info yet.
           for (idx <- indices;
                lcbo_id = prods(idx).lcboId.toInt;
                prod <- Product.getProductByLcboId(lcbo_id)) yield (0.toLong, prod)
@@ -167,7 +161,7 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
                                         urlRoot: String,
                                         requiredSize: Int,
                                         pageNo: Int,
-                                        myFilter: ProductAsLCBOJson => Boolean = { p: ProductAsLCBOJson => true }): IndexedSeq[Product] = {
+                                        myFilter: Product => Boolean = { p: Product => true }): IndexedSeq[Product] = {
 
     if (requiredSize <= 0) return accumItems
     // specify the URI for the LCBO api url for liquor selection
@@ -175,7 +169,7 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
-    val items = (for (p <- itemNodes) yield p.extract[ProductAsLCBOJson].removeNulls).filter(myFilter)  // LCBO sends us poisoned useless nulls that we need to filter for DB (filter them right away).
+    val items = Product.extractFromJValueSeq(itemNodes).filter(myFilter)
     val outstandingSize = requiredSize - items.size
 
     // Collects into our list of products the attributes we care about (extract[Product]). Then filter out unwanted data.
@@ -226,8 +220,8 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
     if (Store.MaxSampleSize <= 0) Vector()
     else {
       val url = s"$LcboDomainURL/products?store_id=${lcboId}" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
-      val filter = { p: ProductAsLCBOJson => p.primary_category == LiquorCategory.toPrimaryCategory(category) &&
-        !p.is_discontinued
+      val filter = { p: Product => p.primaryCategory == LiquorCategory.toPrimaryCategory(category) &&
+        !p.isDiscontinued
       } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
       collectItemsOnAPage(
         IndexedSeq[Product](),
@@ -258,13 +252,13 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
       val initSeq = IndexedSeq[Product]()
 
       val url = s"$LcboDomainURL/products?store_id=$lcboId"
-      val filter = { p: ProductAsLCBOJson => !p.is_discontinued } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
+      val filter = { p: Product => !p.isDiscontinued } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
 
       collectItemsOnAPage(
         initSeq,
         url,
         Store.productCacheSize,
-        1, // programmer client is assumed to know we use this as a page.
+        1,
         filter).take(Store.productCacheSize)
     }
   }

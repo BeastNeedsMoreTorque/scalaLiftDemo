@@ -3,6 +3,8 @@ package code.model
 import java.text.NumberFormat
 import java.sql.SQLException
 
+import net.liftweb.json.JsonAST
+
 import scala.collection.concurrent.TrieMap
 import scala.collection._
 
@@ -20,49 +22,6 @@ import code.Rest.pagerRestClient
 
 case class Attribute(key: String, value: String)
 
-// helper case class to extract from JSON as REST client to LCBO.
-case class ProductAsLCBOJson(id: Int,
-                             is_discontinued: Boolean,
-                             is_dead: Boolean,
-                             `package`: String,
-                             total_package_units: Int,
-                             primary_category: String,
-                             name: String,
-                             image_thumb_url: String,
-                             origin: String,
-                             description: String,
-                             secondary_category: String,
-                             serving_suggestion: String,
-                             varietal: String,
-                             price_in_cents: Int,
-                             alcohol_content: Int,
-                             volume_in_milliliters: Int) {
-  def removeNulls: ProductAsLCBOJson = { // remove LCBO's poisoned null strings
-    def notNull(s: String) = if (s eq null) "" else s
-
-    ProductAsLCBOJson(id,
-      is_discontinued,
-      is_dead,
-      notNull(`package`),
-      total_package_units,
-      notNull(primary_category),
-      name: String,
-      notNull(image_thumb_url),
-      notNull(origin),
-      notNull(description),
-      notNull(secondary_category),
-      notNull(serving_suggestion),
-      notNull(varietal),
-      price_in_cents,
-      alcohol_content,
-      volume_in_milliliters)
-  }
-
-  def getProduct(dbProducts: Map[Long, Product]) = dbProducts.get(id)
-
-}
-
-
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
@@ -70,7 +29,7 @@ case class ProductAsLCBOJson(id: Int,
 class Product private() extends Record[Product] with KeyedRecord[Long] with CreatedUpdated[Product]  {
   def meta = Product
 
-  @Column(name="id")
+  @Column(name="pkid")
   override val idField = new LongField(this, 1)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   def lcboId = lcbo_id.get
@@ -150,16 +109,10 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
       Attribute ("Origin:", origin.get) ::
       Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
 
-  def dirty_?(p: ProductAsLCBOJson): Boolean = {
-    price_in_cents.get != p.price_in_cents ||
-      image_thumb_url.get != p.image_thumb_url
+  def isDirty(p: Product): Boolean = {
+    price_in_cents.get != p.price_in_cents.get ||
+      image_thumb_url.get != p.image_thumb_url.get
   }
-  def copyAttributes(p: ProductAsLCBOJson): Product = {
-    price_in_cents.set(p.price_in_cents)
-    image_thumb_url.set(p.image_thumb_url)
-    this
-  }
-
 }
 
 /**
@@ -170,36 +123,15 @@ class Product private() extends Record[Product] with KeyedRecord[Long] with Crea
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
+  private implicit val formats = net.liftweb.json.DefaultFormats
 
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   private val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
 
   def getProduct(dbId: Long): Option[Product] = productsCache get dbId
-  def getProductByLcboId(id: Int): Option[Product] = lcboidToDBId(id).flatMap(  productsCache.get )
-  def lcboidToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
-
-  def create(p: ProductAsLCBOJson): Product = {
-    // store in same format as received by provider so that un-serializing if required will be same logic. This boiler-plate code seems crazy (not DRY at all)...
-    createRecord.
-      lcbo_id(p.id).
-      name(p.name).
-      primary_category(p.primary_category).
-      is_discontinued(p.is_discontinued).
-      `package`(p.`package`).
-      origin(p.origin).
-      image_thumb_url(p.image_thumb_url).
-      price_in_cents(p.price_in_cents).
-      total_package_units(p.total_package_units).
-      volume_in_milliliters(p.volume_in_milliliters).
-      alcohol_content(p.alcohol_content).
-      secondary_category(p.secondary_category).
-      varietal(p.varietal).
-      description(p.description).
-      serving_suggestion(p.serving_suggestion)
-  }
-
-
+  def getProductByLcboId(id: Long): Option[Product] = lcboidToDBId(id).flatMap(  productsCache.get )
+  def lcboidToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
 
   def init(): Unit = {
     logger.info(s"Product.init start") // potentially slow if products select is big
@@ -210,28 +142,39 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     logger.info(s"Product.init end")
   }
 
-  def reconcile(items: IndexedSeq[ProductAsLCBOJson]) :  IndexedSeq[Product] = {
-    def fetchItems(state: EntityRecordState,
-                   productsByState: Map[EntityRecordState, IndexedSeq[ProductAsLCBOJson]],
-                   f: ProductAsLCBOJson => Option[Product] ): IndexedSeq[Product] = {
-      productsByState.getOrElse(state, Vector()).flatMap { f(_) } // remove the Option in Option[Product]
+  def extractFromJValueSeq(itemNodes: IndexedSeq[JsonAST.JValue]): IndexedSeq[Product] = {
+    import scala.collection.mutable.ArrayBuffer
+    var items = ArrayBuffer[Product]()
+    for (p <- itemNodes) {
+      var item: Product = Product.createRecord
+      val key = (p \ "id").extractOrElse[Int](0)
+      if (key > 0) {
+        item.lcbo_id.set(key) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
+        setFieldsFromJValue(item, p)
+        items += item
+      }
     }
+    items.toIndexedSeq
+  }
 
+  def reconcile(items: IndexedSeq[Product]) :  IndexedSeq[Product] = {
     val prods = productsCache.toMap
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-    val productsByState: Map[EntityRecordState, IndexedSeq[ProductAsLCBOJson]] = items.groupBy {
+    val productsByState: Map[EntityRecordState, IndexedSeq[Product]] = items.groupBy {
       p => (prods.get(p.id.toLong), p) match {
         case (None, _) => New
-        case (Some(product), lcboProduct) if product.dirty_?(lcboProduct) => Dirty
+        case (Some(product), lcboProduct) if product.isDirty(lcboProduct) => Dirty
         case (_ , _) => Clean
       }
     }
 
-    val cleanProducts = fetchItems(Clean, productsByState, {p => p.getProduct(prods)})
-    val newProducts = productsByState.get(New).fold(IndexedSeq[ProductAsLCBOJson]()){identity}.map { Product.create }
+    val cleanProducts = productsByState.getOrElse(Clean, IndexedSeq[Product]()).
+      flatMap{p => lcboidToDBId(p.lcbo_id.get).flatMap { productsCache.get} }
+    val newProducts = productsByState.getOrElse(New, IndexedSeq[Product]())
     insertProducts(newProducts)
 
-    val dirtyProducts = fetchItems(Dirty, productsByState, {p => p.getProduct(prods).map { _.copyAttributes( p)} })
+    val dirtyProducts = productsByState.getOrElse(Dirty, IndexedSeq[Product]()).
+      flatMap{p => lcboidToDBId(p.lcbo_id.get).flatMap { productsCache.get} }
     updateProducts(dirtyProducts)
 
     cleanProducts ++ newProducts ++ dirtyProducts // client wants full set, meanwhile we store and cache those that represent changes from what we knew.
