@@ -18,9 +18,8 @@ import net.liftweb.common.{Full, Empty, Box, Loggable}
 import net.liftweb.json._
 import net.liftweb.json.JsonParser.{ParseException, parse}
 import net.liftweb.util.Helpers.tryo
-import net.liftweb.record.{MetaRecord, Record}
+import net.liftweb.record.MetaRecord
 import net.liftweb.record.field._
-import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
 
@@ -30,14 +29,20 @@ import code.model.Product._
 import code.Rest.pagerRestClient
 import MainSchema._
 
-
-class Store  private() extends Record[Store] with KeyedRecord[Long] with CreatedUpdated[Store] with Loggable  {
+class Store  private() extends Persistable[Store] with CreatedUpdated[Store] with Loggable  {
   private implicit val formats = net.liftweb.json.DefaultFormats
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
-  def lcboId: Long = lcbo_id.get
+
+  // for Persistable
+  override def table(): org.squeryl.Table[Store] = Store.table()
+  override def cache() = Store.storesCache
+  override def LcboIdsToDBIds() = Store.LcboIdsToDBIds
+  override def pKey: Long = idField.get
+  override def lcboId: Long = lcbo_id.get
+
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
   val longitude = new DoubleField(this)
@@ -110,18 +115,14 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
       * @return collection of LCBO products while throwing.
       */
     def productsByStoreCategory(category: String): IndexedSeq[Product] = {
-      if (Store.MaxSampleSize <= 0) Vector()
-      else {
-        val url = s"$LcboDomainURL/products?store_id=${lcboId}" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
-        val filter = { p: Product => p.primaryCategory == LiquorCategory.toPrimaryCategory(category) &&
-          !p.isDiscontinued
-        } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
-        collectItemsOnAPage(
-          IndexedSeq[Product](),
-          url,
-          Store.MaxSampleSize,
-          pageNo = 1)
-      }
+      val url = s"$LcboDomainURL/products?store_id=${lcboId}" + additionalParam("q", category) // does not handle first one such as storeId, which is artificially mandatory
+      collectItemsOnAPage(
+        IndexedSeq[Product](),
+        url,
+        Store.MaxSampleSize,
+        takeThemAll = false,
+        pageNo = 1,
+        Store.notDiscontinued)
     }
 
     // we could get errors going to LCBO, this tryo captures those.
@@ -187,17 +188,17 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
   private final def collectItemsOnAPage(accumItems: IndexedSeq[Product],
                                         urlRoot: String,
                                         requiredSize: Int,
+                                        takeThemAll: Boolean,
                                         pageNo: Int,
-                                        myFilter: Product => Boolean = { p: Product => true }): IndexedSeq[Product] = {
+                                        filter: Product => Boolean): IndexedSeq[Product] = {
 
-    if (requiredSize <= 0) return accumItems
     // specify the URI for the LCBO api url for liquor selection
     val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
-    val items = Product.extractFromJValueSeq(itemNodes).filter(myFilter)
-    val outstandingSize = requiredSize - items.size
+    val items = Product.extractFromJValueSeq(itemNodes).filter(filter) // hard code filter for now.
+    val outstandingSize = { if (takeThemAll ) 1 else requiredSize - items.size }
 
     // Collects into our list of products the attributes we care about (extract[Product]). Then filter out unwanted data.
     // fyi: throws Mapping exception.
@@ -207,7 +208,7 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
 
     val revisedAccumItems =  accumItems ++ Product.reconcile(items)
 
-    if (outstandingSize <= 0 || isFinalPage || totalPages < pageNo + 1) {
+    if ( (outstandingSize <= 0  && !takeThemAll )|| isFinalPage || totalPages < pageNo + 1) {
       logger.info(uri) // log only the last one, less chatty
       return revisedAccumItems
     }
@@ -219,8 +220,9 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
       revisedAccumItems,
       urlRoot,
       outstandingSize,
+      takeThemAll,
       pageNo + 1,
-      myFilter) // union of this page with next page when we are asked for a full sample
+      filter) // union of this page with next page when we are asked for a full sample
   }
 
 
@@ -321,15 +323,13 @@ class Store  private() extends Record[Store] with KeyedRecord[Long] with Created
     def fetchProducts(): Unit = {
       // We make a somewhat arbitrary assumption that discontinued products are of zero interest
       def fetchProductsByStore(): Unit = {
-        if (Store.productCacheSize > 0) {
-          val filter = { p: Product => !p.isDiscontinued }
-          collectItemsOnAPage(
-            IndexedSeq[Product](),
-            s"$LcboDomainURL/products?store_id=$lcboId",
-            Store.productCacheSize,
-            1,
-            filter).take(Store.productCacheSize)
-        }
+        collectItemsOnAPage(
+          IndexedSeq[Product](),
+          s"$LcboDomainURL/products?store_id=$lcboId",
+          0,
+          takeThemAll = true,
+          pageNo = 1,
+          Store.notDiscontinued)
       }
       inTransaction {
         tryo { fetchProductsByStore() } match {
@@ -393,13 +393,14 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
   private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
 
-  private val storeLoadBatchSize = Props.getInt("store.loadBatchSize", 10)
-
-  private val productCacheSize = Props.getInt("product.cacheSize", 10000)
-  private val synchEmptiesFirst = Props.getBool("store.synchEmptiesFirst", false)
-
   private val storesCache: concurrent.Map[Long, Store] = TrieMap[Long, Store]()  // primary cache
-  private val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]() //secondary dependent cache
+  override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]() //secondary dependent cache
+  override def table(): org.squeryl.Table[Store] = MainSchema.stores
+
+  override def addNewItemsToCaches(items: Iterable[Store]): Unit = {
+    super.addNewItemsToCaches(items)
+    inTransaction { items.foreach { s => s.storeProducts.refresh } } // ensure inventories are refreshed INCLUDING on start up.
+  }
 
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap() // auxilliary independent cache
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
@@ -425,6 +426,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     ((end - start) / 1000) / 1000.0
   }
 
+  private def notDiscontinued(p: Product): Boolean = !p.isDiscontinued
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
     def synchronizeData(): Box[Unit] = {
@@ -463,7 +465,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         def removeDupeKeys(seq: IndexedSeq[Store]): Iterable[Store] = { // you never know what bad inputs you might get.
           seq.groupBy(s => s.lcboId).map{case (k,v) => v.last}
         }
-        val filteredNewStores = removeDupeKeys(newStores)
+        val filteredNewStores = removeDupeKeys(newStores).toIndexedSeq
         val filteredDirtyStores = removeDupeKeys(dirtyStores)
 
         // identify the dirty and new stores for batch update and then retain all of them as the requested set
@@ -471,8 +473,8 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
           // for the activity on separate thread for synchronizeData
           // batch update the database now.
           try { // getNextException is actually very useful, which is why we do try catch here
-            updateStores(filteredDirtyStores)
-            insertStores(filteredNewStores)
+            update(filteredDirtyStores)
+            insert(filteredNewStores)
           } catch {
             case se: SQLException =>
               logger.error(s"SQLException on uri $uri dirty stores: $filteredDirtyStores new stores: $filteredNewStores")
@@ -511,18 +513,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     }
   }
 
-  private def addNewStoresToCaches(seq: Iterable[Store]): Unit = {
-    storesCache ++= seq.map(s => s.idField.get -> s)(breakOut)
-    LcboIdsToDBIds ++= storesCache.map { case(k,v) => v.lcboId -> k }
-    inTransaction { seq.foreach { s => s.storeProducts.refresh } } // ensure inventories are refreshed INCLUDING on start up.
-  }
 
   def init() = {
     logger.info(s"Store.init start")
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     inTransaction {
       val dbStores = from(stores)(s => select(s))
-      addNewStoresToCaches(dbStores)
+      addNewItemsToCaches(dbStores)
       asyncGetStores(dbStores.map { s => s.idField.get -> s }(breakOut))
     }
   }
@@ -541,17 +538,5 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
  def findAll(): Iterable[Store] =
     storesCache.values
-
-  private def updateStores(myStores: Iterable[Store]) = {
-    myStores.grouped(DBBatchSize).
-      foreach { stores.update }
-    storesCache ++= myStores.map{s => s.idField.get -> s} (breakOut)
-  }
-
-  private def insertStores( newStores: Iterable[Store]) = {
-    newStores.grouped(DBBatchSize).
-      foreach { stores.insert }
-    addNewStoresToCaches(newStores)
-  }
 
 }

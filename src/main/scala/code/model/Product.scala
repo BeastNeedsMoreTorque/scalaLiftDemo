@@ -1,17 +1,15 @@
 package code.model
 
 import java.text.NumberFormat
-import java.sql.SQLException
 
 import scala.collection.concurrent.TrieMap
 import scala.collection._
 
 import net.liftweb.record.field.{LongField,StringField,BooleanField,IntField}
-import net.liftweb.record.{Record, MetaRecord}
+import net.liftweb.record.MetaRecord
 import net.liftweb.common._
 import net.liftweb.util.Props
 import net.liftweb.squerylrecord.RecordTypeMode._
-import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.json.JsonAST
 
 import org.squeryl.annotations._
@@ -25,13 +23,19 @@ case class Attribute(key: String, value: String)
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends Record[Product] with KeyedRecord[Long] with CreatedUpdated[Product]  {
+class Product private() extends Persistable[Product] with CreatedUpdated[Product] {
   def meta = Product
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
-  def lcboId = lcbo_id.get
+
+  // for Persistable
+  override def table(): org.squeryl.Table[Product] = Product.table()
+  override def cache() = Product.productsCache
+  override def LcboIdsToDBIds() = Product.LcboIdsToDBIds
+  override def pKey: Long = idField.get
+  override def lcboId: Long = lcbo_id.get
 
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
@@ -124,7 +128,8 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
-  private val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
+  override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
+  override def table(): org.squeryl.Table[Product] = MainSchema.products
 
   def getProduct(dbId: Long): Option[Product] = productsCache get dbId
   def getProductByLcboId(id: Long): Option[Product] = lcboidToDBId(id).flatMap(  productsCache.get )
@@ -134,7 +139,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     logger.info(s"Product.init start") // potentially slow if products select is big
     inTransaction {
       val prods = from(products)(p => select(p))
-      addNewProductsToCaches(prods)
+      addNewItemsToCaches(prods)
     }
     logger.info(s"Product.init end")
   }
@@ -167,73 +172,13 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val cleanProducts = productsByState.getOrElse(Clean, IndexedSeq[Product]()).
       flatMap{p => lcboidToDBId(p.lcbo_id.get).flatMap { productsCache.get} }
     val newProducts = productsByState.getOrElse(New, IndexedSeq[Product]())
-    insertProducts(newProducts)
+    insert(newProducts)
 
     val dirtyProducts = productsByState.getOrElse(Dirty, IndexedSeq[Product]()).
       flatMap{p => lcboidToDBId(p.lcbo_id.get).flatMap { productsCache.get} }
-    updateProducts(dirtyProducts)
+    update(dirtyProducts)
 
     cleanProducts ++ newProducts ++ dirtyProducts // client wants full set, meanwhile we store and cache those that represent changes from what we knew.
   }
 
-  private def addNewProductsToCaches(prods: Iterable[Product]): Unit = {
-    productsCache ++= prods.map { p => p.id -> p }(breakOut)
-    LcboIdsToDBIds ++= productsCache.map { case(k,v) => v.lcboId -> k }
-  }
-
-  // @see http://squeryl.org/occ.html
-  private def updateProducts(myProducts: Seq[Product]): Unit = synchronized {
-    myProducts.grouped(DBBatchSize).
-      foreach { prods =>
-        try {
-          inTransaction { products.forceUpdate(prods) } // @see http://squeryl.org/occ.html.
-          // regular call as update throws.
-          // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
-          // However, there are other situations where we might well care.
-        } catch {
-          case se: SQLException =>
-            logger.error(s"SQLException $prods")
-            logger.error("Code: " + se.getErrorCode)
-            logger.error("SqlState: " + se.getSQLState)
-            logger.error("Error Message: " + se.getMessage)
-            logger.error("NextException:" + se.getNextException)
-          case e: Exception =>
-            logger.error("General exception caught: " + e+ " " + prods)
-        }
-        // update in memory for next caller who should be blocked (updateProducts is synchronized, helping DB and cache to be in synch)
-        productsCache ++= prods.map { p => p.id -> p }.toMap
-      }
-  }
-
-  private def insertProducts( myProducts: IndexedSeq[Product]): Unit = {
-    // Do special handling to filter out duplicate keys, which would throw.
-    def insertBatch(filteredProds: Iterable[Product]): Unit = synchronized { // synchronize on object Product as clients are from different threads
-        // insert them
-      try {  // getNextException in catch is why we want to try catch here.
-        // the DB could fail for PK or whatever other reason.
-        inTransaction { products.insert(filteredProds) } // refresh them with PKs assigned by DB server.
-      } catch {
-        case se: SQLException =>
-          logger.error(s"SQLException $filteredProds")
-          logger.error("Code: " + se.getErrorCode)
-          logger.error("SqlState: " + se.getSQLState)
-          logger.error("Error Message: " + se.getMessage)
-          logger.error("NextException:" + se.getNextException)
-        case e: Exception =>
-          logger.error("General exception caught: " + e)
-      }
-      val ids = filteredProds.map(_.lcbo_id)
-      val filteredProdsWithPKs = from(products)(p => where( p.lcbo_id in ids) select(p))
-      // update in memory for next caller who should be blocked
-      addNewProductsToCaches(filteredProdsWithPKs)
-    }
-    // first evaluate against cache (assumed in synch with DB) what's genuinely new.
-    val LcboIDs = productsCache.map{ case (id, p) => p.lcboId}.toSet // evaluate once
-    val filteredForRI = myProducts.filterNot { p => LcboIDs.contains(p.lcboId) }
-    // you never know... Our input could have the same product twice in the collection with the same lcbo_id and we have unique index in DB against that.
-    val filteredForUnique = filteredForRI.groupBy {_.lcboId}.
-      map { case (k,v) => v.last }
-    // break it down and then serialize the work.
-    filteredForUnique.grouped(DBBatchSize).foreach { insertBatch }
-  }
 }
