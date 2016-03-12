@@ -5,7 +5,10 @@
 // <localhost:port>/stores/lat/<lat>/lng/<lng> gives closest store from coordinate(lat,lng).
 // Currently supported Store  (see lcboapi.com): id, name, is_dead, latitude, longitude, distance_in_meters (from specified location), address_line_1, city
 var storeFinder = (function() {
-  var defaultOntarioLocation = new google.maps.LatLng(43.647219, -79.3789987); // Bay & Front LCBO address.
+  var defaultOntarioLocation; // Bay & Front LCBO address.
+  var distMatrixService;
+  var directionsService;
+
   var kmsPerLat = 111;
   var kmsPerLng = 78.4;
   var mapCanvas = document.getElementById('map-canvas');
@@ -15,9 +18,9 @@ var storeFinder = (function() {
   var userMarker;
   var userLocation;
   var storeDistance;  // could also get storeDuration if we wanted.
-  var distMatrixService = new google.maps.DistanceMatrixService();
-  var directionsService = new google.maps.DirectionsService();
+
   var directionsDisplay;
+  var closestMarker = null;
   var theSelectedStore = null;
 
   var distanceByGeo = function(latLng1, latLng2) {
@@ -44,34 +47,12 @@ var storeFinder = (function() {
     return closest;
   }
 
-  var fetchStore = function(userLatLng, userLocationAvailable, storeSelectedByApp) {
-    var myOptions = {
-      center:userLatLng,
-      zoom:12,
-      mapTypeId:google.maps.MapTypeId.HYBRID,
-      mapTypeControl:true
-    }
-    if (storeSelectedByApp == true) {
-      map = new google.maps.Map(mapCanvas, myOptions);
-      map.addListener('bounds_changed', function() {
-        clearMarkers();
-        if (this.zoom > 10) {
-          showMarkers();
-        }
-        else {
-          clearMarkers();
-        }
-      });
-
-      directionsDisplay = new google.maps.DirectionsRenderer();
-      directionsDisplay.setMap(map);
-      userMarker = new google.maps.Marker({position:userLatLng,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
-    }
+  var fetchStore = function(userLatLng) {
     theSelectedStore = closestStore(userLatLng);
     if (theSelectedStore != null) {
       var closestLatLng = new google.maps.LatLng(theSelectedStore.latitude, theSelectedStore.longitude)
-      if (storeSelectedByApp == true) {
-        var closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:"Closest store",icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
+      if (closestMarker == null) {
+        closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:"Closest store",icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
       }
 
       evaluateDistance(closestLatLng);
@@ -89,7 +70,6 @@ var storeFinder = (function() {
       $("#storeAttributesTbl").hide();
     }
   };
-
 
   var evaluateDistance = function(latLng) {
     distMatrixService.getDistanceMatrix(
@@ -115,14 +95,58 @@ var storeFinder = (function() {
     });
   };
 
-  var fetchStoreNearUser = function(position) {
+  var fetchAllStores = function() {
+    $.ajax({
+      url: '/stores',
+      type: 'GET',
+      success: function(data, status){
+        function createMarker(element, index, array) {
+          var latlng = new google.maps.LatLng(element.latitude, element.longitude);
+          addMarker(element.name, latlng);
+        }
+        data.forEach(createMarker);
+        stores = data;
+        fetchStore( userLocation);
+      },
+      error: function(data, status){
+        console.log("Error Data: " + data.responseText + "\nStatus: " + status );
+        alert(data.responseText );
+      }
+    });
+  };
+
+  var initMapCallback = function(position) {
+    distMatrixService = new google.maps.DistanceMatrixService();
+    directionsService = new google.maps.DirectionsService();
+
     userLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
-    fetchStore( userLocation, true, true);
+    var myOptions = {
+      center:userLocation,
+      zoom:12,
+      mapTypeId:google.maps.MapTypeId.HYBRID,
+      mapTypeControl:true
+    }
+    map = new google.maps.Map(mapCanvas, myOptions);
+    map.addListener('bounds_changed', function() {
+      clearMarkers();
+      if (this.zoom > 10) {
+        showMarkers();
+      }
+      else {
+        clearMarkers();
+      }
+    });
+
+    directionsDisplay = new google.maps.DirectionsRenderer();
+    directionsDisplay.setMap(map);
+    userMarker = new google.maps.Marker({position:userLocation,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
+    fetchAllStores();
   };
 
   var showGeoError = function(error) {
+    defaultOntarioLocation = new google.maps.LatLng(43.647219, -79.3789987); // Bay & Front LCBO address.
     userLocation = defaultOntarioLocation;
-    fetchStore(defaultOntarioLocation, false, true);
+    fetchStore(defaultOntarioLocation);
   };
 
   // Adds a marker to the map and push to the array.
@@ -161,7 +185,7 @@ var storeFinder = (function() {
 
   return {
     storeClickCB: function(e) {
-      fetchStore(e.latLng, true, false);
+      fetchStore(e.latLng);
       evaluateDistance(e.latLng);
       getDirections(e.latLng);
     },
@@ -174,26 +198,6 @@ var storeFinder = (function() {
     getTheSelectedLcboStoreId: function() {
       if (theSelectedStore == null) return -1;
       return theSelectedStore.lcbo_id;
-    },
-
-    fetchAllStores: function() {
-      $.ajax({
-        url: '/stores',
-        type: 'GET',
-        success: function(data, status){
-          function createMarker(element, index, array) {
-            var latlng = new google.maps.LatLng(element.latitude, element.longitude);
-            addMarker(element.name, latlng);
-          }
-          data.forEach(createMarker);
-          stores = data;
-          storeFinder.fetchStoreFromPosition();
-        },
-        error: function(data, status){
-          console.log("Error Data: " + data.responseText + "\nStatus: " + status );
-          alert(data.responseText );
-        }
-      });
     },
 
     distMatrixCB: function(response, status) {
@@ -211,19 +215,16 @@ var storeFinder = (function() {
       }
     },
 
-    fetchStoreFromPosition: function() {
+    initMap: function() {
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(fetchStoreNearUser, showGeoError);
+        navigator.geolocation.getCurrentPosition(initMapCallback, showGeoError);
       } else  {
         $("#storeNearby").html("Geolocation is not supported by this browser.");
-        fetchStore(defaultOntarioLocation, false, true);
+        fetchStore(defaultOntarioLocation);
       }
     }
   }
 }());
 
-$(document).ready(function(){
-  storeFinder.fetchAllStores();
-});
 
 
