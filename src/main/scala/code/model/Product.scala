@@ -158,16 +158,12 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     val prods = productsCache.toMap
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val productsByState: Map[EntityRecordState, IndexedSeq[Product]] = items.groupBy {
-      p => (prods.get(p.id.toLong), p) match {
+      p => (prods.get(p.id), p) match {
         case (None, _) => New
         case (Some(product), lcboProduct) if product.isDirty(lcboProduct) => Dirty
         case (_ , _) => Clean
       }
     }
-
-    // architectural note: ORM supports a notion of Dirty with ability to distinguish for us Clean, Dirty and whether
-    // to insert/update. However, that's useful if we commit to update our cached of products unconditionally based on
-    // received input. There's no intent to use it now. Reconsider, it might be smarter to exploit it.
     val cleanProducts = productsByState.getOrElse(Clean, IndexedSeq[Product]()).
       flatMap{p => lcboidToDBId(p.lcbo_id.get).flatMap { productsCache.get} }
     val newProducts = productsByState.getOrElse(New, IndexedSeq[Product]())
@@ -186,7 +182,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   }
 
   // @see http://squeryl.org/occ.html
-  private def updateProducts(myProducts: Seq[Product]): Unit = synchronized {
+  private def updateProducts(myProducts: Seq[Product]): Unit = {
     myProducts.grouped(DBBatchSize).
       foreach { prods =>
         try {
@@ -209,7 +205,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
       }
   }
 
-  private def insertProducts( myProducts: IndexedSeq[Product]): Unit = synchronized {
+  private def insertProducts( myProducts: IndexedSeq[Product]): Unit = {
     // Do special handling to filter out duplicate keys, which would throw.
     def insertBatch(filteredProds: Iterable[Product]): Unit = synchronized { // synchronize on object Product as clients are from different threads
         // insert them
