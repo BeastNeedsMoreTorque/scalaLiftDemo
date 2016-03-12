@@ -28,18 +28,15 @@ object MainSchema extends Schema {
   // CREATE SEQUENCE s_store_pkid;
   // alter table store alter column pkid set default nextval('s_store_pkid');
 
-
   val products = table[Product]("product")
-  // in Postgres:  CREATE SEQUENCE s_product_id;  See output from printDdl in Boot.
-  // alter table product alter column id set default nextval('s_product_id');
+  // in Postgres:  CREATE SEQUENCE s_product_pkid;  See output from printDdl in Boot.
+  // alter table product alter column pkid set default nextval('s_product_pkid');
   // String columns are typically nullable.
 
   val inventories = manyToManyRelation(stores, products).
-    via[Inventory]((s,p,inv) => (inv.storeid === s.id, p.id === inv.productid))
+    via[Inventory]((s,p,inv) => (inv.storeid === s.idField.get, p.idField.get === inv.productid))
   // The table in database needs to be called "Inventory".
   //alter table "Inventory" add primary key ("storeid","productid");
-
-
 
   val userProducts = table[UserProduct]("userproduct")
   // In Postgres: CREATE SEQUENCE s_userproduct_id;
@@ -48,8 +45,8 @@ object MainSchema extends Schema {
   val productToUserProducts = oneToManyRelation(products, userProducts).
     via((p,u) => p.id === u.productid)
   // Foreign-key constraints:
-  // "userproductFK1" FOREIGN KEY (productid) REFERENCES product(id)
-  //    alter table "userproduct" add constraint "userproductFK1" foreign key ("productid") references "product"("id");
+  // "userproductFK1" FOREIGN KEY (productid) REFERENCES product(pkid)
+  //    alter table "userproduct" add constraint "userproductFK1" foreign key ("productid") references "product"("pkid");
 
   // the default constraint for all foreign keys in this schema :
   override def applyDefaultForeignKeyPolicy(foreignKeyDeclaration: ForeignKeyDeclaration) =
@@ -69,7 +66,6 @@ object MainSchema extends Schema {
 
   on(products) { p =>
     declare(
-      p.lcbo_id defineAs (unique,indexed("lcbo_id_idx")),
-      p.primary_category defineAs indexed("pr_category_id_idx"))
+      p.lcbo_id defineAs (unique,indexed("lcbo_id_idx")))
   }
 }

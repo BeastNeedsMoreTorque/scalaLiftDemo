@@ -10,7 +10,6 @@ import scala.xml.Node
   * Created by philippederome on 2015-12-19.
   *
   * we use attach point stores JSON way (XML available for completeness)
-  * Also we show storesAsLCBO, which have a more compact representation, but requires translation from Store to StoreAsLCBOJson.
   *
   * @see http://simply.liftweb.net/index-5.3.html#prev
   */
