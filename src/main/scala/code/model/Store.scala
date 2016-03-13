@@ -128,7 +128,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 
     // we could get errors going to LCBO, this tryo captures those.
     tryo {
-      asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results
       if (hasProductsByStoreCategory(lcboProdCategory)) {
         // get some random sampling.
@@ -137,6 +136,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
                        p <- Product.getProduct(id)) yield p
         // generate double the keys and hope it's enough to find enough products with positive inventory as a result
         // checking quantity in for comprehension above is cost prohibitive.
+        asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
         seq.take(2 * requestSize).map { p: Product =>
           (getInventoryQuantity(p.id).fold(0.toLong) {
             identity}, p)
@@ -145,6 +145,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       else {
         logger.warn(s"recommend cache miss for $id") // don't try to load it asynchronously as that's start up job to get going with it.
         val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
+        asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
         val indices = Random.shuffle[Int, IndexedSeq](prods.indices)
         val seq =
         // just use 0 as placeholder for inventory for now as we don't have this info yet.
@@ -249,7 +250,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 
       def stateOfProduct(item: InventoryAsLCBOJson): EntityRecordState = {
         val invOption =
-          for (dbProductId <- lcboidToDBId(item.product_id);
+          for (dbProductId <- Product.lcboidToDBId(item.product_id);
                i <- getInventory(dbProductId)) yield i
         invOption  match {
           case None  => New
