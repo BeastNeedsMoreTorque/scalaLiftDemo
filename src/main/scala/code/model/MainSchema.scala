@@ -5,7 +5,25 @@ import org.squeryl.dsl.CompositeKey2
 import org.squeryl.{KeyedEntity, ForeignKeyDeclaration, Schema}
 import net.liftweb.squerylrecord.RecordTypeMode._
 
-class Inventory(val storeid: Long, val productid: Long, var quantity: Long) extends KeyedEntity[CompositeKey2[Long,Long]] {
+case class InventoryAsLCBOJson(product_id: Int,
+                               store_id: Int,
+                               is_dead: Boolean,
+                               updated_on: String,
+                               quantity: Int) {
+  def removeNulls: InventoryAsLCBOJson = {
+    // remove LCBO's poisoned null strings
+    def notNull(s: String) = if (s eq null) "" else s
+
+    InventoryAsLCBOJson(
+      product_id,
+      store_id,
+      is_dead,
+      notNull(updated_on),
+      quantity)
+  }
+}
+
+class Inventory(val storeid: Long, val productid: Long, var quantity: Long, var updated_on: String, var is_dead: Boolean) extends KeyedEntity[CompositeKey2[Long,Long]] {
   def id = compositeKey(storeid, productid)
 
   def dirty_?(inv: InventoryAsLCBOJson): Boolean =
@@ -13,6 +31,8 @@ class Inventory(val storeid: Long, val productid: Long, var quantity: Long) exte
 
   def copyAttributes(inv: InventoryAsLCBOJson): Inventory = {
     quantity = inv.quantity
+    updated_on = inv.updated_on
+    is_dead = inv.is_dead
     this
   }
 }

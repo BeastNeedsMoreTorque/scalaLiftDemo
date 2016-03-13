@@ -86,7 +86,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     inventoriesPerProductInStore.get(prodId).map( _.quantity)
 
   private def getProductIdsByStoreCategory(lcboCategory: String): IndexedSeq[Long] =
-    storeProducts.toIndexedSeq.filter(_.primaryCategory == lcboCategory).map(_.id)
+    storeProducts.toIndexedSeq.filter(_.primaryCategory == lcboCategory).map(_.lcboId)
 
   private def hasProductsByStoreCategory(lcboCategory: String): Boolean =
     storeProducts.exists{ _.primaryCategory == lcboCategory }
@@ -131,9 +131,9 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results
       if (hasProductsByStoreCategory(lcboProdCategory)) {
         // get some random sampling.
-        val prodIds = Random.shuffle(getProductIdsByStoreCategory(lcboProdCategory))
-        val seq = for (id <- prodIds;
-                       p <- Product.getProduct(id)) yield p
+        val lcboProdIds = Random.shuffle(getProductIdsByStoreCategory(lcboProdCategory))
+        val seq = for (id <- lcboProdIds;
+                       p <- Product.getProductByLcboId(id)) yield p
         // generate double the keys and hope it's enough to find enough products with positive inventory as a result
         // checking quantity in for comprehension above is cost prohibitive.
         asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
@@ -283,7 +283,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       // finally fetch a Inventory that is created with specified productId, quantity, and storeId.
       val newInventories = storeProductsByState.getOrElse(New, Nil).
         flatMap { inv => lcboidToDBId(inv.product_id).
-          map { dbProductId: Long => new Inventory(idField.get, dbProductId, inv.quantity ) } } (collection.breakOut)
+          map { dbProductId: Long => new Inventory(idField.get, dbProductId, inv.quantity, inv.updated_on, inv.is_dead ) } } (collection.breakOut)
 
       // God forbid, we might supply ourselves data that violates composite key. Weed it out!
       def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]): Iterable[Inventory] = {

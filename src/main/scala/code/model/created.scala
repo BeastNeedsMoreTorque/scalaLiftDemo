@@ -56,8 +56,8 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   def batchSize: Int = 1024
 
   def addNewItemsToCaches(items: Iterable[T]): Unit = {
-    cache ++= items.map{x => x.pKey -> x } (collection.breakOut)
-    LcboIdsToDBIds ++= cache.map { case(k,v) => v.lcboId -> k }
+    cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)
+    LcboIdsToDBIds ++= cache().map { case(k,v) => v.lcboId -> k }
   }
 
   // THREAD SAFETY: always call update before insert even though it's the same lock, but just to be consistent and safe. Enforce it.
@@ -92,7 +92,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
         // regular call as update throws.
         // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
         // However, there are other situations where we might well care.
-        if (prodsWithPKs ne null) cache ++= prodsWithPKs.map{x => x.pKey -> x } (collection.breakOut)  // refresh from the database select not from data we sent down.
+        if (prodsWithPKs ne null) cache() ++= prodsWithPKs.map{x => x.pKey -> x } (collection.breakOut)  // refresh from the database select not from data we sent down.
       }
   }
 
@@ -124,7 +124,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
       if (filteredProdsWithPKs ne null) addNewItemsToCaches(filteredProdsWithPKs)
     }
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
-    val LcboIDs = cache.map{ case (id, p) => p.lcboId}.toSet // evaluate once
+    val LcboIDs = cache().map{ case (id, p) => p.lcboId}.toSet // evaluate once
     val filteredForRI = items.filterNot { p => LcboIDs.contains(p.lcboId) }
     // you never know... Our input could have the same product twice in the collection with the same lcbo_id and we have unique index in DB against that.
     val filteredForUnique = filteredForRI.groupBy {_.lcboId}.
