@@ -58,19 +58,19 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 
-  //products is a ManyToMany[Product,Inventory], it extends Query[Product]
+  //products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)
-
+  private val productsCache: concurrent.Map[Long, Product] = TrieMap[Long, Product]()  // keyed by lcboId
+  private val productsCacheByCategory: concurrent.Map[String, IndexedSeq[Product]] = TrieMap[String, IndexedSeq[Product]]()
+  private def productsByCategory: Map[String, IndexedSeq[Product]] = storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
 
   def isDirty(s: Store): Boolean = {
     is_dead.get != s.is_dead.get ||
       address_line_1.get != s.address_line_1.get
   }
 
-  private def productsByPKId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.id).mapValues(_.head)
-  private def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.id).mapValues(_.head)
+  private def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
 
-  private def productsByCategory: Map[String, IndexedSeq[Product]] = storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
   private def inventories = storeProducts.associations
 
   private def inventoriesPerProductInStore: Map[Long, Inventory] =
@@ -84,12 +84,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 
   private def getInventoryQuantity(prodId: Long): Option[Long] =
     inventoriesPerProductInStore.get(prodId).map( _.quantity)
-
-  private def getProductIdsByStoreCategory(lcboCategory: String): IndexedSeq[Long] =
-    storeProducts.toIndexedSeq.filter(_.primaryCategory == lcboCategory).map(_.lcboId)
-
-  private def hasProductsByStoreCategory(lcboCategory: String): Boolean =
-    storeProducts.exists{ _.primaryCategory == lcboCategory }
 
   private def getInventories: Map[Long, Inventory] =
     inventories.toSeq.map (inv => inv.productid -> inv ) (breakOut)
@@ -129,11 +123,13 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     // we could get errors going to LCBO, this tryo captures those.
     tryo {
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results
-      if (hasProductsByStoreCategory(lcboProdCategory)) {
+      val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
+      if (matchingKeys.nonEmpty) {
         // get some random sampling.
-        val lcboProdIds = Random.shuffle(getProductIdsByStoreCategory(lcboProdCategory))
-        val seq = for (id <- lcboProdIds;
-                       p <- Product.getProductByLcboId(id)) yield p
+        val permutedKeys = Random.shuffle(matchingKeys)
+        productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
+        val seq = for (id <- permutedKeys;
+                       p <- productsCache.get(id)) yield p
         // generate double the keys and hope it's enough to find enough products with positive inventory as a result
         // checking quantity in for comprehension above is cost prohibitive.
         asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
@@ -151,7 +147,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
         // just use 0 as placeholder for inventory for now as we don't have this info yet.
           for (idx <- indices;
                lcbo_id = prods(idx).lcboId.toInt;
-               prod <- Product.getProductByLcboId(lcbo_id)) yield (0.toLong, prod)
+               prod <- productsCache.get(lcbo_id)) yield (0.toLong, prod)
 
         // we may have 0 inventory, browser should try to finish off that work not web server.
         seq.take(requestSize)
@@ -210,6 +206,8 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
 
     val revisedAccumItems =  accumItems ++ Product.reconcile(cacheOnly, items)
+    productsCache ++= revisedAccumItems.groupBy(_.lcboId).mapValues(_.head) // update local cache after having updated global cache for all products
+    productsCacheByCategory ++= revisedAccumItems.groupBy(_.primaryCategory)
 
     if ( (outstandingSize <= 0  && !cacheOnly )|| isFinalPage || totalPages < pageNo + 1) {
       logger.info(uri) // log only the last one, less chatty
@@ -269,7 +267,11 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       // Collects into our list of inventories the attributes we care about (extract[InventoryAsLCBOJson]). Then filter out unwanted data.
 
       // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-      inTransaction { storeProducts.refresh } // make sure we're synched up with DB for the store.
+      inTransaction {
+        storeProducts.refresh
+        productsCache ++= productsByLcboId
+        productsCacheByCategory ++= productsByCategory
+      } // make sure we're synched up with DB for the store.
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfProduct )
 
       val storeInventories = getInventories
@@ -377,6 +379,8 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
           inTransaction {
             // we're in async callback, need to acquire a valid session for our refresh and our query to DB on store's inventory.
             storeProducts.refresh  // key for whole inventory caching to work! We've persisted along the way for each LCBO page
+            productsCache ++= productsByLcboId
+            productsCacheByCategory ++= productsByCategory
             logger.debug(s"loadCache succeeded for ${lcboId}")
             if (emptyInventory) {
               logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
