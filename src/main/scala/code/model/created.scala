@@ -72,12 +72,12 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
 
     items.grouped(batchSize).
       foreach { subItems =>
-        var prodsWithPKs: Query[T] = null
+        var itemsWithPK: Query[T] = null
         val ids = items.map(_.pKey)
         inTransaction {
           try {
             t.forceUpdate(subItems) // @see http://squeryl.org/occ.html.
-            prodsWithPKs = from(t)(p => where( p.idField in ids) select(p))
+            itemsWithPK = from(t)(p => where( p.idField in ids) select(p))
           } catch {
             case se: SQLException =>
               logger.error(s"SQLException $subItems")
@@ -92,7 +92,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
         // regular call as update throws.
         // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
         // However, there are other situations where we might well care.
-        if (prodsWithPKs ne null) cache() ++= prodsWithPKs.map{x => x.pKey -> x } (collection.breakOut)  // refresh from the database select not from data we sent down.
+        if (itemsWithPK ne null) cache() ++= itemsWithPK.map{x => x.pKey -> x } (collection.breakOut)  // refresh from the database select not from data we sent down.
       }
   }
 
