@@ -269,7 +269,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       // Collects into our list of inventories the attributes we care about (extract[InventoryAsLCBOJson]). Then filter out unwanted data.
 
       // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-      storeProducts.refresh // make sure we're synched up with DB for the store.
+      inTransaction { storeProducts.refresh } // make sure we're synched up with DB for the store.
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfProduct )
 
       val storeInventories = getInventories
@@ -335,7 +335,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
           pageNo = 1,
           Store.notDiscontinued)
       }
-      inTransaction {
+      inTransaction {  // needed
         tryo { fetchProductsByStore() } match {
           case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading products into cache for '${lcboId}' with message $m and exception error $ex")
@@ -347,7 +347,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     }
 
     def fetchInventories(): Unit = {
-      inTransaction {
+      inTransaction { // needed
         tryo { fetchInventoriesByStore() } match {
           case net.liftweb.common.Failure(m, ex, _) =>
             logger.error(s"Problem loading inventories into cache for '${lcboId}' with message $m and exception error $ex")
@@ -448,7 +448,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         for (p <- itemNodes) {
           val item = Store.createRecord
           val key = (p \ "id" ).extractOrElse[Int](0)
-          if (key > 0) {
+          if (key > 0)  {
             item.lcbo_id.set(key) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
             setFieldsFromJValue(item, p)
             items += item
