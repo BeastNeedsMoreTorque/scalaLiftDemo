@@ -42,7 +42,7 @@ class User extends MegaProtoUser[User] with Loggable {
     tryo {
       DB.use(DefaultConnectionIdentifier) { connection =>
         // avoids two/three round-trips to store to DB.
-        val updatedCount = Product.getProduct(p.id).fold {
+        val updatedCount = Product.getProductByLcboId(p.lcboId).fold {
           logger.error(s"User.consume on unsaved product $p")
           0.toLong  // this is an error, the product should have been in cache.
         } { q =>
