@@ -265,7 +265,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       val jsonRoot = parse(pageContent) // fyi: throws ParseException
       val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
       val filter = { p: InventoryAsLCBOJson => !p.is_dead } // filter accommodates for the rather unpleasant different ways of seeing product categories (beer and Beer or coolers and Ready-to-Drink/Coolers
-      val items = (for (p <- itemNodes) yield p.extract[InventoryAsLCBOJson].removeNulls).filter(filter)  // LCBO sends us poisoned useless nulls that we need to filter for DB (filter them right away).
+      val items = (for (p <- itemNodes) yield p.extract[InventoryAsLCBOJson]).filter(filter)  // LCBO sends us poisoned useless nulls that we need to filter for DB (filter them right away).
       // Collects into our list of inventories the attributes we care about (extract[InventoryAsLCBOJson]). Then filter out unwanted data.
 
       // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
