@@ -132,7 +132,7 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   override def table(): org.squeryl.Table[Product] = MainSchema.products
 
   def getProduct(dbId: Long): Option[Product] = productsCache get dbId
-  def getProductByLcboId(id: Long): Option[Product] = lcboidToDBId(id).flatMap(  productsCache.get )
+  def getProductByLcboId(id: Long): Option[Product] = LcboIdsToDBIds.get(id).flatMap(  productsCache.get )
   def lcboidToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
 
   def init(): Unit = {

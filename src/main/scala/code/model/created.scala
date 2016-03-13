@@ -3,15 +3,17 @@ package code.model
 import java.util.Calendar
 import java.sql.SQLException
 
+import scala.collection.{IndexedSeq, concurrent}
+
 import net.liftweb.common.{Box, Loggable}
 import net.liftweb.json.JsonAST.JValue
 import net.liftweb.record.field.DateTimeField
 import net.liftweb.record.{Record,MetaRecord}
 import net.liftweb.squerylrecord.KeyedRecord
-
 import net.liftweb.squerylrecord.RecordTypeMode._
 
-import scala.collection.{IndexedSeq, concurrent}
+import org.squeryl.Query
+
 
 /**
   * Created by philippederome on 2016-01-02. Credit Lift Cookbook.
@@ -66,28 +68,32 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   }
 
   // @see http://squeryl.org/occ.html
-  private def update(items: Iterable[T]): Unit = meta.synchronized {
+  private def update(items: Iterable[T]): Unit = {
     val t = table()
 
     items.grouped(batchSize).
       foreach { subItems =>
-        try {
-          inTransaction { t.forceUpdate(subItems) } // @see http://squeryl.org/occ.html.
-          // regular call as update throws.
-          // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
-          // However, there are other situations where we might well care.
-        } catch {
-          case se: SQLException =>
-            logger.error(s"SQLException $subItems")
-            logger.error("Code: " + se.getErrorCode)
-            logger.error("SqlState: " + se.getSQLState)
-            logger.error("Error Message: " + se.getMessage)
-            logger.error("NextException:" + se.getNextException)
-          case e: Exception =>
-            logger.error("General exception caught: " + e+ " " + subItems)
+        var prodsWithPKs: Query[T] = null
+        val ids = items.map(_.pKey)
+        inTransaction {
+          try {
+            t.forceUpdate(subItems) // @see http://squeryl.org/occ.html.
+            prodsWithPKs = from(t)(p => where( p.idField in ids) select(p))
+          } catch {
+            case se: SQLException =>
+              logger.error(s"SQLException $subItems")
+              logger.error("Code: " + se.getErrorCode)
+              logger.error("SqlState: " + se.getSQLState)
+              logger.error("Error Message: " + se.getMessage)
+              logger.error("NextException:" + se.getNextException)
+            case e: Exception =>
+              logger.error("General exception caught: " + e+ " " + subItems)
+          }
         }
-        // update in memory for next caller who should be blocked (updateProducts is synchronized, helping DB and cache to be in synch)
-        cache ++= subItems.map { x => x.pKey -> x } (collection.breakOut)
+        // regular call as update throws.
+        // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
+        // However, there are other situations where we might well care.
+        cache ++= prodsWithPKs.map{x => x.pKey -> x } (collection.breakOut)  // refresh from the database select not from data we sent down.
       }
   }
 
@@ -95,29 +101,28 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
     val t = table()
 
     // Do special handling to filter out duplicate keys, which would throw.
-    def insertBatch(items: Iterable[T]): Unit = meta.synchronized { // synchronize on LCBO object/singleton as clients are from different threads
+    def insertBatch(items: Iterable[T]): Unit = {
       // insert them
-      try {  // getNextException in catch is why we want to try catch here.
-        // the DB could fail for PK or whatever other reason.
-        inTransaction {
+      var filteredProdsWithPKs: Query[T] = null
+      val ids = items.map(_.lcboId)
+      inTransaction {
+        try {  // getNextException in catch is why we want to try catch here.
+          // the DB could fail for PK or whatever other reason.
           // we require transaction for insert and following refresh select.
           t.insert(items) // refresh them with PKs assigned by DB server.
-          val ids = items.map(_.lcboId)
-          val filteredProdsWithPKs = from(t)(p => where( p.lcboId in ids) select(p))
-          // update in memory for next caller who should be blocked
-          addNewItemsToCaches(filteredProdsWithPKs)
+          filteredProdsWithPKs = from(t)(p => where( p.lcboId in ids) select(p))
+        } catch {
+          case se: SQLException =>
+            logger.error(s"SQLException $items")
+            logger.error("Code: " + se.getErrorCode)
+            logger.error("SqlState: " + se.getSQLState)
+            logger.error("Error Message: " + se.getMessage)
+            logger.error("NextException:" + se.getNextException)
+          case e: Exception =>
+            logger.error("General exception caught: " + e)
         }
-      } catch {
-        case se: SQLException =>
-          logger.error(s"SQLException $items")
-          logger.error("Code: " + se.getErrorCode)
-          logger.error("SqlState: " + se.getSQLState)
-          logger.error("Error Message: " + se.getMessage)
-          logger.error("NextException:" + se.getNextException)
-        case e: Exception =>
-          logger.error("General exception caught: " + e)
       }
-
+      addNewItemsToCaches(filteredProdsWithPKs)
     }
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
     val LcboIDs = cache.map{ case (id, p) => p.lcboId}.toSet // evaluate once
