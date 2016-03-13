@@ -14,6 +14,7 @@ import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
 
 import org.squeryl.Query
+import org.squeryl.Table
 
 /**
   * Created by philippederome on 2016-01-02. Credit Lift Cookbook.
@@ -45,7 +46,7 @@ Updated[T] with Created[T] {
 trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] with Loggable {
   self: T =>
 
-  def table(): org.squeryl.Table[T]
+  def table(): Table[T]
   def cache(): concurrent.Map[Long, T]  // primary cache
   def LcboIdsToDBIds(): concurrent.Map[Long, Long]
   def pKey: Long
