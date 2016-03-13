@@ -447,9 +447,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val items = ArrayBuffer[Store]()
         for (p <- itemNodes) {
           val item = Store.createRecord
-          val key = (p \ "id" ).extractOrElse[Int](0)
-          if (key > 0)  {
-            item.lcbo_id.set(key) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
+          val key = (p \ "id").extractOpt[Long]
+          key.foreach { x: Long =>
+            item.lcbo_id.set(x) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
             setFieldsFromJValue(item, p)
             items += item
           }
