@@ -86,20 +86,18 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
     * Select a random product that matches the parameters subject to a max sample size.
     *
-    * @param store a String representing a numeric code of a LCBO store
     * @param category a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category (for query only not to compare results and filter!).
-    * @return
+    * @param requestSize a number representing how many items we need to sample
+    * @return quantity found in inventory for product and the product
     */
   def recommend(category: String, requestSize: Int): Box[Iterable[(Long, Product)]] = {
     /**
-      * Queries LCBO matching category and storeId for a sample size as specified by client, with category considered optional, though not tested when optional.
+      * Queries LCBO matching category
       * Full URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage>
       * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
       * for pattern match LCBO uses lower case but for actual product category it's upper case, so to make comparisons, we will need to account for that
       * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
       *
-      * @param requiredSize upper bound on #items we need. Attempt to match it if enough supply is available.
-      * @param store id  of Store at LCBO
       * @param category wine, spirits, and so on
       * @return collection of LCBO products while throwing.
       */
@@ -135,13 +133,11 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       else {
         logger.warn(s"recommend cache miss for $id") // don't try to load it asynchronously as that's start up job to get going with it.
         val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
-        asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-        val indices = Random.shuffle[Int, IndexedSeq](prods.indices)
-        val seq =
-        // just use 0 as placeholder for inventory for now as we don't have this info yet.
-          for (idx <- indices;
-               lcbo_id = prods(idx).lcboId.toInt;
-               prod <- productsCache.get(lcbo_id)) yield (0.toLong, prod)
+        asyncLoadCache() // if we never loaded the cache, do it (fast lock free test).
+        val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
+        val seq = for (id <- permutedIndices;
+                       lcbo_id = prods(id).lcboId.toInt;
+                       p <- productsCache.get(lcbo_id)) yield (0.toLong, p)
 
         // we may have 0 inventory, browser should try to finish off that work not web server.
         seq.take(requestSize)
@@ -149,22 +145,21 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     }
   }
 
-
   /**
-    * LCBO client JSON query handler. So naturally, the code is specifically written with the structure of LCBO documents in mind, with tokens as is.
-    * For Liftweb JSON extraction after parse,
+    * LCBO client JSON query handler.
     *
     * @see https://github.com/lift/lift/tree/master/framework/lift-base/lift-json/
     *      don't go to more pages than user implicitly requests via requiredSize that should not be exceeded.
-    *      Would Streams collection be handy for paging here? Depends on consumption usage perhaps.
     *      Uses tail recursion.
     * @param accumItems accumulator to facilitate tail recursion
     * @param urlRoot a LCBO product query without the details of paging, which we handle here
     * @param requiredSize required size of products that are asked for. May get less if there are fewer matches, but will not go above that size.
+    *                      if cacheOnly is true, this value can be arbitrary and ignored.
+    * @param cacheOnly true if we don't need a full return result set, false if we need data we can consume (side effect is to cache all the time)
     * @param pageNo client calls this with value 1 (initial page), recursion increments it, designates the pageno for LCBO JSON data when data fits on several pages
-    * @param myFilter client's filter that can be applied as we process the data before mapping/extracting it out to client data.
+    * @param filter client's filter that can be applied as we process the data before mapping/extracting it out to client data.
     *                 In principle, should be faster when user filters reject many values, but no empirical evidence here.
-    * @return a vector of product items matching the query and size constraint, though we may go a bit over the size by multiple of page sizes.
+    * @return a vector of product items matching the query and size constraint (or none if cacheOnly is true). Always side effect to cache.
     * @throws java.net.SocketTimeoutException timeout is reached, slow connection
     * @throws java.io.IOException I/O issue
     * @throws net.liftweb.json.JsonParser.ParseException parse problem
@@ -186,40 +181,36 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 
     // specify the URI for the LCBO api url for liquor selection
     val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
-    logger.info(s"collectItemsOnAPage $uri")
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
+    // collect our list of products in items and filter out unwanted products
     val items = Product.extractFromJValueSeq(itemNodes).filter(filter) // hard code filter for now.
-    val outstandingSize = { if (cacheOnly ) 1 else requiredSize - items.size }
+    val outstandingSize = requiredSize - items.size
 
-    // Collects into our list of products the attributes we care about (extract[Product]). Then filter out unwanted data.
-    // fyi: throws Mapping exception.
     //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
     val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
 
-    val revisedAccumItems =  accumItems ++ Product.reconcile(cacheOnly, items)
-    productsCache ++= revisedAccumItems.groupBy(_.lcboId).mapValues(_.head) // update local cache after having updated global cache for all products
+    val revisedAccumItems =  accumItems ++ Product.reconcile(cacheOnly, items)  // global db+cache update.
+    productsCache ++= revisedAccumItems.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
     productsCacheByCategory ++= revisedAccumItems.groupBy(_.primaryCategory)
 
     if ( (outstandingSize <= 0  && !cacheOnly )|| isFinalPage || totalPages < pageNo + 1) {
       logger.info(uri) // log only the last one, less chatty
       return revisedAccumItems
     }
-    // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (when we gap due to parallelism).
+    // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (totalPages).
     // Similarly having reached our required size,we can stop.
 
-    // tail recursion enforced.
     collectItemsOnAPage(
-      revisedAccumItems,
+      revisedAccumItems, // union of this page with next page when we are asked for a full sample
       urlRoot,
       outstandingSize,
       cacheOnly,
       pageNo + 1,
-      filter) // union of this page with next page when we are asked for a full sample
+      filter)
   }
-
 
   @throws(classOf[SocketTimeoutException])
   @throws(classOf[IOException])
@@ -237,12 +228,15 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       def fetchItems(state: EntityRecordState,
                      mapVector: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]],
                      f: InventoryAsLCBOJson => Option[Inventory] ): IndexedSeq[Inventory] = {
-        mapVector.getOrElse(state, Vector()).flatMap { p => f(p) } // remove the Option in Option[Product]
+        mapVector.getOrElse(state, Vector()).flatMap {  f(_) } // remove the Option in Option[Inventory]
       }
+      def inventoryForStoreAndLCBOProd(lcboProdID: Int): Option[Inventory] = {
+        for (prodId <- Product.lcboidToDBId(lcboProdID);
+             i <- inventoryByProductId.get(prodId)) yield i
+      }
+
       def stateOfProduct(item: InventoryAsLCBOJson): EntityRecordState = {
-        val invOption =
-          for (prodId <- Product.lcboidToDBId(item.product_id);
-               i <- inventoryByProductId.get(prodId)) yield i
+        val invOption = inventoryForStoreAndLCBOProd(item.product_id)
         invOption  match {
           case None  => New
           case Some(inv) if inv.dirty_?(item) => Dirty
@@ -259,7 +253,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       val items = (for (p <- itemNodes) yield p.extract[InventoryAsLCBOJson]).filter(filter)  // LCBO sends us poisoned useless nulls that we need to filter for DB (filter them right away).
       // Collects into our list of inventories the attributes we care about (extract[InventoryAsLCBOJson]). Then filter out unwanted data.
 
-      // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
+      // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy, after doing a quick db refresh and cache refresh.
       inTransaction {
         storeProducts.refresh
         productsCache ++= productsByLcboId
@@ -268,17 +262,18 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       } // make sure we're synched up with DB for the store.
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfProduct )
 
-      def inventoryForStoreAndLCBOProd(lcboProdID: Int): Option[Inventory] = {
-        val dbProdId = Product.lcboidToDBId(lcboProdID )
-        dbProdId.map{ id: Long => inventoryByProductId.get(id) }.getOrElse(None)
-      }
-
-      val dirtyInventories = fetchItems(Dirty, storeProductsByState, {inv => inventoryForStoreAndLCBOProd(inv.product_id).map { _.copyAttributes( inv)} } )
+      val dirtyInventories = fetchItems(Dirty, storeProductsByState,
+                             {inv =>
+                               inventoryForStoreAndLCBOProd(inv.product_id).
+                                 map { _.copyAttributes( inv) }
+                             } )
       // get the New partition, returning Nil if we don't have any, and open up option for a match on the productID in database from the LCBO ID.
       // finally fetch a Inventory that is created with specified productId, quantity, and storeId.
-      val newInventories = storeProductsByState.getOrElse(New, Nil).
-        flatMap { inv => lcboidToDBId(inv.product_id).
-          map { dbProductId: Long => new Inventory(idField.get, dbProductId, inv.quantity, inv.updated_on, inv.is_dead ) } } (collection.breakOut)
+      val newInventories =
+        storeProductsByState.getOrElse(New, Nil).
+        flatMap { inv => Product.lcboidToDBId(inv.product_id).
+          map { dbProductId =>
+                new Inventory(idField.get, dbProductId, inv.quantity, inv.updated_on, inv.is_dead ) } } (collection.breakOut)
 
       // God forbid, we might supply ourselves data that violates composite key. Weed it out!
       def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]): Iterable[Inventory] = {
@@ -287,7 +282,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
       val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories)
 
-      try {  // getNextException in catch is why we want to try catch here.
+      try {  // getNextException in catch is what is useful to log (along with the data that led to the exception)
         inTransaction {
           // we refresh just before splitting the inventories into clean, dirty, new classes.
           MainSchema.inventories.update(CompKeyFilterDirtyInventories)
@@ -311,24 +306,22 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
         logger.info(uri) // log only last one to be less verbose
         return
       }
-      collectInventoriesOnAPage( urlRoot, pageNo + 1) // union of this page with next page when we are asked for a full sample
+      collectInventoriesOnAPage( urlRoot, pageNo + 1) // recurse to cache all we can
     }
-    collectInventoriesOnAPage(s"$LcboDomainURL/inventories?store_id=${lcboId}", 1) // programmer client is assumed to know we use this as a page.
+    collectInventoriesOnAPage(s"$LcboDomainURL/inventories?store_id=${lcboId}", 1)
   }
 
-  // may have side effect to update database with more up to date from LCBO's content (if different)
+  // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
     def fetchProducts(): Unit = {
-      // We make a somewhat arbitrary assumption that discontinued products are of zero interest.
-      // We obtain results and discard them because we're only interested in caching
       def fetchProductsByStore(): Unit = {
         collectItemsOnAPage(
-          IndexedSeq[Product](),
+          accumItems=IndexedSeq[Product](),
           s"$LcboDomainURL/products?store_id=$lcboId",
-          0,
+          requiredSize=0,  // ignored if cacheOnly is true, meaning get them all to cache them all
           cacheOnly = true,
           pageNo = 1,
-          Store.notDiscontinued)
+          filter=Store.notDiscontinued) // We make a somewhat arbitrary assumption that discontinued products are of zero interest.
       }
       inTransaction {  // needed
         tryo { fetchProductsByStore() } match {
