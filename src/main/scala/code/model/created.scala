@@ -4,9 +4,10 @@ import java.util.Calendar
 import java.sql.SQLException
 
 import scala.collection.{IndexedSeq, concurrent}
+import scala.collection.mutable.ArrayBuffer
 
-import net.liftweb.common.{Box, Loggable}
-import net.liftweb.json.JsonAST.JValue
+import net.liftweb.common.{Loggable}
+import net.liftweb.json.JsonAST
 import net.liftweb.record.field.DateTimeField
 import net.liftweb.record.{Record,MetaRecord}
 import net.liftweb.squerylrecord.KeyedRecord
@@ -51,13 +52,27 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   def lcboId: Long
   def setLcboId(id: Long): Unit
   def meta: MetaRecord[T]
-  def setFieldsFromJson(rec: T, jvalue: JValue): Box[Unit] = meta.setFieldsFromJValue(rec, jvalue)
 
   def batchSize: Int = 1024
 
   def addNewItemsToCaches(items: Iterable[T]): Unit = {
     cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)
     LcboIdsToDBIds ++= cache().map { case(k,v) => v.lcboId -> k }
+  }
+
+  def extractLcbo(nodes: Vector[JsonAST.JValue]): IndexedSeq[T] = {
+    implicit val formats = net.liftweb.json.DefaultFormats
+    val items = ArrayBuffer[T]()
+    for (p <- nodes) {
+      val item = meta.createRecord
+      val key = (p \ "id").extractOpt[Long]
+      key.foreach { x: Long =>
+        item.setLcboId(x) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
+        meta.setFieldsFromJValue(item, p)
+        items += item
+      }
+    }
+    items.toIndexedSeq
   }
 
   // THREAD SAFETY: always call update before insert even though it's the same lock, but just to be consistent and safe. Enforce it.
