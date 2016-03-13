@@ -3,14 +3,15 @@ package code.model
 import java.util.Calendar
 import java.sql.SQLException
 
-import net.liftweb.common.Loggable
+import net.liftweb.common.{Box, Loggable}
+import net.liftweb.json.JsonAST.JValue
 import net.liftweb.record.field.DateTimeField
-import net.liftweb.record.Record
+import net.liftweb.record.{Record,MetaRecord}
 import net.liftweb.squerylrecord.KeyedRecord
 
 import net.liftweb.squerylrecord.RecordTypeMode._
 
-import scala.collection.concurrent
+import scala.collection.{IndexedSeq, concurrent}
 
 /**
   * Created by philippederome on 2016-01-02. Credit Lift Cookbook.
@@ -47,6 +48,9 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   def LcboIdsToDBIds(): concurrent.Map[Long, Long]
   def pKey: Long
   def lcboId: Long
+  def setLcboId(id: Long): Unit
+  def meta: MetaRecord[T]
+  def setFieldsFromJson(rec: T, jvalue: JValue): Box[Unit] = meta.setFieldsFromJValue(rec, jvalue)
 
   def batchSize: Int = 1024
 
@@ -55,8 +59,14 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
     LcboIdsToDBIds ++= cache.map { case(k,v) => v.lcboId -> k }
   }
 
+  // THREAD SAFETY: always call update before insert even though it's the same lock, but just to be consistent and safe. Enforce it.
+  def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = {
+    update(updateItems)
+    insert(insertItems)
+  }
+
   // @see http://squeryl.org/occ.html
-  def update(items: Iterable[T]): Unit = meta.synchronized {
+  private def update(items: Iterable[T]): Unit = meta.synchronized {
     val t = table()
 
     items.grouped(batchSize).
@@ -81,7 +91,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
       }
   }
 
-  def insert( items: IndexedSeq[T]): Unit = {
+  private def insert( items: IndexedSeq[T]): Unit = {
     val t = table()
 
     // Do special handling to filter out duplicate keys, which would throw.
@@ -89,7 +99,14 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
       // insert them
       try {  // getNextException in catch is why we want to try catch here.
         // the DB could fail for PK or whatever other reason.
-        inTransaction { t.insert(items) } // refresh them with PKs assigned by DB server.
+        inTransaction {
+          // we require transaction for insert and following refresh select.
+          t.insert(items) // refresh them with PKs assigned by DB server.
+          val ids = items.map(_.lcboId)
+          val filteredProdsWithPKs = from(t)(p => where( p.lcboId in ids) select(p))
+          // update in memory for next caller who should be blocked
+          addNewItemsToCaches(filteredProdsWithPKs)
+        }
       } catch {
         case se: SQLException =>
           logger.error(s"SQLException $items")
@@ -100,10 +117,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
         case e: Exception =>
           logger.error("General exception caught: " + e)
       }
-      val ids = items.map(_.lcboId)
-      val filteredProdsWithPKs = from(t)(p => where( p.lcboId in ids) select(p))
-      // update in memory for next caller who should be blocked
-      addNewItemsToCaches(filteredProdsWithPKs)
+
     }
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
     val LcboIDs = cache.map{ case (id, p) => p.lcboId}.toSet // evaluate once

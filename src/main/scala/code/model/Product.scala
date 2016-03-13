@@ -36,6 +36,7 @@ class Product private() extends Persistable[Product] with CreatedUpdated[Product
   override def LcboIdsToDBIds() = Product.LcboIdsToDBIds
   override def pKey: Long = idField.get
   override def lcboId: Long = lcbo_id.get
+  override def setLcboId(id: Long): Unit = lcbo_id.set(id)
 
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
@@ -120,7 +121,6 @@ class Product private() extends Persistable[Product] with CreatedUpdated[Product
 
 /**
   * object Product: supports reconcile that does insert or update on items needing updating, and refresh caches
-  * supports JSON parsing a list of LCBO products with extractFromJValueSeq, which has a peculiarity to deal with special "id" field from LCBO.
   */
 object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
@@ -159,26 +159,29 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     items.toIndexedSeq
   }
 
-  def reconcile(items: IndexedSeq[Product]) :  IndexedSeq[Product] = {
-    val prods = productsCache.toMap
+  def reconcile(cacheOnly: Boolean, items: IndexedSeq[Product]): IndexedSeq[Product] = {
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val productsByState: Map[EntityRecordState, IndexedSeq[Product]] = items.groupBy {
-      p => (prods.get(p.id), p) match {
+      p => (getProductByLcboId(p.lcboId), p) match {
         case (None, _) => New
         case (Some(product), lcboProduct) if product.isDirty(lcboProduct) => Dirty
         case (_ , _) => Clean
       }
     }
-    val cleanProducts = productsByState.getOrElse(Clean, IndexedSeq[Product]()).
-      flatMap{p => lcboidToDBId(p.lcbo_id.get).flatMap { productsCache.get} }
+    val dirtyProducts = productsByState.getOrElse(Dirty, IndexedSeq[Product]())
     val newProducts = productsByState.getOrElse(New, IndexedSeq[Product]())
-    insert(newProducts)
+    updateAndInsert(dirtyProducts, newProducts)
 
-    val dirtyProducts = productsByState.getOrElse(Dirty, IndexedSeq[Product]()).
-      flatMap{p => lcboidToDBId(p.lcbo_id.get).flatMap { productsCache.get} }
-    update(dirtyProducts)
+    if (cacheOnly) IndexedSeq() // to satisfy method signature only
+    else {
+      // productsByState has dirty PKID and so need refresh prior to use in memory, which we do with flatMap calls below.
+      val refreshedCleanProducts = productsByState.getOrElse(Clean, IndexedSeq[Product]()).
+        flatMap { p => getProductByLcboId(p.lcboId) }
+      val updatedProducts = dirtyProducts.flatMap { p => getProductByLcboId(p.lcboId) }
+      val refreshedNewProducts = newProducts.flatMap { p => getProductByLcboId(p.lcboId) }
 
-    cleanProducts ++ newProducts ++ dirtyProducts // client wants full set, meanwhile we store and cache those that represent changes from what we knew.
+      refreshedCleanProducts ++ refreshedNewProducts ++ updatedProducts // client wants full set.
+    }
   }
 
 }
