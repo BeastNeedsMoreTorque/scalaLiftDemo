@@ -444,9 +444,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val jsonRoot = parse(pageContent)
         val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
 
-        var items = ArrayBuffer[Store]()
+        val items = ArrayBuffer[Store]()
         for (p <- itemNodes) {
-          var item = Store.createRecord
+          val item = Store.createRecord
           val key = (p \ "id" ).extractOrElse[Int](0)
           if (key > 0) {
             item.lcbo_id.set(key) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
