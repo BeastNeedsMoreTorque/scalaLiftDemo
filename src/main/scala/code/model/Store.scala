@@ -185,13 +185,12 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
     // collect our list of products in items and filter out unwanted products
-    val items = Product.extractFromJValueSeq(itemNodes).filter(filter) // hard code filter for now.
+    val items = Product.extractLcbo(itemNodes).filter(filter) // hard code filter for now.
     val outstandingSize = requiredSize - items.size
 
     //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
     val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
-
     val revisedAccumItems =  accumItems ++ Product.reconcile(cacheOnly, items)  // global db+cache update.
     productsCache ++= revisedAccumItems.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
     productsCacheByCategory ++= revisedAccumItems.groupBy(_.primaryCategory)
@@ -435,17 +434,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val jsonRoot = parse(pageContent)
         val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
 
-        val items = ArrayBuffer[Store]()
-        for (p <- itemNodes) {
-          val item = Store.createRecord
-          val key = (p \ "id").extractOpt[Long]
-          key.foreach { x: Long =>
-            item.lcbo_id.set(x) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
-            setFieldsFromJValue(item, p)
-            items += item
-          }
-        }
-
+        val items = extractLcbo(itemNodes)
         // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
         val storesByState: Map[EntityRecordState, IndexedSeq[Store]] = items.groupBy {
           s =>  ( getStoreByLcboId(s.lcboId), s) match {

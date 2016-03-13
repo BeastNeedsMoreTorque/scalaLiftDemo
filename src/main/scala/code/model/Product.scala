@@ -143,21 +143,6 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
     logger.info(s"Product.init end")
   }
 
-  def extractFromJValueSeq(itemNodes: IndexedSeq[JsonAST.JValue]): IndexedSeq[Product] = {
-    import scala.collection.mutable.ArrayBuffer
-    val items = ArrayBuffer[Product]()
-    for (p <- itemNodes) {
-      val key = (p \ "id").extractOpt[Long]
-      key.foreach { x =>
-        val item: Product = Product.createRecord
-        item.lcbo_id.set(x) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
-        setFieldsFromJValue(item, p)
-        items += item
-      }
-    }
-    items.toIndexedSeq
-  }
-
   def reconcile(cacheOnly: Boolean, items: IndexedSeq[Product]): IndexedSeq[Product] = {
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val productsByState: Map[EntityRecordState, IndexedSeq[Product]] = items.groupBy {
