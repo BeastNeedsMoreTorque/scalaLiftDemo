@@ -73,20 +73,12 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 
   private def inventories = storeProducts.associations
 
-  private def inventoriesPerProductInStore: Map[Long, Inventory] =
+  private def getInventories: Map[Long, Inventory] =
     inventories.toIndexedSeq.map { inv: Inventory => inv.productid -> inv } (breakOut)
 
   private def emptyInventory: Boolean =
     inventories.toIndexedSeq.forall(_.quantity == 0)
 
-  private def getInventory(prodId: Long): Option[Inventory] =
-    inventoriesPerProductInStore.get(prodId)
-
-  private def getInventoryQuantity(prodId: Long): Option[Long] =
-    inventoriesPerProductInStore.get(prodId).map( _.quantity)
-
-  private def getInventories: Map[Long, Inventory] =
-    inventories.toSeq.map (inv => inv.productid -> inv ) (breakOut)
 
   /**
     * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
@@ -133,8 +125,9 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
         // generate double the keys and hope it's enough to find enough products with positive inventory as a result
         // checking quantity in for comprehension above is cost prohibitive.
         asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
+        val invs = getInventories
         seq.take(2 * requestSize).map { p: Product =>
-          (getInventoryQuantity(p.id).fold(0.toLong) {
+          (invs.get(p.id).map( _.quantity).fold(0.toLong) {
             identity}, p)
         }.filter { _._1 > 0 }.take(requestSize)
       }
@@ -245,11 +238,11 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
                      f: InventoryAsLCBOJson => Option[Inventory] ): IndexedSeq[Inventory] = {
         mapVector.getOrElse(state, Vector()).flatMap { p => f(p) } // remove the Option in Option[Product]
       }
-
+      val invs = getInventories
       def stateOfProduct(item: InventoryAsLCBOJson): EntityRecordState = {
         val invOption =
-          for (dbProductId <- Product.lcboidToDBId(item.product_id);
-               i <- getInventory(dbProductId)) yield i
+          for (prodId <- Product.lcboidToDBId(item.product_id);
+               i <- invs.get(prodId)) yield i
         invOption  match {
           case None  => New
           case Some(inv) if inv.dirty_?(item) => Dirty
