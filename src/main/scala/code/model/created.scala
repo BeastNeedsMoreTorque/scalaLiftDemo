@@ -14,7 +14,6 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 
 import org.squeryl.Query
 
-
 /**
   * Created by philippederome on 2016-01-02. Credit Lift Cookbook.
   */
