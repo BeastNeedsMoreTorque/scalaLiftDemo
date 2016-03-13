@@ -118,7 +118,7 @@ object ProductInteraction extends Loggable {
       }
 
       def maySelect(storeId: Int): JsCmd =
-        Store.getStoreById(storeId).fold {
+        Store.getStore(storeId).fold {
           S.error("We need to establish your local store first, please wait for local geo to become available")
           Noop
         }{ s: Store =>
