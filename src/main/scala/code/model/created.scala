@@ -92,7 +92,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
         // regular call as update throws.
         // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
         // However, there are other situations where we might well care.
-        cache ++= prodsWithPKs.map{x => x.pKey -> x } (collection.breakOut)  // refresh from the database select not from data we sent down.
+        if (prodsWithPKs ne null) cache ++= prodsWithPKs.map{x => x.pKey -> x } (collection.breakOut)  // refresh from the database select not from data we sent down.
       }
   }
 
@@ -121,7 +121,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
             logger.error("General exception caught: " + e)
         }
       }
-      addNewItemsToCaches(filteredProdsWithPKs)
+      if (filteredProdsWithPKs ne null) addNewItemsToCaches(filteredProdsWithPKs)
     }
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
     val LcboIDs = cache.map{ case (id, p) => p.lcboId}.toSet // evaluate once
