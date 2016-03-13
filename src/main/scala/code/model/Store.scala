@@ -60,25 +60,27 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 
   //products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)
-  private val productsCache: concurrent.Map[Long, Product] = TrieMap[Long, Product]()  // keyed by lcboId
-  private val productsCacheByCategory: concurrent.Map[String, IndexedSeq[Product]] = TrieMap[String, IndexedSeq[Product]]()
+  private def inventories = storeProducts.associations
+
+  // following three caches leverage ORM's stateful cache of storeProducts and inventories above (which are not presented as map but as slower sequence;
+  // we organize as map for faster access).
+  // They're recomputed when needed by the three helper functions that follow.
+  private val productsCache = TrieMap[Long, Product]()  // keyed by lcboId
+  private val productsCacheByCategory = TrieMap[String, IndexedSeq[Product]]()
+  private val inventoryByProductId = TrieMap[Long, Inventory]()
+
+  private def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
   private def productsByCategory: Map[String, IndexedSeq[Product]] = storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
+  private def getInventories: Map[Long, Inventory] =
+    inventories.toIndexedSeq.map { inv => inv.productid -> inv } (breakOut)  // moderately slow because of iteration
+
+  private def emptyInventory: Boolean =
+    inventories.toIndexedSeq.forall(_.quantity == 0)
 
   def isDirty(s: Store): Boolean = {
     is_dead.get != s.is_dead.get ||
       address_line_1.get != s.address_line_1.get
   }
-
-  private def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
-
-  private def inventories = storeProducts.associations
-
-  private def getInventories: Map[Long, Inventory] =
-    inventories.toIndexedSeq.map { inv: Inventory => inv.productid -> inv } (breakOut)
-
-  private def emptyInventory: Boolean =
-    inventories.toIndexedSeq.forall(_.quantity == 0)
-
 
   /**
     * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
@@ -125,9 +127,8 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
         // generate double the keys and hope it's enough to find enough products with positive inventory as a result
         // checking quantity in for comprehension above is cost prohibitive.
         asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-        val invs = getInventories
         seq.take(2 * requestSize).map { p: Product =>
-          (invs.get(p.id).map( _.quantity).fold(0.toLong) {
+          (inventoryByProductId.get(p.id).map( _.quantity).fold(0.toLong) {
             identity}, p)
         }.filter { _._1 > 0 }.take(requestSize)
       }
@@ -238,11 +239,10 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
                      f: InventoryAsLCBOJson => Option[Inventory] ): IndexedSeq[Inventory] = {
         mapVector.getOrElse(state, Vector()).flatMap { p => f(p) } // remove the Option in Option[Product]
       }
-      val invs = getInventories
       def stateOfProduct(item: InventoryAsLCBOJson): EntityRecordState = {
         val invOption =
           for (prodId <- Product.lcboidToDBId(item.product_id);
-               i <- invs.get(prodId)) yield i
+               i <- inventoryByProductId.get(prodId)) yield i
         invOption  match {
           case None  => New
           case Some(inv) if inv.dirty_?(item) => Dirty
@@ -264,13 +264,13 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
         storeProducts.refresh
         productsCache ++= productsByLcboId
         productsCacheByCategory ++= productsByCategory
+        inventoryByProductId ++= getInventories
       } // make sure we're synched up with DB for the store.
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfProduct )
 
-      val storeInventories = getInventories
       def inventoryForStoreAndLCBOProd(lcboProdID: Int): Option[Inventory] = {
         val dbProdId = Product.lcboidToDBId(lcboProdID )
-        dbProdId.map{ id: Long => storeInventories.get(id) }.getOrElse(None)
+        dbProdId.map{ id: Long => inventoryByProductId.get(id) }.getOrElse(None)
       }
 
       val dirtyInventories = fetchItems(Dirty, storeProductsByState, {inv => inventoryForStoreAndLCBOProd(inv.product_id).map { _.copyAttributes( inv)} } )
@@ -374,6 +374,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
             storeProducts.refresh  // key for whole inventory caching to work! We've persisted along the way for each LCBO page
             productsCache ++= productsByLcboId
             productsCacheByCategory ++= productsByCategory
+            inventoryByProductId ++= getInventories
             logger.debug(s"loadCache succeeded for ${lcboId}")
             if (emptyInventory) {
               logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
