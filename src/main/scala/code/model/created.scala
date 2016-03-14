@@ -43,22 +43,36 @@ Updated[T] with Created[T] {
   self: T =>
 }
 
-trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] with Loggable {
-  self: T =>
 
-  def table(): Table[T]
-  def cache(): concurrent.Map[Long, T]  // primary cache
+trait LcboEntity {
   def LcboIdsToDBIds(): concurrent.Map[Long, Long]
   def pKey: Long
   def lcboId: Long
   def setLcboId(id: Long): Unit
+}
+
+trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] with LcboEntity with Loggable {
+  self: T =>
+
+  def table(): Table[T]
+  def cache(): concurrent.Map[Long, T]  // primary cache
+
   def meta: MetaRecord[T]
 
   def batchSize: Int = 1024
 
+  def init(xactLastStep: => (Iterable[T])=> Unit ): Unit = {
+    // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
+    inTransaction {
+      val items = from(table())(s => select(s))
+      addNewItemsToCaches(items)
+      xactLastStep(items)
+    }
+  }
+
   def addNewItemsToCaches(items: Iterable[T]): Unit = {
     cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)
-    LcboIdsToDBIds ++= cache().map { case(k,v) => v.lcboId -> k }
+    LcboIdsToDBIds ++= cache().map { case(k, v) => v.lcboId -> k }
   }
 
   def extractLcbo(nodes: Vector[JsonAST.JValue]): IndexedSeq[T] = {
@@ -76,7 +90,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
     items.toIndexedSeq
   }
 
-  // THREAD SAFETY: always call update before insert even though it's the same lock, but just to be consistent and safe. Enforce it.
+  // Always call update before insert just to be consistent and safe. Enforce it.
   def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = {
     update(updateItems)
     insert(insertItems)
