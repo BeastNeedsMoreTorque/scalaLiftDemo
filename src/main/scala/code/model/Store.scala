@@ -461,7 +461,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       val url = s"$LcboDomainURL/stores?"
       tryo {
         // gather stores on this page (url) and recursively to following pages
-        collectStoresOnAPage(url, 1)
+        inTransaction { collectStoresOnAPage(url, 1) }
         logger.debug(s"done loading stores from LCBO")
       }
     }
@@ -475,14 +475,11 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
     }
   }
 
-  def init() = {
-    logger.info(s"Store.init start")
-    // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
-    inTransaction {
-      val dbStores = from(stores)(s => select(s))
-      addNewItemsToCaches(dbStores)
-      asyncGetStores(dbStores.map { s => s.idField.get -> s }(breakOut))
-    }
+  def init(): Unit = {
+    logger.info("Store.init start")
+    def asyncLoad: (Iterable[Store]) => Unit = {items: Iterable[Store] => asyncGetStores(items.map { s => s.idField.get -> s }(breakOut))}
+    init(asyncLoad)  // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
+    logger.info("Store.init end")
   }
 
   def asyncGetStores(x: Map[Long, Store]): Unit = {

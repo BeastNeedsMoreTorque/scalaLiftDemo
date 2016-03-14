@@ -9,8 +9,6 @@ import net.liftweb.record.field.{LongField,StringField,BooleanField,IntField}
 import net.liftweb.record.MetaRecord
 import net.liftweb.common._
 import net.liftweb.util.Props
-import net.liftweb.squerylrecord.RecordTypeMode._
-import net.liftweb.json.JsonAST
 
 import org.squeryl.annotations._
 
@@ -135,12 +133,10 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
   def lcboidToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
 
   def init(): Unit = {
-    logger.info(s"Product.init start") // potentially slow if products select is big
-    inTransaction {
-      val prods = from(products)(p => select(p))
-      addNewItemsToCaches(prods)
-    }
-    logger.info(s"Product.init end")
+    logger.info("Product.init start")
+    val voidLastStep: (Iterable[Product]) => Unit = {x: Iterable[Product] => Unit }
+    init(voidLastStep)
+    logger.info("Product.init end")
   }
 
   def reconcile(cacheOnly: Boolean, items: IndexedSeq[Product]): IndexedSeq[Product] = {
