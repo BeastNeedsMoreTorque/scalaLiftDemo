@@ -6,7 +6,6 @@ import java.sql.SQLException
 
 import scala.annotation.tailrec
 import scala.collection._
-import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
 import scala.util.Random
 import scala.xml.Node
@@ -27,7 +26,6 @@ import org.squeryl.annotations._
 
 import code.model.Product._
 import code.Rest.pagerRestClient
-import MainSchema._
 
 class Store  private() extends Persistable[Store] with CreatedUpdated[Store] with Loggable  {
   private implicit val formats = net.liftweb.json.DefaultFormats

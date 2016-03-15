@@ -21,7 +21,6 @@ var storeFinder = (function() {
   var storeDistance;  // could also get storeDuration if we wanted.
 
   var closestName = "Closest store";
-  var closestMarker = null;
   var theSelectedStore = null;
 
   var distanceByGeo = function(latLng1, latLng2) {
@@ -45,7 +44,7 @@ var storeFinder = (function() {
         }
       }
     );
-    if (closest != null) {
+    if (closest !== null && theSelectedStore == null) {
       flipMarker(closest.name);
     }
     return closest;
@@ -63,7 +62,7 @@ var storeFinder = (function() {
 
   var fetchStore = function(userLatLng) {
     theSelectedStore = closestStore(userLatLng);
-    if (theSelectedStore != null) {
+    if (theSelectedStore !== null) {
       var closestLatLng = new google.maps.LatLng(theSelectedStore.latitude, theSelectedStore.longitude)
       evaluateDistance(closestLatLng);
       getDirections(closestLatLng);
