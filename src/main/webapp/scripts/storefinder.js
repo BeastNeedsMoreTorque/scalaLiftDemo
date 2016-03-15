@@ -2,12 +2,13 @@
 
 // Global variable, singleton storeFinder
 // API:
-// <localhost:port>/stores/lat/<lat>/lng/<lng> gives closest store from coordinate(lat,lng).
-// Currently supported Store  (see lcboapi.com): id, name, is_dead, latitude, longitude, distance_in_meters (from specified location), address_line_1, city
+// <localhost:port>/stores gives us all stores with coordinates and we evaluate the closest.
+// Uses Google maps API quite a bit.
 var storeFinder = (function() {
   var defaultOntarioLocation; // Bay & Front LCBO address.
   var distMatrixService;
   var directionsService;
+  var directionsDisplay;
 
   var kmsPerLat = 111;
   var kmsPerLng = 78.4;
@@ -19,7 +20,7 @@ var storeFinder = (function() {
   var userLocation;
   var storeDistance;  // could also get storeDuration if we wanted.
 
-  var directionsDisplay;
+  var closestName = "Closest store";
   var closestMarker = null;
   var theSelectedStore = null;
 
@@ -44,17 +45,26 @@ var storeFinder = (function() {
         }
       }
     );
+    if (closest != null) {
+      flipMarker(closest.name);
+    }
     return closest;
+  }
+
+  var flipMarker = function(name) {
+      markers.forEach(
+        function (marker, index, array) {
+          if (marker.title.localeCompare(name) == 0) {
+            marker.setIcon("http://maps.google.com/mapfiles/ms/icons/blue-dot.png");
+          }
+        }
+      );
   }
 
   var fetchStore = function(userLatLng) {
     theSelectedStore = closestStore(userLatLng);
     if (theSelectedStore != null) {
       var closestLatLng = new google.maps.LatLng(theSelectedStore.latitude, theSelectedStore.longitude)
-      if (closestMarker == null) {
-        closestMarker = new google.maps.Marker({position:closestLatLng,map:map,title:"Closest store",icon:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"});
-      }
-
       evaluateDistance(closestLatLng);
       getDirections(closestLatLng);
 
@@ -136,11 +146,15 @@ var storeFinder = (function() {
         clearMarkers();
       }
     });
+    var rendererOptions = {
+      suppressMarkers: true
+    }
 
-    directionsDisplay = new google.maps.DirectionsRenderer();
+    directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
     directionsDisplay.setMap(map);
     userMarker = new google.maps.Marker({position:userLocation,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
     fetchAllStores();
+    $(mapCanvas).removeAttr( "hidden" );
   };
 
   var showGeoError = function(error) {
@@ -203,7 +217,6 @@ var storeFinder = (function() {
     distMatrixCB: function(response, status) {
       if (status == google.maps.DistanceMatrixStatus.OK) {
         var origins = response.originAddresses;
-        var destinations = response.destinationAddresses;
         if(origins.length > 0) {
           var results = response.rows[0].elements;
           if(results.length > 0 ) {
@@ -221,6 +234,8 @@ var storeFinder = (function() {
       } else  {
         $("#storeNearby").html("Geolocation is not supported by this browser.");
         fetchStore(defaultOntarioLocation);
+        $(mapCanvas).removeAttr( "hidden" )
+
       }
     }
   }
