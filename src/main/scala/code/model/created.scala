@@ -78,15 +78,12 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   def extractLcbo(nodes: Vector[JsonAST.JValue]): IndexedSeq[T] = {
     implicit val formats = net.liftweb.json.DefaultFormats
     val items = ArrayBuffer[T]()
-    for (p <- nodes) {
-      val item = meta.createRecord
-      val key = (p \ "id").extractOpt[Long]
-      key.foreach { x: Long =>
-        item.setLcboId(x) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
-        meta.setFieldsFromJValue(item, p)
-        items += item
-      }
-    }
+    for (p <- nodes;
+         key <- (p \ "id").extractOpt[Long];
+         rec <- meta.fromJValue(p)) {
+          rec.setLcboId(key) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
+          items += rec
+        }
     items.toIndexedSeq
   }
 
