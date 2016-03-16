@@ -10,7 +10,7 @@ var storeFinder = (function() {
   var directionsService;
   var directionsDisplay;
 
-  var kmsPerLat = 111;
+  var kmsPerLat = 111; // good approximation at 45' of latitude, which mostly works in Ontario (undefined if not near Ontario).
   var kmsPerLng = 78.4;
   var mapCanvas = document.getElementById('map-canvas');
   var map;
@@ -23,6 +23,7 @@ var storeFinder = (function() {
   var closestName = "Closest store";
   var theSelectedStore = null;
 
+  // evaluate distance ourselves because of 25 destination distances limit, we have more than 600.
   var distanceByGeo = function(latLng1, latLng2) {
     var x = kmsPerLat * (latLng1.lat()-latLng2.lat());
     var y = kmsPerLng * (latLng1.lng()-latLng2.lng());
