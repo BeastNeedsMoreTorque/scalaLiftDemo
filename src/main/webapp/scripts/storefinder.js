@@ -10,6 +10,8 @@ var storeFinder = (function() {
   var directionsService;
   var directionsDisplay;
 
+  // admittedly a hack but to find closest store amoung more than 600 would require 30 calls to google maps API and I don't really see the need
+  // to have the server side provide that service when we can offload some computation to browser.
   var kmsPerLat = 111; // good approximation at 45' of latitude, which mostly works in Ontario (undefined if not near Ontario).
   var kmsPerLng = 78.4;
   var mapCanvas = document.getElementById('map-canvas');

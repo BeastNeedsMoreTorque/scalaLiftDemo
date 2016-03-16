@@ -98,7 +98,7 @@ class Product private() extends Persistable[Product] with CreatedUpdated[Product
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
-  def createProductElemVals: IndexedSeq[Attribute] =
+  def streamAttributes: IndexedSeq[Attribute] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
     ( Attribute("Name:", name.get) ::
       Attribute("Primary Category:", primary_category.get) ::

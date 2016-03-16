@@ -8,7 +8,7 @@ var prodSelection = (function() {
   };
 
   var formatAsCurrency = function(number) {
-    return "$" + number.toFixed(2); // cheats a lot...
+    return "$" + number.toFixed(2); // cheats a lot on internationalization (but this is Ontario!)...
   };
 
   return {

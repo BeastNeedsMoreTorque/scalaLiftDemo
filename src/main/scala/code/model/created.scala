@@ -43,7 +43,6 @@ Updated[T] with Created[T] {
   self: T =>
 }
 
-
 trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] with Loggable {
   self: T =>
 
@@ -51,7 +50,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   def cache(): concurrent.Map[Long, T]  // primary cache
 
   def meta: MetaRecord[T]
-  def LcboIdsToDBIds(): concurrent.Map[Long, Long]
+  def LcboIdsToDBIds(): concurrent.Map[Long, Long]  // secondary cache
   def pKey: Long
   def lcboId: Long
   def setLcboId(id: Long): Unit
