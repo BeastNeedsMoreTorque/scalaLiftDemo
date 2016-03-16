@@ -106,7 +106,7 @@ object ProductInteraction extends Loggable {
 
           val prod = qOfProd.product
           val quantityAttribute = Attribute("Quantity:", qOfProd.quantity.toString)
-          val allAttributes = prod.createProductElemVals ++ Vector(quantityAttribute)
+          val allAttributes = prod.streamAttributes :+ quantityAttribute
 
           <div>{attributesMarkup(prod, quantityAttribute, allAttributes)}{selectionMarkup(prod)}</div><hr/>
 

@@ -112,6 +112,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 
     // we could get errors going to LCBO, this tryo captures those.
     tryo {
+      if (productsCache.isEmpty) refreshProducts()
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results
       val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
       if (matchingKeys.nonEmpty) {
@@ -251,12 +252,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       // Collects into our list of inventories the attributes we care about (extract[InventoryAsLCBOJson]). Then filter out unwanted data.
 
       // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy, after doing a quick db refresh and cache refresh.
-      inTransaction {
-        storeProducts.refresh
-        productsCache ++= productsByLcboId
-        productsCacheByCategory ++= productsByCategory
-        inventoryByProductId ++= getInventories
-      } // make sure we're synched up with DB for the store.
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfProduct )
 
       val dirtyInventories = fetchItems(Dirty, storeProductsByState,
@@ -284,6 +279,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
           // we refresh just before splitting the inventories into clean, dirty, new classes.
           MainSchema.inventories.update(CompKeyFilterDirtyInventories)
           MainSchema.inventories.insert(CompKeyFilterNewInventories)
+          refreshInventories()
         }
       } catch {
           case se: SQLException =>  // the bad
@@ -359,17 +355,12 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       val fut = Future { loadCache() }
       fut foreach {
         case m =>
-          inTransaction {
-            // we're in async callback, need to acquire a valid session for our refresh and our query to DB on store's inventory.
-            storeProducts.refresh  // key for whole inventory caching to work! We've persisted along the way for each LCBO page
-            productsCache ++= productsByLcboId
-            productsCacheByCategory ++= productsByCategory
-            inventoryByProductId ++= getInventories
-            logger.debug(s"loadCache succeeded for ${lcboId}")
-            if (emptyInventory) {
-              logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
-            }
+          //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
+          logger.debug(s"loadCache succeeded for ${lcboId}")
+          if (emptyInventory) {
+            logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
           }
+
       }
       fut.failed foreach {
         case f =>
@@ -378,6 +369,21 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     }
   }
 
+  def refreshInventories(): Unit = {
+    inTransaction {
+      storeProducts.refresh // key for whole inventory caching to work!
+      inventoryByProductId ++= getInventories
+    }
+  }
+
+  def refreshProducts(): Unit = {
+    inTransaction {
+      storeProducts.refresh // key for whole inventory caching to work!
+      productsCache ++= productsByLcboId
+      productsCacheByCategory ++= productsByCategory
+      inventoryByProductId ++= getInventories
+    }
+  }
 }
 
 object Store extends Store with MetaRecord[Store] with pagerRestClient with Loggable {
@@ -391,7 +397,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
   override def addNewItemsToCaches(items: Iterable[Store]): Unit = {
     super.addNewItemsToCaches(items)
-    inTransaction { items.foreach { s => s.storeProducts.refresh } } // ensure inventories are refreshed INCLUDING on start up.
+    inTransaction { items.foreach { s => s.refreshProducts() } } // ensure inventories are refreshed INCLUDING on start up.
   }
 
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap() // auxilliary independent cache
