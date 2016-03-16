@@ -4,15 +4,17 @@ import java.text.NumberFormat
 
 import scala.collection.concurrent.TrieMap
 import scala.collection._
+import scala.language.implicitConversions
+import scala.xml.Node
 
 import net.liftweb.record.field.{LongField,StringField,BooleanField,IntField}
 import net.liftweb.record.MetaRecord
 import net.liftweb.common._
 import net.liftweb.util.Props
+import net.liftweb.json.Xml
 
 import org.squeryl.annotations._
 
-import MainSchema._
 import code.Rest.pagerRestClient
 
 case class Attribute(key: String, value: String)
@@ -131,6 +133,10 @@ object Product extends Product with MetaRecord[Product] with pagerRestClient wit
 
   def getProductByLcboId(id: Long): Option[Product] = LcboIdsToDBIds.get(id).flatMap(  productsCache.get )
   def lcboidToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
+
+  /* Convert a store to XML @see progscala2 chapter on implicits */
+  implicit def toXml(p: Product): Node =
+    <product>{Xml.toXml(p.asJValue)}</product>
 
   def init(): Unit = {
     logger.info("Product.init start")

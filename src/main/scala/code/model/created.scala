@@ -44,21 +44,17 @@ Updated[T] with Created[T] {
 }
 
 
-trait LcboEntity {
-  def LcboIdsToDBIds(): concurrent.Map[Long, Long]
-  def pKey: Long
-  def lcboId: Long
-  def setLcboId(id: Long): Unit
-}
-
-trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] with LcboEntity with Loggable {
+trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] with Loggable {
   self: T =>
 
   def table(): Table[T]
   def cache(): concurrent.Map[Long, T]  // primary cache
 
   def meta: MetaRecord[T]
-
+  def LcboIdsToDBIds(): concurrent.Map[Long, Long]
+  def pKey: Long
+  def lcboId: Long
+  def setLcboId(id: Long): Unit
   def batchSize: Int = 1024
 
   def init(xactLastStep: => (Iterable[T])=> Unit ): Unit = {
@@ -81,9 +77,9 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
     for (p <- nodes;
          key <- (p \ "id").extractOpt[Long];
          rec <- meta.fromJValue(p)) {
-          rec.setLcboId(key) //hack. Record is forced to use "id" as read-only def... Because of PK considerations at Squeryl.
-          items += rec
-        }
+           rec.setLcboId(key) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl.
+           items += rec
+         }
     items.toIndexedSeq
   }
 
