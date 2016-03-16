@@ -113,33 +113,60 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     // we could get errors going to LCBO, this tryo captures those.
     tryo {
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results
+      logger.info("cache start")
       val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
-      if (matchingKeys.nonEmpty) {
-        // get some random sampling.
-        val permutedKeys = Random.shuffle(matchingKeys)
-        productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
-        val seq = for (id <- permutedKeys;
-                       p <- productsCache.get(id)) yield p
-        // generate double the keys and hope it's enough to find enough products with positive inventory as a result
-        // checking quantity in for comprehension above is cost prohibitive.
-        asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-        seq.take(2 * requestSize).map { p: Product =>
-          (inventoryByProductId.get(p.id).map( _.quantity).fold(0.toLong) {
-            identity}, p)
-        }.filter { _._1 > 0 }.take(requestSize)
-      }
-      else {
-        logger.warn(s"recommend cache miss for $id") // don't try to load it asynchronously as that's start up job to get going with it.
-        val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
-        asyncLoadCache() // if we never loaded the cache, do it (fast lock free test).
-        val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
-        val seq = for (id <- permutedIndices;
-                       lcbo_id = prods(id).lcboId.toInt;
-                       p <- productsCache.get(lcbo_id)) yield (0.toLong, p)
+      val x = {
+        if (matchingKeys.nonEmpty) {
+          logger.info("cache success ${matchingKeys.size}")
 
-        // we may have 0 inventory, browser should try to finish off that work not web server.
-        seq.take(requestSize)
+          // get some random sampling.
+          val permutedKeys = Random.shuffle(matchingKeys)
+          productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
+          val seq = for (id <- permutedKeys;
+                         p <- productsCache.get(id)) yield p
+          // generate double the keys and hope it's enough to find enough products with positive inventory as a result
+          // checking quantity in for comprehension above is cost prohibitive.
+          asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
+          logger.info(s"cache success near end key size ${seq.size}")
+
+          seq.take(2 * requestSize).map { p: Product =>
+            (inventoryByProductId.get(p.id).map(_.quantity).fold(0.toLong) {
+              identity
+            }, p)
+          }.filter {
+            _._1 > 0
+          }.take(requestSize)
+        }
+        else {
+          logger.warn(s"recommend cache miss for $id") // don't try to load it asynchronously as that's start up job to get going with it.
+          if (Store.UseSyncLcbo) {
+            logger.warn(s"recommend $id using sync LCBO !")
+            val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
+            logger.warn(s"recommend $id using sync LCBO !")
+
+            asyncLoadCache() // if we never loaded the cache, do it (fast lock free test).
+            logger.warn(s"recommend $id using sync LCBO after asyncLoadCache!")
+
+            val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
+            logger.warn(s"recommend $id using sync LCBO  after permuted!")
+
+            val seq = for (id <- permutedIndices;
+                          lcbo_id = prods(id).lcboId.toInt;
+                         p <- productsCache.get(lcbo_id)) yield (0.toLong, p)
+            logger.warn(s"recommend $id using sync LCBO after seq size is ${seq.size}!")
+
+            // we may have 0 inventory, browser should try to finish off that work not web server.
+             seq.take(requestSize)
+          }
+          else
+          {
+            asyncLoadCache() // if we never loaded the cache, do it (fast lock free test).
+            Nil
+          }
+        }
       }
+      logger.info(s"recommend near end ${x.size}")
+      x
     }
   }
 
@@ -222,22 +249,15 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     @tailrec
     def collectInventoriesOnAPage(  urlRoot: String,
                                     pageNo: Int): Unit = {
-      def fetchItems(state: EntityRecordState,
-                     mapVector: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]],
-                     f: InventoryAsLCBOJson => Option[Inventory] ): IndexedSeq[Inventory] = {
-        mapVector.getOrElse(state, Vector()).flatMap {  f(_) } // remove the Option in Option[Inventory]
-      }
-      def inventoryForStoreAndLCBOProd(lcboProdID: Int): Option[Inventory] = {
-        for (prodId <- Product.lcboidToDBId(lcboProdID);
-             i <- inventoryByProductId.get(prodId)) yield i
-      }
 
-      def stateOfProduct(item: InventoryAsLCBOJson): EntityRecordState = {
-        val invOption = inventoryForStoreAndLCBOProd(item.product_id)
-        invOption  match {
-          case None  => New
-          case Some(inv) if inv.dirty_?(item) => Dirty
-          case _ => Clean
+      def stateOfInventory(item: InventoryAsLCBOJson): EntityRecordState = {
+        val prodId = Product.lcboidToDBId(item.product_id)
+        val invOption = prodId.flatMap(inventoryByProductId.get(_))
+        (prodId, invOption)  match {
+          case (Some(id), None)  => New
+          case (Some(id), Some(inv)) if inv.dirty_?(item) => Dirty
+          case (Some(id), _) => Clean
+          case _ => Undefined  // on a product we don't yet know, so consider it as undefined so we don't violate FK on products (LCBO makes no guaranty to be consistent here)
         }
       }
 
@@ -251,13 +271,15 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       // Collects into our list of inventories the attributes we care about (extract[InventoryAsLCBOJson]). Then filter out unwanted data.
 
       // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy, after doing a quick db refresh and cache refresh.
-      val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfProduct )
+      val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfInventory )
 
-      val dirtyInventories = fetchItems(Dirty, storeProductsByState,
-                             {inv =>
-                               inventoryForStoreAndLCBOProd(inv.product_id).
-                                 map { _.copyAttributes( inv) }
-                             } )
+      val dirtyInventories =
+        storeProductsByState.getOrElse(Dirty, Nil).
+          flatMap { inv => Product.lcboidToDBId(inv.product_id).
+            flatMap { dbProductId =>
+                  inventoryByProductId.get(dbProductId).map  { _.copyAttributes(inv) } }
+          }.toIndexedSeq
+
       // get the New partition, returning Nil if we don't have any, and open up option for a match on the productID in database from the LCBO ID.
       // finally fetch a Inventory that is created with specified productId, quantity, and storeId.
       val newInventories =
@@ -278,7 +300,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
           // we refresh just before splitting the inventories into clean, dirty, new classes.
           MainSchema.inventories.update(CompKeyFilterDirtyInventories)
           MainSchema.inventories.insert(CompKeyFilterNewInventories)
-          refreshInventories()
+          refreshProducts()
         }
       } catch {
           case se: SQLException =>  // the bad
@@ -368,13 +390,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     }
   }
 
-  def refreshInventories(): Unit = {
-    inTransaction {
-      storeProducts.refresh // key for whole inventory caching to work!
-      inventoryByProductId ++= getInventories
-    }
-  }
-
   def refreshProducts(): Unit = {
     inTransaction {
       storeProducts.refresh // key for whole inventory caching to work!
@@ -388,7 +403,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 object Store extends Store with MetaRecord[Store] with pagerRestClient with Loggable {
   private implicit val formats = net.liftweb.json.DefaultFormats
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
-  private val DBBatchSize = Props.getInt("store.DBBatchSize", 1)
+  private val UseSyncLcbo = Props.getBool("store.useSyncLCBO", false)
 
   private val storesCache: concurrent.Map[Long, Store] = TrieMap[Long, Store]()  // primary cache
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]() //secondary dependent cache

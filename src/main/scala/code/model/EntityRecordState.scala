@@ -10,3 +10,4 @@ sealed trait EntityRecordState
 final case object New extends EntityRecordState
 final case object Dirty extends EntityRecordState
 final case object Clean extends EntityRecordState
+final case object Undefined extends EntityRecordState

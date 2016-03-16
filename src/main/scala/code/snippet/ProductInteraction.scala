@@ -125,9 +125,15 @@ object ProductInteraction extends Loggable {
           // validate expected numeric input storeId then access LCBO data
           val quantityProdSeq = s.recommend(theCategory.is, theRecommendCount.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
-            case Full(pairs) => Full(pairs) // returns prod and quantity in inventory normally
+            case Full(pairs) =>
+              logger.warn(s"maySelect $storeId got pairs of stores of size ${pairs.size}")
+
+              Full(pairs) // returns prod and quantity in inventory normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
-            case Empty => S.error(s"Unable to choose product of category ${theCategory.is}"); Empty
+            case Empty =>
+              logger.warn(s"maySelect $storeId got empty set of stores")
+              S.error(s"Unable to choose product of category ${theCategory.is}")
+              Empty
           }
           quantityProdSeq.dmap { Noop } // we gave notice of error already via JS, nothing else to do
           { pairs => // normal case
