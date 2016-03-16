@@ -31,5 +31,4 @@ product.cacheSize=20000
 store.maxSampleSize=150
 store.lcboMaxPerPage=100
 store.lcboMinPerPage=10
-store.DBBatchSize=256
-store.loadBatchSize=16
+store.useSyncLCBO=true
