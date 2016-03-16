@@ -112,7 +112,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 
     // we could get errors going to LCBO, this tryo captures those.
     tryo {
-      if (productsCache.isEmpty) refreshProducts()
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results
       val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
       if (matchingKeys.nonEmpty) {
@@ -397,7 +396,9 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
 
   override def addNewItemsToCaches(items: Iterable[Store]): Unit = {
     super.addNewItemsToCaches(items)
-    inTransaction { items.foreach { s => s.refreshProducts() } } // ensure inventories are refreshed INCLUDING on start up.
+    // note to C++ developer: doing the refreshProducts using items instead of storesCache would accomplish nothing since those objects are equal but DIFFERENT.
+    // they were copied (the way to do it in immutable functional world, even though in C++ we try our best not to copy such objects)
+    inTransaction { storesCache.foreach { case (id, s)  => s.refreshProducts() } } // ensure inventories are refreshed INCLUDING on start up.
   }
 
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap() // auxilliary independent cache
