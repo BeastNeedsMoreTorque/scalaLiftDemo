@@ -25,10 +25,8 @@ import net.liftweb.util.Props
 import org.squeryl.annotations._
 
 import code.model.Product._
-import code.Rest.pagerRestClient
 
 class Store  private() extends Persistable[Store] with CreatedUpdated[Store] with Loggable  {
-  private implicit val formats = net.liftweb.json.DefaultFormats
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -78,13 +76,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
   def isDirty(s: Store): Boolean = {
     is_dead.get != s.is_dead.get ||
       address_line_1.get != s.address_line_1.get
-  }
-
-  def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
-    //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
-    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
-    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
-    isFinalPage || totalPages < pageNo + 1
   }
 
   /**
@@ -188,26 +179,19 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
                                         pageNo: Int,
                                         filter: Product => Boolean): IndexedSeq[Product] = {
 
-    // specify the URI for the LCBO api url for liquor selection
-    val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
-    val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
-    val jsonRoot = parse(pageContent) // fyi: throws ParseException
-    val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
-    // collect our list of products in items and filter out unwanted products
-    val items = Product.extractLcbo(itemNodes).filter(filter) // hard code filter for now.
-    val outstandingSize = requiredSize - items.size
-
+    val (rawItems, finalPage, uri) = Product.extractLcbo(urlRoot, Store.MaxPerPage, pageNo)
+    val items = rawItems.filter(filter)
     val revisedAccumItems =  accumItems ++ Product.reconcile(cacheOnly, items)  // global db+cache update.
     productsCache ++= revisedAccumItems.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
     productsCacheByCategory ++= revisedAccumItems.groupBy(_.primaryCategory)
 
-    if ( (outstandingSize <= 0  && !cacheOnly ) || isFinalPage(jsonRoot, pageNo)) {
+    val outstandingSize = requiredSize - items.size
+    if ( (outstandingSize <= 0  && !cacheOnly ) || finalPage) {
       // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (totalPages).
       // Similarly having reached our required size,we can stop.
       logger.info(uri) // log only last one to be less verbose
       return revisedAccumItems
     }
-
     collectItemsOnAPage(
       revisedAccumItems, // union of this page with next page when we are asked for a full sample
       urlRoot,
@@ -215,7 +199,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       cacheOnly,
       pageNo + 1,
       filter)
-
   }
 
   @throws(classOf[SocketTimeoutException])
@@ -231,7 +214,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     @tailrec
     def collectInventoriesOnAPage(  urlRoot: String,
                                     pageNo: Int): Unit = {
-
       def stateOfInventory(item: InventoryAsLCBOJson): EntityRecordState = {
         val prodId = Product.lcboidToDBId(item.product_id)
         val invOption = prodId.flatMap(inventoryByProductId.get(_))
@@ -244,7 +226,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       }
 
       // specify the URI for the LCBO api url for liquor selection
-      val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
+      val uri = urlRoot + additionalParam("per_page", Store.MaxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
       val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
       val jsonRoot = parse(pageContent) // fyi: throws ParseException
       val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
@@ -272,7 +254,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 
       // God forbid, we might supply ourselves data that violates composite key. Weed it out!
       def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]): Iterable[Inventory] = {
-        invs.groupBy(x => (x.productid, x.storeid)).map{case (k,v) => v.last}
+        invs.groupBy(x => (x.productid, x.storeid)).map{ case (k,v) => v.last }
       }
       val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
       val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories)
@@ -386,8 +368,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
   }
 }
 
-object Store extends Store with MetaRecord[Store] with pagerRestClient with Loggable {
-  private implicit val formats = net.liftweb.json.DefaultFormats
+object Store extends Store with MetaRecord[Store] with Loggable {
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
 
   private val storesCache: concurrent.Map[Long, Store] = TrieMap[Long, Store]()  // primary cache
@@ -410,14 +391,13 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
   def getStore(s: Long): Option[Store] = storesCache.get(s)
   def getStoreByLcboId(id: Long): Option[Store] = lcboidToDBId(id).flatMap( storesCache.get )
 
-  override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
-  override def MinPerPage = Props.getInt("store.lcboMinPerPage", 0)
+  def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
 
     /* Convert a store to XML */
   implicit def toXml(st: Store): Node =
     <store>{Xml.toXml(st.asJValue)}</store>
 
-  @volatile
+  @volatile // for perf measurement (from creator of TrieMap in Scala)
   var dummy: Any = _
   def timed[T](body: =>T): Double = {
     val start = System.nanoTime
@@ -434,12 +414,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
       @tailrec
       def collectStoresOnAPage(urlRoot: String,
                                pageNo: Int): Unit = {
-        val uri = urlRoot + additionalParam("per_page", MaxPerPage) + additionalParam("page", pageNo)
-        val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut)
-        val jsonRoot = parse(pageContent)
-        val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
-
-        val items = extractLcbo(itemNodes)
+        val (items, finalPage, uri) = extractLcbo(urlRoot, MaxPerPage, pageNo)
         // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
         val storesByState: Map[EntityRecordState, IndexedSeq[Store]] = items.groupBy {
           s =>  ( getStoreByLcboId(s.lcboId), s) match {
@@ -454,7 +429,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val newStores = storesByState.getOrElse(New, IndexedSeq[Store]()).toIndexedSeq
         updateAndInsert(dirtyStores, newStores)
 
-        if (isFinalPage(jsonRoot, pageNo)) {
+        if (finalPage) {
           logger.info(uri)
           return
         } // log only last one to be less verbose
