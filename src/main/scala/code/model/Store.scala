@@ -139,8 +139,8 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val cachedRes = getRequestFromCache(matchingKeys, lcboProdCategory)
-      if (cachedRes.nonEmpty) cachedRes
+      val cached = getRequestFromCache(matchingKeys, lcboProdCategory)
+      if (cached.nonEmpty) cached
       else getSerialResult
     }
   }
@@ -179,23 +179,26 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
                                         pageNo: Int,
                                         filter: Product => Boolean): IndexedSeq[Product] = {
 
-    val (rawItems, finalPage, uri) = Product.extractLcbo(urlRoot, Store.MaxPerPage, pageNo)
+    def finalPageWithSize(jsonRoot: JValue, pageNo: Int, visitedCount: Int): Boolean = {
+      // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (totalPages).
+      // Similarly having reached our required size,we can stop.
+      super.isFinalPage(jsonRoot, pageNo, visitedCount) || (!cacheOnly && requiredSize <= visitedCount + accumItems.size )
+    }
+
+    val (rawItems, finalPage, uri) = Product.extractLcbo(urlRoot, pageNo=pageNo, Store.MaxPerPage, finalPageWithSize)
     val items = rawItems.filter(filter)
-    val revisedAccumItems =  accumItems ++ Product.reconcile(cacheOnly, items)  // global db+cache update.
+    val revisedAccumItems =  accumItems ++ Product.reconcile(cacheOnly, items)  // global product db and cache update.
     productsCache ++= revisedAccumItems.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
     productsCacheByCategory ++= revisedAccumItems.groupBy(_.primaryCategory)
 
-    val outstandingSize = requiredSize - items.size
-    if ( (outstandingSize <= 0  && !cacheOnly ) || finalPage) {
-      // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (totalPages).
-      // Similarly having reached our required size,we can stop.
+    if (finalPage) {
       logger.info(uri) // log only last one to be less verbose
       return revisedAccumItems
     }
     collectItemsOnAPage(
       revisedAccumItems, // union of this page with next page when we are asked for a full sample
       urlRoot,
-      outstandingSize,
+      requiredSize,
       cacheOnly,
       pageNo + 1,
       filter)
@@ -277,7 +280,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
             logger.error("General exception caught: " + e)
         }
 
-      if (isFinalPage(jsonRoot, pageNo)) {
+      if (isFinalPage(jsonRoot, pageNo=pageNo)) {
         logger.info(uri)
         return
       } // log only last one to be less verbose
@@ -342,7 +345,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
           if (emptyInventory) {
             logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
           }
-
       }
       fut.failed foreach {
         case f =>
@@ -351,21 +353,20 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     }
   }
 
-  def refreshInventories(): Unit = {
+  def refreshInventories(): Unit =
     inTransaction {
       storeProducts.refresh // key for whole inventory caching to work!
       inventoryByProductId ++= getInventories
     }
-  }
 
-  def refreshProducts(): Unit = {
+  def refreshProducts(): Unit =
     inTransaction {
       storeProducts.refresh // key for whole inventory caching to work!
       productsCache ++= productsByLcboId
       productsCacheByCategory ++= productsByCategory
       inventoryByProductId ++= getInventories
     }
-  }
+
 }
 
 object Store extends Store with MetaRecord[Store] with Loggable {
@@ -377,12 +378,10 @@ object Store extends Store with MetaRecord[Store] with Loggable {
 
   override def addNewItemsToCaches(items: Iterable[Store]): Unit = {
     super.addNewItemsToCaches(items)
-    // note to C++ developer: doing the refreshProducts using items instead of storesCache would accomplish nothing since those objects are equal but DIFFERENT.
-    // they were copied (the way to do it in immutable functional world, even though in C++ we try our best not to copy such objects)
     inTransaction { storesCache.foreach { case (id, s)  => s.refreshProducts() } } // ensure inventories are refreshed INCLUDING on start up.
   }
 
-  private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap() // auxilliary independent cache
+  private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
   def availableStores: Set[Long] = storesCache.toMap.keySet
@@ -397,15 +396,6 @@ object Store extends Store with MetaRecord[Store] with Loggable {
   implicit def toXml(st: Store): Node =
     <store>{Xml.toXml(st.asJValue)}</store>
 
-  @volatile // for perf measurement (from creator of TrieMap in Scala)
-  var dummy: Any = _
-  def timed[T](body: =>T): Double = {
-    val start = System.nanoTime
-    dummy = body
-    val end = System.nanoTime
-    ((end - start) / 1000) / 1000.0
-  }
-
   private def notDiscontinued(p: Product): Boolean = !p.isDiscontinued
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
@@ -414,7 +404,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
       @tailrec
       def collectStoresOnAPage(urlRoot: String,
                                pageNo: Int): Unit = {
-        val (items, finalPage, uri) = extractLcbo(urlRoot, MaxPerPage, pageNo)
+        val (items, finalPage, uri) = extractLcbo(urlRoot, pageNo=pageNo, MaxPerPage)
         // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
         val storesByState: Map[EntityRecordState, IndexedSeq[Store]] = items.groupBy {
           s =>  ( getStoreByLcboId(s.lcboId), s) match {

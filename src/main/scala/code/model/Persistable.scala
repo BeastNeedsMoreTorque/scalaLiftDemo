@@ -63,14 +63,15 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
     LcboIdsToDBIds ++= cache().map { case(k, v) => v.lcboId -> k }
   }
 
-  def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
+  def isFinalPage(jsonRoot: JValue, pageNo: Int, visitedCount: Int = 0): Boolean = {
     //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
     val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
     isFinalPage || totalPages < pageNo + 1
   }
 
-  def extractLcbo(urlRoot: String, maxPerPage: Int, pageNo: Int ): (IndexedSeq[T], Boolean, String) = {
+  def extractLcbo(urlRoot: String, pageNo: Int, maxPerPage: Int = 0,
+                  finalPage: (JValue, Int, Int ) => Boolean = isFinalPage ): (IndexedSeq[T], Boolean, String) = {
     // specify the URI for the LCBO api url for liquor selection
     val uri = urlRoot + additionalParam("per_page", maxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
     val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
@@ -85,7 +86,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
       rec.setLcboId(key) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl.
       items += rec
     }
-    (items.toIndexedSeq, isFinalPage(jsonRoot, pageNo), uri)
+    (items.toIndexedSeq, finalPage(jsonRoot, pageNo, items.size), uri)
   }
 
   // Always call update before insert just to be consistent and safe. Enforce it.
