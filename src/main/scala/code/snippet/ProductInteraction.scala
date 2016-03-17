@@ -125,13 +125,14 @@ object ProductInteraction extends Loggable {
           // validate expected numeric input storeId then access LCBO data
           val quantityProdSeq = s.recommend(theCategory.is, theRecommendCount.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
-            case Full(pairs) =>
-              logger.warn(s"maySelect $storeId got pairs of stores of size ${pairs.size}")
-
+            case Full(pairs) if pairs.size > 0 =>
+              Full(pairs) // returns prod and quantity in inventory normally
+            case Full(pairs) if pairs.size == 0 =>
+              S.error(s"Unable to choose find a product of category ${theCategory.is} that is not out of stock! Looking into it, please try again a little later")
+              // we're reloading into cache to make up for that issue!
               Full(pairs) // returns prod and quantity in inventory normally
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
             case Empty =>
-              logger.warn(s"maySelect $storeId got empty set of stores")
               S.error(s"Unable to choose product of category ${theCategory.is}")
               Empty
           }
@@ -143,7 +144,7 @@ object ProductInteraction extends Loggable {
         }
 
       val json = jsStore.extractOpt[String].map( parse)
-      val storeId = json.fold(-1){ json =>  json.extract[Int]}
+      val storeId = json.fold(-1){ json => json.extract[Int]}
       User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
       { user => maySelect(storeId)} // normal processing
     }
