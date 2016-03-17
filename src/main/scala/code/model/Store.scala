@@ -102,8 +102,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       collectItemsOnAPage(
         IndexedSeq[Product](),
         url,
-        Store.MaxSampleSize,
-        cacheOnly = false,
+        Some(Store.MaxSampleSize),
         pageNo = 1,
         Store.notDiscontinued)
     }
@@ -174,24 +173,18 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
   @tailrec
   private final def collectItemsOnAPage(accumItems: IndexedSeq[Product],
                                         urlRoot: String,
-                                        requiredSize: Int,
-                                        cacheOnly: Boolean,
+                                        requiredSize: Option[Int],
                                         pageNo: Int,
                                         filter: Product => Boolean): IndexedSeq[Product] = {
 
-    def finalPageWithSize(jsonRoot: JValue, pageNo: Int, visitedCount: Int): Boolean = {
-      // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (totalPages).
-      // Similarly having reached our required size,we can stop.
-      super.isFinalPage(jsonRoot, pageNo, visitedCount) || (!cacheOnly && requiredSize <= visitedCount + accumItems.size )
-    }
-
-    val (rawItems, finalPage, uri) = Product.extractLcbo(urlRoot, pageNo=pageNo, Store.MaxPerPage, finalPageWithSize)
+    val (rawItems, jsonRoot, uri) = Product.extractLcbo(urlRoot, pageNo=pageNo, Product.MaxPerPage)
     val items = rawItems.filter(filter)
-    val revisedAccumItems =  accumItems ++ Product.reconcile(cacheOnly, items)  // global product db and cache update.
+    val revisedAccumItems =  accumItems ++ Product.reconcile(requiredSize.isEmpty, items)  // global product db and cache update.
     productsCache ++= revisedAccumItems.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
     productsCacheByCategory ++= revisedAccumItems.groupBy(_.primaryCategory)
 
-    if (finalPage) {
+    if (Store.isFinalPage(jsonRoot, pageNo=pageNo) ||
+      requiredSize.forall{x => x <= items.size + accumItems.size }) {
       logger.info(uri) // log only last one to be less verbose
       return revisedAccumItems
     }
@@ -199,7 +192,6 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       revisedAccumItems, // union of this page with next page when we are asked for a full sample
       urlRoot,
       requiredSize,
-      cacheOnly,
       pageNo + 1,
       filter)
   }
@@ -280,7 +272,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
             logger.error("General exception caught: " + e)
         }
 
-      if (isFinalPage(jsonRoot, pageNo=pageNo)) {
+      if (Store.isFinalPage(jsonRoot, pageNo=pageNo)) {
         logger.info(uri)
         return
       } // log only last one to be less verbose
@@ -296,8 +288,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
         collectItemsOnAPage(
           accumItems=IndexedSeq[Product](),
           s"$LcboDomainURL/products?store_id=$lcboId",
-          requiredSize=0,  // ignored if cacheOnly is true, meaning get them all to cache them all
-          cacheOnly = true,
+          requiredSize=None,  // ignored if not set meaning take them all
           pageNo = 1,
           filter=Store.notDiscontinued) // We make a somewhat arbitrary assumption that discontinued products are of zero interest.
       }
@@ -397,6 +388,13 @@ object Store extends Store with MetaRecord[Store] with Loggable {
     <store>{Xml.toXml(st.asJValue)}</store>
 
   private def notDiscontinued(p: Product): Boolean = !p.isDiscontinued
+  def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
+    //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
+    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
+    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
+    isFinalPage || totalPages < pageNo + 1
+  }
+
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
     def collectAllStoresIntoCache(): Box[Unit] = {
@@ -404,7 +402,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
       @tailrec
       def collectStoresOnAPage(urlRoot: String,
                                pageNo: Int): Unit = {
-        val (items, finalPage, uri) = extractLcbo(urlRoot, pageNo=pageNo, MaxPerPage)
+        val (items, jsonRoot, uri) = extractLcbo(urlRoot, pageNo=pageNo, MaxPerPage)
         // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
         val storesByState: Map[EntityRecordState, IndexedSeq[Store]] = items.groupBy {
           s =>  ( getStoreByLcboId(s.lcboId), s) match {
@@ -419,7 +417,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
         val newStores = storesByState.getOrElse(New, IndexedSeq[Store]()).toIndexedSeq
         updateAndInsert(dirtyStores, newStores)
 
-        if (finalPage) {
+        if (Store.isFinalPage(jsonRoot, pageNo=pageNo)) {
           logger.info(uri)
           return
         } // log only last one to be less verbose

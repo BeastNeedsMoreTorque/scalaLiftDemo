@@ -129,6 +129,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
 
   def getProductByLcboId(id: Long): Option[Product] = LcboIdsToDBIds.get(id).flatMap(  productsCache.get )
   def lcboidToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
+  def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
 
   /* Convert a store to XML @see progscala2 chapter on implicits */
   implicit def toXml(p: Product): Node =
