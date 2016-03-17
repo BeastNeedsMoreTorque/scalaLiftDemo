@@ -80,6 +80,13 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       address_line_1.get != s.address_line_1.get
   }
 
+  def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
+    //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
+    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
+    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
+    isFinalPage || totalPages < pageNo + 1
+  }
+
   /**
     * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
     * Select a random product that matches the parameters subject to a max sample size.
@@ -190,27 +197,25 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     val items = Product.extractLcbo(itemNodes).filter(filter) // hard code filter for now.
     val outstandingSize = requiredSize - items.size
 
-    //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
-    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
-    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
     val revisedAccumItems =  accumItems ++ Product.reconcile(cacheOnly, items)  // global db+cache update.
     productsCache ++= revisedAccumItems.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
     productsCacheByCategory ++= revisedAccumItems.groupBy(_.primaryCategory)
 
-    if ( (outstandingSize <= 0  && !cacheOnly )|| isFinalPage || totalPages < pageNo + 1) {
-      logger.info(uri) // log only the last one, less chatty
-      return revisedAccumItems
+    if ( (outstandingSize <= 0  && !cacheOnly ) || isFinalPage(jsonRoot, pageNo)) {
+      // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (totalPages).
+      // Similarly having reached our required size,we can stop.
+      logger.info(uri) // log only last one to be less verbose
+      revisedAccumItems
     }
-    // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (totalPages).
-    // Similarly having reached our required size,we can stop.
-
-    collectItemsOnAPage(
-      revisedAccumItems, // union of this page with next page when we are asked for a full sample
-      urlRoot,
-      outstandingSize,
-      cacheOnly,
-      pageNo + 1,
-      filter)
+    else {
+      collectItemsOnAPage(
+        revisedAccumItems, // union of this page with next page when we are asked for a full sample
+        urlRoot,
+        outstandingSize,
+        cacheOnly,
+        pageNo + 1,
+        filter)
+    }
   }
 
   @throws(classOf[SocketTimeoutException])
@@ -290,14 +295,8 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
             logger.error("General exception caught: " + e)
         }
 
-      //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
-      val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
-      val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
-      if (isFinalPage || totalPages < pageNo +1) {
-        logger.info(uri) // log only last one to be less verbose
-        return
-      }
-      collectInventoriesOnAPage( urlRoot, pageNo + 1) // recurse to cache all we can
+      if (isFinalPage(jsonRoot, pageNo)) logger.info(uri) // log only last one to be less verbose
+      else collectInventoriesOnAPage( urlRoot, pageNo + 1) // recurse to cache all we can
     }
     collectInventoriesOnAPage(s"$LcboDomainURL/inventories?store_id=${lcboId}", 1)
   }
@@ -452,11 +451,7 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val newStores = storesByState.getOrElse(New, IndexedSeq[Store]()).toIndexedSeq
         updateAndInsert(dirtyStores, newStores)
 
-        val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
-        if (items.isEmpty || isFinalPage) {
-          logger.info(uri) // log only last one to be less verbose
-          return // no need to look at more pages
-        }
+        if (isFinalPage(jsonRoot, pageNo)) logger.info(uri) // log only last one to be less verbose
         collectStoresOnAPage(urlRoot, pageNo + 1) // fetch on next page
       }
 
