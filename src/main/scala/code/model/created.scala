@@ -3,11 +3,15 @@ package code.model
 import java.util.Calendar
 import java.sql.SQLException
 
+import code.Rest.RestClient
+import net.liftweb.json._
+import net.liftweb.util.Props
+
 import scala.collection.{IndexedSeq, concurrent}
 import scala.collection.mutable.ArrayBuffer
 
-import net.liftweb.common.{Loggable}
-import net.liftweb.json.JsonAST
+import net.liftweb.common.Loggable
+import net.liftweb.json.JsonParser.parse
 import net.liftweb.record.field.DateTimeField
 import net.liftweb.record.{Record,MetaRecord}
 import net.liftweb.squerylrecord.KeyedRecord
@@ -43,7 +47,7 @@ Updated[T] with Created[T] {
   self: T =>
 }
 
-trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] with Loggable {
+trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] with RestClient with Loggable {
   self: T =>
 
   def table(): Table[T]
@@ -55,6 +59,22 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   def lcboId: Long
   def setLcboId(id: Long): Unit
   def batchSize: Int = 1024
+
+  // Following values must be read as config externally. We don't mean to rely on defaults below, rather properties should be set sensibly.
+  def HttpClientConnTimeOut = Props.getInt("http.ClientConnTimeOut", 5000)
+  def HttpClientReadTimeOut = Props.getInt("http.ClientReadTimeOut", HttpClientConnTimeOut)
+  def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
+
+  /**
+    * streams as String a parameter tag value pair prefixed with & as building block for a URL query String.
+    * Assumes not first one (uses &). Improve! First approximation towards a better solution.
+    * @param name name of optional parameter
+    * @param value value of optional parameter
+    * @return     &<name>=<value>         Assumes value is meaningful with printable data, but does not validate it.
+    */
+  def additionalParam[A](name: String, value: A): String = s"&$name=$value"
+
+  implicit val formats = net.liftweb.json.DefaultFormats
 
   def init(xactLastStep: => (Iterable[T])=> Unit ): Unit = {
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
@@ -70,8 +90,21 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
     LcboIdsToDBIds ++= cache().map { case(k, v) => v.lcboId -> k }
   }
 
-  def extractLcbo(nodes: Vector[JsonAST.JValue]): IndexedSeq[T] = {
-    implicit val formats = net.liftweb.json.DefaultFormats
+  def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
+    //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
+    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
+    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
+    isFinalPage || totalPages < pageNo + 1
+  }
+
+  def extractLcbo(urlRoot: String, maxPerPage: Int, pageNo: Int ): (IndexedSeq[T], Boolean, String) = {
+    // specify the URI for the LCBO api url for liquor selection
+    val uri = urlRoot + additionalParam("per_page", maxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
+    val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
+    val jsonRoot = parse(pageContent) // fyi: throws ParseException
+    val nodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
+    // collect our list of products in items and filter out unwanted products
+
     val items = ArrayBuffer[T]()
     for (p <- nodes;
          key <- (p \ "id").extractOpt[Long];
@@ -79,7 +112,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
            rec.setLcboId(key) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl.
            items += rec
          }
-    items.toIndexedSeq
+    (items.toIndexedSeq, isFinalPage(jsonRoot, pageNo), uri)
   }
 
   // Always call update before insert just to be consistent and safe. Enforce it.

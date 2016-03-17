@@ -15,8 +15,6 @@ import net.liftweb.json.Xml
 
 import org.squeryl.annotations._
 
-import code.Rest.pagerRestClient
-
 case class Attribute(key: String, value: String)
 
 /**
@@ -122,10 +120,8 @@ class Product private() extends Persistable[Product] with CreatedUpdated[Product
 /**
   * object Product: supports reconcile that does insert or update on items needing updating, and refresh caches
   */
-object Product extends Product with MetaRecord[Product] with pagerRestClient with Loggable {
+object Product extends Product with MetaRecord[Product] with Loggable {
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
-  private implicit val formats = net.liftweb.json.DefaultFormats
-
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
