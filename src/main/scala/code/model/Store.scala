@@ -205,17 +205,17 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       // Deem as last page only if  LCBO tells us it's final page or we evaluate next page won't have any (totalPages).
       // Similarly having reached our required size,we can stop.
       logger.info(uri) // log only last one to be less verbose
-      revisedAccumItems
+      return revisedAccumItems
     }
-    else {
-      collectItemsOnAPage(
-        revisedAccumItems, // union of this page with next page when we are asked for a full sample
-        urlRoot,
-        outstandingSize,
-        cacheOnly,
-        pageNo + 1,
-        filter)
-    }
+
+    collectItemsOnAPage(
+      revisedAccumItems, // union of this page with next page when we are asked for a full sample
+      urlRoot,
+      outstandingSize,
+      cacheOnly,
+      pageNo + 1,
+      filter)
+
   }
 
   @throws(classOf[SocketTimeoutException])
@@ -295,8 +295,11 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
             logger.error("General exception caught: " + e)
         }
 
-      if (isFinalPage(jsonRoot, pageNo)) logger.info(uri) // log only last one to be less verbose
-      else collectInventoriesOnAPage( urlRoot, pageNo + 1) // recurse to cache all we can
+      if (isFinalPage(jsonRoot, pageNo)) {
+        logger.info(uri)
+        return
+      } // log only last one to be less verbose
+      collectInventoriesOnAPage( urlRoot, pageNo + 1) // recurse to cache all we can
     }
     collectInventoriesOnAPage(s"$LcboDomainURL/inventories?store_id=${lcboId}", 1)
   }
@@ -451,7 +454,10 @@ object Store extends Store with MetaRecord[Store] with pagerRestClient with Logg
         val newStores = storesByState.getOrElse(New, IndexedSeq[Store]()).toIndexedSeq
         updateAndInsert(dirtyStores, newStores)
 
-        if (isFinalPage(jsonRoot, pageNo)) logger.info(uri) // log only last one to be less verbose
+        if (isFinalPage(jsonRoot, pageNo)) {
+          logger.info(uri)
+          return
+        } // log only last one to be less verbose
         collectStoresOnAPage(urlRoot, pageNo + 1) // fetch on next page
       }
 
