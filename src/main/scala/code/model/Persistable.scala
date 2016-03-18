@@ -16,6 +16,7 @@ import org.squeryl.{Query, Table}
 
 import code.Rest.RestClient
 
+
 /**
   * Created by philippederome on 2016-03-17.
   */
@@ -30,12 +31,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   def pKey: Long
   def lcboId: Long
   def setLcboId(id: Long): Unit
-  def batchSize: Int = 1024
-
-  // Following values must be read as config externally. We don't mean to rely on defaults below, rather properties should be set sensibly.
-  def HttpClientConnTimeOut = Props.getInt("http.ClientConnTimeOut", 5000)
-  def HttpClientReadTimeOut = Props.getInt("http.ClientReadTimeOut", HttpClientConnTimeOut)
-  def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
+  def batchSize: Int = Props.getInt("DBWrite.BatchSize", 1024)
 
   /**
     * streams as String a parameter tag value pair prefixed with & as building block for a URL query String.
@@ -53,20 +49,20 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     inTransaction {
       val items = from(table())(s => select(s))
-      addNewItemsToCaches(items)
+      cacheNewItems(items)
       xactLastStep(items)
     }
   }
 
-  def addNewItemsToCaches(items: Iterable[T]): Unit = {
+  def cacheNewItems(items: Iterable[T]): Unit = {
     cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)
-    LcboIdsToDBIds ++= cache().map { case(k, v) => v.lcboId -> k }
+    LcboIdsToDBIds() ++= cache().map { case(k, v) => v.lcboId -> k }
   }
 
-  def extractLcbo(urlRoot: String, pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
+  def extractLcboItems(urlRoot: String, pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
     // specify the URI for the LCBO api url for liquor selection
     val uri = urlRoot + additionalParam("per_page", maxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
-    val pageContent = get(uri, HttpClientConnTimeOut, HttpClientReadTimeOut) // fyi: throws IOException or SocketTimeoutException
+    val pageContent = get(uri) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val nodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
     // collect our list of products in items and filter out unwanted products
@@ -142,7 +138,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
             logger.error("General exception caught: " + e)
         }
       }
-      if (filteredProdsWithPKs ne null) addNewItemsToCaches(filteredProdsWithPKs)
+      if (filteredProdsWithPKs ne null) cacheNewItems(filteredProdsWithPKs)
     }
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
     val LcboIDs = cache().map{ case (id, p) => p.lcboId}.toSet // evaluate once
