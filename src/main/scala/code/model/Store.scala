@@ -6,6 +6,7 @@ import java.sql.SQLException
 
 import scala.annotation.tailrec
 import scala.collection._
+import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
 import scala.util.Random
 import scala.xml.Node
@@ -227,25 +228,31 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
       val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfInventory )
 
-      val dirtyInventories =
-        storeProductsByState.getOrElse(Dirty, Nil).
-          flatMap { inv => Product.lcboidToDBId(inv.product_id).
-            flatMap { dbProductId =>
-                  inventoryByProductId.get(dbProductId).map  { _.copyAttributes(inv) } }
-          }.toIndexedSeq
+      val dirtyInventories = ArrayBuffer[Inventory]()
+      for (jsInvs <- storeProductsByState.get(Dirty);
+           jsInv <- jsInvs;
+           dbId <- Product.lcboidToDBId(jsInv.product_id);
+           dbInv <- inventoryByProductId.get(dbId))
+      {
+        val updInv = dbInv.copyAttributes(jsInv)
+        dirtyInventories += updInv
+      }
 
-      val newInventories =
-        storeProductsByState.getOrElse(New, Nil).
-        flatMap { inv => Product.lcboidToDBId(inv.product_id).
-          map { dbProductId =>
-                new Inventory(idField.get, dbProductId, inv.quantity, inv.updated_on, inv.is_dead ) } } (collection.breakOut)
+      val newInventories = ArrayBuffer[Inventory]()
+      for (jsInvs <- storeProductsByState.get(New);
+           jsInv <- jsInvs;
+           dbId <- Product.lcboidToDBId(jsInv.product_id))
+      {
+        val newInv = new Inventory(idField.get, dbId, jsInv.quantity, jsInv.updated_on, jsInv.is_dead )
+        newInventories += newInv
+      }
 
       // God forbid, we might supply ourselves data that violates composite key. Weed it out!
       def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]): Iterable[Inventory] = {
         invs.groupBy(x => (x.productid, x.storeid)).map{ case (k,v) => v.last }
       }
       val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
-      val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories)
+      val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories.toIndexedSeq)
 
       try {  // getNextException in catch is what is useful to log (along with the data that led to the exception)
         inTransaction {
