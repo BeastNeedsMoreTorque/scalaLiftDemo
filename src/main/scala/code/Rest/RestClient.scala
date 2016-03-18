@@ -2,11 +2,16 @@ package code.Rest
 
 import java.net.{HttpURLConnection, URL}
 
+import net.liftweb.util.Props
+
 /**
   * Created by philippederome on 2015-12-19.
   */
 trait RestClient {
 
+  // Following values must be read as config externally. We don't mean to rely on defaults below, rather properties should be set sensibly.
+  def HttpClientConnTimeOut = Props.getInt("http.ClientConnTimeOut", 5000)
+  def HttpClientReadTimeOut = Props.getInt("http.ClientReadTimeOut", HttpClientConnTimeOut)
   /**
     * @author Alvin Alexander
     *         Returns the text (content) from a REST URL as a String.
@@ -39,8 +44,8 @@ trait RestClient {
   @throws(classOf[java.net.SocketTimeoutException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   def get(url: String,
-          connectTimeout: Int = 5000,
-          readTimeout: Int = 5000,
+          connectTimeout: Int = HttpClientConnTimeOut,
+          readTimeout: Int = HttpClientReadTimeOut,
           requestMethod: String = "GET"): String = {
     val connection = new URL(url).openConnection.asInstanceOf[HttpURLConnection]
     connection.setConnectTimeout(connectTimeout)
@@ -48,7 +53,7 @@ trait RestClient {
     connection.setRequestMethod(requestMethod)
     val inputStream = connection.getInputStream
     val content: String = io.Source.fromInputStream(inputStream).mkString
-    if (inputStream != null) inputStream.close()
+    if (inputStream ne null) inputStream.close()
     content
   }
 }
