@@ -51,7 +51,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   def buildUrl(urlRoot: String, params: Seq[(String, Any)] ): String = {
     val encoding = "UTF-8"
     urlRoot + (params.map(v => URLEncoder.encode(v._1, encoding) + "=" + URLEncoder.encode(v._2.toString, encoding)).mkString("&")
-                           match {case s if s.length == 0 => ""; case s => "?" + s})
+                           match {case s if s.length == 0 => ""; case s => "?" + s})  // if there are parameters, prepend with ?
   }
 
   def extractLcboItems(urlRoot: String, params: Seq[(String, Any)], pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
