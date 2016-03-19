@@ -1,10 +1,10 @@
 package code.model
 
+import java.net.URLEncoder
 import java.sql.SQLException
 
 import scala.collection.{IndexedSeq, concurrent}
 import scala.collection.mutable.ArrayBuffer
-
 import net.liftweb.util.Props
 import net.liftweb.common.Loggable
 import net.liftweb.json.JValue
@@ -13,7 +13,6 @@ import net.liftweb.record.{MetaRecord, Record}
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
 import org.squeryl.{Query, Table}
-
 import code.Rest.RestClient
 
 
@@ -33,16 +32,6 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
   def setLcboId(id: Long): Unit
   def batchSize: Int = Props.getInt("DBWrite.BatchSize", 1024)
 
-  /**
-    * streams as String a parameter tag value pair prefixed with & as building block for a URL query String.
-    * Assumes not first one (uses &). Improve! First approximation towards a better solution.
-    *
-    * @param name name of optional parameter
-    * @param value value of optional parameter
-    * @return     &<name>=<value>         Assumes value is meaningful with printable data, but does not validate it.
-    */
-  def additionalParam[A](name: String, value: A): String = s"&$name=$value"
-
   implicit val formats = net.liftweb.json.DefaultFormats
 
   def init(xactLastStep: => (Iterable[T])=> Unit ): Unit = {
@@ -59,9 +48,16 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
     LcboIdsToDBIds() ++= cache().map { case(k, v) => v.lcboId -> k }
   }
 
-  def extractLcboItems(urlRoot: String, pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
+  def buildUrl(urlRoot: String, params: Seq[(String, Any)] ): String = {
+    val encoding = "UTF-8"
+    urlRoot + (params.map(v => URLEncoder.encode(v._1, encoding) + "=" + URLEncoder.encode(v._2.toString, encoding)).mkString("&")
+                           match {case s if s.length == 0 => ""; case s => "?" + s})
+  }
+
+  def extractLcboItems(urlRoot: String, params: Seq[(String, Any)], pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
     // specify the URI for the LCBO api url for liquor selection
-    val uri = urlRoot + additionalParam("per_page", maxPerPage) + additionalParam("page", pageNo) // get as many as possible on a page because we could have few matches.
+    val fullParams = params ++ Seq(("per_page", maxPerPage), ("page", pageNo)) // get as many as possible on a page because we could have few matches.
+    val uri = buildUrl(urlRoot, fullParams)
     val pageContent = get(uri) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val nodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.

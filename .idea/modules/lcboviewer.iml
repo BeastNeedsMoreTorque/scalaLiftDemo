@@ -90,5 +90,6 @@
     <orderEntry type="library" name="SBT: cglib:cglib-nodep:2.2:jar" level="project" />
     <orderEntry type="library" name="SBT: net.liftweb:lift-squeryl-record_2.11:2.6.2:jar" level="project" />
     <orderEntry type="library" name="SBT: org.squeryl:squeryl_2.11:0.9.5-7:jar" level="project" />
+    <orderEntry type="library" name="scala-sdk-2.11.7" level="application" />
   </component>
 </module>
