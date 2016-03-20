@@ -127,7 +127,10 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
 
-  def getProductByLcboId(id: Long): Option[Product] = LcboIdsToDBIds.get(id).flatMap(  productsCache.get )
+  def getProductByLcboId(id: Long): Option[Product] =
+    for (dbId <- LcboIdsToDBIds.get(id);
+         p <- productsCache.get(dbId)) yield p
+
   def lcboidToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
   def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
 
@@ -158,12 +161,13 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     if (cacheOnly) IndexedSeq() // to satisfy method signature only
     else {
       // productsByState has dirty PKID and so need refresh prior to use in memory, which we do with flatMap calls below.
-      val refreshedCleanProducts = productsByState.getOrElse(Clean, IndexedSeq[Product]()).
-        flatMap { p => getProductByLcboId(p.lcboId) }
-      val updatedProducts = dirtyProducts.flatMap { p => getProductByLcboId(p.lcboId) }
-      val refreshedNewProducts = newProducts.flatMap { p => getProductByLcboId(p.lcboId) }
-
-      refreshedCleanProducts ++ refreshedNewProducts ++ updatedProducts // client wants full set.
+      val refreshedCleanProducts = for( prod <- productsByState.getOrElse(Clean, IndexedSeq[Product]());
+                                        p <- getProductByLcboId(prod.lcboId)) yield p
+      val updatedProducts = for ( prod <- dirtyProducts;
+                                  p <- getProductByLcboId(prod.lcboId)) yield p
+      val refreshedNewProducts = for ( prod <- newProducts;
+                                  p <- getProductByLcboId(prod.lcboId)) yield p
+      (refreshedCleanProducts ++ refreshedNewProducts ++ updatedProducts).toIndexedSeq // client wants full set.
     }
   }
 

@@ -34,6 +34,6 @@ object LabelStyle {
     </label>
 
   def toForm(holder: ChoiceHolder[RadioElements]): NodeSeq =
-    holder.items.flatMap(htmlize)
+    holder.items.flatMap(htmlize) // rare usage of flatMap in place of comprehension!
 
 }
