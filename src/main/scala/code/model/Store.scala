@@ -13,8 +13,7 @@ import scala.xml.Node
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
-
-import net.liftweb.common.{Full, Empty, Box, Loggable}
+import net.liftweb.common.{Box, Empty, Full, Loggable}
 import net.liftweb.json._
 import net.liftweb.json.JsonParser.{ParseException, parse}
 import net.liftweb.util.Helpers.tryo
@@ -22,9 +21,7 @@ import net.liftweb.record.MetaRecord
 import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
-
 import org.squeryl.annotations._
-
 import code.model.Product._
 
 class Store  private() extends Persistable[Store] with CreatedUpdated[Store] with Loggable  {
@@ -320,34 +317,30 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       }
     }
 
-    logger.info(s"loadCache start ${lcboId}")
+    val fProds = Future(fetchProducts())
     // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
-    fetchProducts() // updates products on each query if something new comes up.
-    fetchInventories() // and similarly for inventories
+    val twoCacheFetches = for (prods <- fProds; // updates products on each query if something new comes up.
+                                invs <- Future(fetchInventories()))  // similarly for inventories and serialize intentionally because of Ref. Integ.
+      yield AnyRef
+
+    twoCacheFetches foreach {
+      case m =>
+        //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
+        logger.debug(s"loadCache succeeded for ${lcboId}")
+        if (emptyInventory) {
+          logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
+        }
+    }
+    twoCacheFetches.failed foreach {
+      case f =>
+        logger.info(s"loadCache explicitly failed for ${lcboId} cause $f")
+    }
     logger.info(s"loadCache ended ${lcboId}") // about 15 seconds, likely depends mostly on network/teleco infrastructure
   }
 
-  def asyncLoadCache(): Unit = {
+  def asyncLoadCache(): Unit =
     // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
-    // Slightly unwanted consequence is that clients need to test for empty set and not assume it's non empty.
-    // we impose referential integrity so we MUST get products and build on that to get inventories that refer to products
-    // Note: we may execute this function, get nothing back from LCBO (e.g. website down) and still provide user data because of our db store.
-    if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) {
-      val fut = Future { loadCache() }
-      fut foreach {
-        case m =>
-          //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
-          logger.debug(s"loadCache succeeded for ${lcboId}")
-          if (emptyInventory) {
-            logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
-          }
-      }
-      fut.failed foreach {
-        case f =>
-          logger.info(s"loadCache explicitly failed for ${lcboId} cause $f")
-      }
-    }
-  }
+    if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
   def refreshInventories(): Unit =
     inTransaction {
