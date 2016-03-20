@@ -319,13 +319,12 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       }
     }
 
-    val fProds = Future(fetchProducts())
-    // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
-    val twoCacheFetches = for (prods <- fProds; // updates products on each query if something new comes up.
-                                invs <- Future(fetchInventories()))  // similarly for inventories and serialize intentionally because of Ref. Integ.
-      yield AnyRef
-
-    twoCacheFetches foreach {
+    val doubleFetch = Future {
+      fetchProducts() // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
+    } andThen {
+      case x => fetchInventories() // similarly for inventories and serialize intentionally because of Ref.  if no exception was thrown
+    }
+    doubleFetch foreach {
       case m =>
         //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
         logger.debug(s"loadCache succeeded for ${lcboId}")
@@ -333,7 +332,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
           logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
         }
     }
-    twoCacheFetches.failed foreach {
+    doubleFetch.failed foreach {
       case f =>
         logger.info(s"loadCache explicitly failed for ${lcboId} cause $f")
     }
