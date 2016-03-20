@@ -209,7 +209,9 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
                                     params: Seq[(String, Any)]): Unit = {
       def stateOfInventory(item: InventoryAsLCBOJson): EntityRecordState = {
         val prodId = Product.lcboidToDBId(item.product_id)
-        val invOption = prodId.flatMap(inventoryByProductId.get(_))
+        val invOption = for (x <- prodId;
+                             inv <- inventoryByProductId.get(x)) yield inv
+
         (prodId, invOption)  match {
           case (Some(id), None)  => New
           case (Some(id), Some(inv)) if inv.dirty_?(item) => Dirty
@@ -379,7 +381,9 @@ object Store extends Store with MetaRecord[Store] with Loggable {
   def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
   def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)
   def getStore(s: Long): Option[Store] = storesCache.get(s)
-  def getStoreByLcboId(id: Long): Option[Store] = lcboidToDBId(id).flatMap( storesCache.get )
+  def getStoreByLcboId(id: Long): Option[Store] =
+    for (dbid <- lcboidToDBId(id);
+          s <- storesCache.get(dbid)) yield s
 
   def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
 
