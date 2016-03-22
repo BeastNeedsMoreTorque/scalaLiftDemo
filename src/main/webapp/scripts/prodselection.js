@@ -2,6 +2,7 @@
 
 // Global variable, singleton prodSelection
 var prodSelection = (function() {
+  var selectedItems = [];
   var parseCurrency = function(currency) {
       var number = Number(currency.replace(/[^0-9\.]+/g,""));
       return parseFloat(number) || 0.0;
@@ -10,6 +11,25 @@ var prodSelection = (function() {
   var formatAsCurrency = function(number) {
     return "$" + number.toFixed(2); // cheats a lot on internationalization (but this is Ontario!)...
   };
+
+  var collectSelectedProductDetails = function() {
+    var id = parseInt(this.value) || 0;
+
+    var siblings = $(this).parent().siblings();
+
+    var quantityEl = $(siblings).find("input.prodQty");
+    var quantity = parseInt($(quantityEl).val()) || 0;
+
+    var fixedCostEl = $(siblings).parent().find("input.hiddenProdCost");
+    var cost = quantity * parseCurrency($(fixedCostEl).val());
+
+    var data = {
+      id: id,
+      quantity: quantity,
+      cost: cost
+    };
+    selectedItems.push(data);
+  }
 
   return {
     updateQtyItem: function(data) {
@@ -28,25 +48,8 @@ var prodSelection = (function() {
     },
 
     currentProds: function() {
-      var selectedItems = [];
-      $("div.prodContainer").find("input:checked").each(function() {
-        var id = parseInt(this.value) || 0;
-
-        var siblings = $(this).parent().siblings();
-
-        var quantityEl = $(siblings).find("input.prodQty");
-        var quantity = parseInt($(quantityEl).val()) || 0;
-
-        var fixedCostEl = $(siblings).parent().find("input.hiddenProdCost");
-        var cost = quantity * parseCurrency($(fixedCostEl).val());
-
-        var data = {
-          id: id,
-          quantity: quantity,
-          cost: cost
-        };
-        selectedItems.push(data);
-      });
+      selectedItems = [];
+      $("div.prodContainer").find("input:checked").each(collectSelectedProductDetails);
       return JSON.stringify(selectedItems);
     }
   }
