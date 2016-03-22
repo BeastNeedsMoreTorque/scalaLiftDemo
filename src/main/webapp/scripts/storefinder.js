@@ -5,15 +5,29 @@
 // <localhost:port>/stores gives us all stores with coordinates and we evaluate the closest.
 // Uses Google maps API quite a bit.
 var storeFinder = (function() {
-  var defaultOntarioLocation; // Bay & Front LCBO address.
+  // Bay & Front LCBO address items.
+  var defaultOntarioLocation;
+  var defaultOnLat=43.647219;
+  var defaultOnLng=-79.3789987;
+
+  var kmsPerLat = 111; // good approximation at 45' of latitude, which mostly works in Ontario (undefined if not near Ontario).
+  var kmsPerLng = 78.4;
+
+  var greenMarkerIconURI = "http://maps.google.com/mapfiles/ms/icons/green-dot.png";
+  var blueMarkerIconURI = "http://maps.google.com/mapfiles/ms/icons/blue-dot.png";
+  var currentLocMarkerTitle = "Current Location";
+  var closestName = "Closest store";
+  var selectedStoreCaption = 'Selected LCBO store:';
+  var selectedStoreErrCaption = "Downtown Toronto LCBO (user location unavailable)";
+  var geoLocationUnavailable = "Geolocation is not supported by this browser.";
+
+  var zoomShowMarkersLowerBound = 10;
+  var standardZoom = 12;
+
   var distMatrixService;
   var directionsService;
   var directionsDisplay;
 
-  // admittedly a hack but to find closest store amoung more than 600 would require 30 calls to google maps API and I don't really see the need
-  // to have the server side provide that service when we can offload some computation to browser.
-  var kmsPerLat = 111; // good approximation at 45' of latitude, which mostly works in Ontario (undefined if not near Ontario).
-  var kmsPerLng = 78.4;
   var mapCanvas = document.getElementById('map-canvas');
   var map;
   var markers = [];
@@ -21,11 +35,11 @@ var storeFinder = (function() {
   var userMarker;
   var userLocation;
   var storeDistance;  // could also get storeDuration if we wanted.
+  var mapOptions = {};
 
-  var closestName = "Closest store";
   var theSelectedStore = null;
 
-  // evaluate distance ourselves because of 25 destination distances limit, we have more than 600.
+  // evaluate distance ourselves because of 25 destination distances limit, we have more than 600. Some hack.
   var distanceByGeo = function(latLng1, latLng2) {
     var x = kmsPerLat * (latLng1.lat()-latLng2.lat());
     var y = kmsPerLng * (latLng1.lng()-latLng2.lng());
@@ -38,7 +52,7 @@ var storeFinder = (function() {
     var dist = bestDistance;
     var closest = null;
     stores.forEach(
-      function (store, index, array) {
+      function (store) {
         var storeLatLng = new google.maps.LatLng(store.latitude, store.longitude)
         dist = distanceByGeo(latLng, storeLatLng);
         if (dist < bestDistance) {
@@ -54,13 +68,13 @@ var storeFinder = (function() {
   }
 
   var flipMarker = function(name) {
-      markers.forEach(
-        function (marker, index, array) {
-          if (marker.title.localeCompare(name) == 0) {
-            marker.setIcon("http://maps.google.com/mapfiles/ms/icons/blue-dot.png");
-          }
+    markers.forEach(
+      function (marker, index, array) {
+        if (marker.title.localeCompare(name) == 0) {
+          marker.setIcon(blueMarkerIconURI);
         }
-      );
+      }
+    );
   }
 
   var fetchStore = function(userLatLng) {
@@ -70,7 +84,7 @@ var storeFinder = (function() {
       evaluateDistance(closestLatLng);
       getDirections(closestLatLng);
 
-      $("#storeNearby").html('Selected LCBO store:');
+      $("#storeNearby").html(selectedStoreCaption);
       $("#storeName").html(theSelectedStore.name);
       $("#storeAddressLine1").html(theSelectedStore.address_line_1);
       $("#storeCity").html(theSelectedStore.city);
@@ -78,7 +92,7 @@ var storeFinder = (function() {
       $("#storeLon").html(theSelectedStore.longitude);
       $("#storeAttributesTbl").show();
     } else {
-      $("#storeNearby").html("Downtown Toronto LCBO (user location unavailable)");
+      $("#storeNearby").html(selectedStoreErrCaption);
       $("#storeAttributesTbl").hide();
     }
   };
@@ -92,19 +106,21 @@ var storeFinder = (function() {
     }, storeFinder.distMatrixCB);
   };
 
+  var directionsListener = function(result, status) {
+    if (status == google.maps.DirectionsStatus.OK) {
+      directionsDisplay.setMap(null);
+      directionsDisplay.setMap(map);
+      directionsDisplay.setDirections(result);
+    }
+  };
+
   var getDirections = function(latLng) {
    var request = {
       origin: userLocation,
       destination: latLng,
       travelMode: google.maps.TravelMode.DRIVING
     };
-    directionsService.route(request, function(result, status) {
-      if (status == google.maps.DirectionsStatus.OK) {
-        directionsDisplay.setMap(null);
-        directionsDisplay.setMap(map);
-        directionsDisplay.setDirections(result);
-      }
-    });
+    directionsService.route(request, directionsListener);
   };
 
   var fetchAllStores = function() {
@@ -127,40 +143,46 @@ var storeFinder = (function() {
     });
   };
 
-  var initMapCallback = function(position) {
+  var boundsChangedListener = function() {
+    clearMarkers();
+    if (this.zoom > zoomShowMarkersLowerBound) {
+      showMarkers();
+    }
+    else {
+      clearMarkers();
+    }
+  };
+
+  var userLocationCallback = function(position) {
     distMatrixService = new google.maps.DistanceMatrixService();
     directionsService = new google.maps.DirectionsService();
 
     userLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
-    var myOptions = {
+    mapOptions = {
       center:userLocation,
-      zoom:12,
+      zoom:standardZoom,
       mapTypeId:google.maps.MapTypeId.HYBRID,
       mapTypeControl:true
     }
-    map = new google.maps.Map(mapCanvas, myOptions);
-    map.addListener('bounds_changed', function() {
-      clearMarkers();
-      if (this.zoom > 10) {
-        showMarkers();
-      }
-      else {
-        clearMarkers();
-      }
-    });
+    map = new google.maps.Map(mapCanvas, mapOptions);
+    map.addListener('bounds_changed', boundsChangedListener);
     var rendererOptions = {
       suppressMarkers: true
     }
 
     directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
     directionsDisplay.setMap(map);
-    userMarker = new google.maps.Marker({position:userLocation,map:map,title:"Current Location",icon:"http://maps.google.com/mapfiles/ms/icons/green-dot.png"});
+    userMarker = new google.maps.Marker(
+      {position:userLocation,
+       map:map,
+       title:currentLocMarkerTitle,
+       icon:greenMarkerIconURI});
     fetchAllStores();
     $(mapCanvas).removeAttr( "hidden" );
   };
 
   var showGeoError = function(error) {
-    defaultOntarioLocation = new google.maps.LatLng(43.647219, -79.3789987); // Bay & Front LCBO address.
+    defaultOntarioLocation = new google.maps.LatLng(defaultOnLat, defaultOnLng);
     userLocation = defaultOntarioLocation;
     fetchStore(defaultOntarioLocation);
   };
@@ -178,9 +200,9 @@ var storeFinder = (function() {
 
   // Sets the map on all markers in the array.
   var setMapOnAll = function (map) {
-    for (var i = 0; i < markers.length; i++) {
-      markers[i].setMap(map);
-    }
+    markers.forEach( function(marker) {
+      marker.setMap(map);
+    });
   };
 
   // Removes the markers from the map, but keeps them in the array.
@@ -232,12 +254,11 @@ var storeFinder = (function() {
 
     initMap: function() {
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(initMapCallback, showGeoError);
+        navigator.geolocation.getCurrentPosition(userLocationCallback, showGeoError);
       } else  {
-        $("#storeNearby").html("Geolocation is not supported by this browser.");
+        $("#storeNearby").html(geoLocationUnavailable);
         fetchStore(defaultOntarioLocation);
-        $(mapCanvas).removeAttr( "hidden" )
-
+        $(mapCanvas).removeAttr( "hidden" );
       }
     }
   }
