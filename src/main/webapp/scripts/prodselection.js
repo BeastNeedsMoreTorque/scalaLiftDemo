@@ -9,7 +9,7 @@ var prodSelection = (function() {
   };
 
   var formatAsCurrency = function(number) {
-    return "$" + number.toFixed(2); // cheats a lot on internationalization (but this is Ontario!)...
+    return '$' + number.toFixed(2); // cheats a lot on internationalization (but this is Ontario!)...
   };
 
   var collectSelectedProductDetails = function() {
@@ -17,10 +17,10 @@ var prodSelection = (function() {
 
     var siblings = $(this).parent().siblings();
 
-    var quantityEl = $(siblings).find("input.prodQty");
+    var quantityEl = $(siblings).find('input.prodQty');
     var quantity = parseInt($(quantityEl).val()) || 0;
 
-    var fixedCostEl = $(siblings).parent().find("input.hiddenProdCost");
+    var fixedCostEl = $(siblings).parent().find('input.hiddenProdCost');
     var cost = quantity * parseCurrency($(fixedCostEl).val());
 
     var data = {
@@ -35,7 +35,7 @@ var prodSelection = (function() {
     updateQtyItem: function(data) {
       var siblings = $(data).parent().siblings(); // need to go around label.
 
-      var fixedCostEl = $(siblings).parent().find("input.hiddenProdCost");
+      var fixedCostEl = $(siblings).parent().find('input.hiddenProdCost');
       var cost = parseCurrency($(fixedCostEl).val());
       var qty = parseInt(data.value) || 0;
       if (qty < 1) {
@@ -43,13 +43,13 @@ var prodSelection = (function() {
         $(data).val(1);
       }
 
-      var effectiveCostEl = $(siblings).find("input.prodCost");
+      var effectiveCostEl = $(siblings).find('input.prodCost');
       $(effectiveCostEl).val(formatAsCurrency(cost * qty));
     },
 
     currentProds: function() {
       selectedItems = [];
-      $("div.prodContainer").find("input:checked").each(collectSelectedProductDetails);
+      $('div.prodContainer').find('input:checked').each(collectSelectedProductDetails);
       return JSON.stringify(selectedItems);
     }
   }

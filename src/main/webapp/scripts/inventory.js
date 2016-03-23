@@ -17,7 +17,7 @@ var inventory = (function() {
 
   var prodIdCBQuantityBuddy = function(el, prodId) {
     // server (ProductInteraction) sets name to prodId for easy look up and pairing.
-    return el.parents().find("td[name=" + prodId + "]");
+    return el.parents().find('td[name=' + prodId + ']');
   };
 
   var collectProductInventories = function() {
@@ -31,7 +31,7 @@ var inventory = (function() {
   }
 
   var ajaxFetchInventory = function(storeId, productId) {
-    var uri = "http://lcboapi.com/stores/" + storeId + "/products/" + productId + "/inventory"
+    var uri = 'http://lcboapi.com/stores/' + storeId + '/products/' + productId + '/inventory'
     $.ajax({
       url: uri,
       dataType: 'jsonp', // for Cross Origin Access
@@ -51,14 +51,14 @@ var inventory = (function() {
   };
 
   var inventoryError = function(data, status){
-    console.log("Error Data: " + data.responseText + "\nStatus: " + status );
+    console.log('Error Data: ' + data.responseText + '\nStatus: ' + status );
   };
 
   return {
     fetchInventories: function() {
       prodIdCheckboxes = {}; // reset it. Too bad, if there was an earlier request. Just take current user input.
       storeId = storeFinder.getTheSelectedLcboStoreId();
-      $("div.prodContainer").find("input:checkbox").each(collectProductInventories);
+      $('div.prodContainer').find('input:checkbox').each(collectProductInventories);
     }
   }
 }());

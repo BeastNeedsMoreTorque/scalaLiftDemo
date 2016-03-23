@@ -207,16 +207,16 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
     def collectInventoriesOnAPage(  urlRoot: String,
                                     pageNo: Int,
                                     params: Seq[(String, Any)]): Unit = {
-      def stateOfInventory(item: InventoryAsLCBOJson): EntityRecordState = {
+      def stateOfInventory(item: InventoryAsLCBOJson): EnumerationValueType = {
         val prodId = Product.lcboidToDBId(item.product_id)
         val invOption = for (x <- prodId;
                              inv <- inventoryByProductId.get(x)) yield inv
 
         (prodId, invOption)  match {
-          case (Some(id), None)  => New
-          case (Some(id), Some(inv)) if inv.dirty_?(item) => Dirty
-          case (Some(id), _) => Clean
-          case _ => Undefined  // on a product we don't yet know, so consider it as undefined so we don't violate FK on products (LCBO makes no guaranty to be consistent here)
+          case (Some(id), None)  => EntityRecordState.New
+          case (Some(id), Some(inv)) if inv.dirty_?(item) => EntityRecordState.Dirty
+          case (Some(id), _) => EntityRecordState.Clean
+          case _ => EntityRecordState.Undefined  // on a product we don't yet know, so consider it as undefined so we don't violate FK on products (LCBO makes no guaranty to be consistent here)
         }
       }
 
@@ -229,10 +229,10 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       val items = (for (p <- itemNodes) yield p.extract[InventoryAsLCBOJson]).filter(!_.is_dead)
 
       // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
-      val storeProductsByState: Map[EntityRecordState, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfInventory )
+      val storeProductsByState: Map[EnumerationValueType, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfInventory )
 
       val dirtyInventories = ArrayBuffer[Inventory]()
-      for (jsInvs <- storeProductsByState.get(Dirty);
+      for (jsInvs <- storeProductsByState.get(EntityRecordState.Dirty);
            jsInv <- jsInvs;
            dbId <- Product.lcboidToDBId(jsInv.product_id);
            dbInv <- inventoryByProductId.get(dbId))
@@ -242,7 +242,7 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       }
 
       val newInventories = ArrayBuffer[Inventory]()
-      for (jsInvs <- storeProductsByState.get(New);
+      for (jsInvs <- storeProductsByState.get(EntityRecordState.New);
            jsInv <- jsInvs;
            dbId <- Product.lcboidToDBId(jsInv.product_id))
       {
@@ -362,8 +362,8 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
 object Store extends Store with MetaRecord[Store] with Loggable {
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
 
-  private val storesCache: concurrent.Map[Long, Store] = TrieMap[Long, Store]()  // primary cache
-  override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]() //secondary dependent cache
+  private val storesCache: concurrent.Map[Long, Store] = TrieMap()  // primary cache
+  override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap() //secondary dependent cache
   override def table(): org.squeryl.Table[Store] = MainSchema.stores
 
   def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
@@ -407,17 +407,17 @@ object Store extends Store with MetaRecord[Store] with Loggable {
                                pageNo: Int): Unit = {
         val (items, jsonRoot, uri) = extractLcboItems(urlRoot, Seq(), pageNo=pageNo, MaxPerPage)
         // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-        val storesByState: Map[EntityRecordState, IndexedSeq[Store]] = items.groupBy {
+        val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = items.groupBy {
           s =>  ( getStoreByLcboId(s.lcboId), s) match {
-            case (None, _) => New
-            case (Some(store), item) if store.isDirty(item) => Dirty
-            case (_ , _) => Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
+            case (None, _) => EntityRecordState.New
+            case (Some(store), item) if store.isDirty(item) => EntityRecordState.Dirty
+            case (_ , _) => EntityRecordState.Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
           }
         }
 
         // identify the dirty and new stores for batch update and cache them as side effect (automatically)
-        val dirtyStores =  storesByState.getOrElse(Dirty, IndexedSeq[Store]())
-        val newStores = storesByState.getOrElse(New, IndexedSeq[Store]()).toIndexedSeq
+        val dirtyStores =  storesByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Store]())
+        val newStores = storesByState.getOrElse(EntityRecordState.New, IndexedSeq[Store]()).toIndexedSeq
         updateAndInsert(dirtyStores, newStores)
 
         if (Store.isFinalPage(jsonRoot, pageNo=pageNo)) {
