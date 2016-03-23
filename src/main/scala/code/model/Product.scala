@@ -2,17 +2,17 @@ package code.model
 
 import java.text.NumberFormat
 
+import code.model.EntityRecordState.EnumerationValueType
+
 import scala.collection.concurrent.TrieMap
 import scala.collection._
 import scala.language.implicitConversions
 import scala.xml.Node
-
-import net.liftweb.record.field.{LongField,StringField,BooleanField,IntField}
+import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField}
 import net.liftweb.record.MetaRecord
 import net.liftweb.common._
 import net.liftweb.util.Props
 import net.liftweb.json.Xml
-
 import org.squeryl.annotations._
 
 case class Attribute(key: String, value: String)
@@ -124,7 +124,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
-  override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap[Long, Long]()
+  override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
 
   def getProductByLcboId(id: Long): Option[Product] =
@@ -147,21 +147,21 @@ object Product extends Product with MetaRecord[Product] with Loggable {
 
   def reconcile(cacheOnly: Boolean, items: IndexedSeq[Product]): IndexedSeq[Product] = {
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-    val productsByState: Map[EntityRecordState, IndexedSeq[Product]] = items.groupBy {
+    val productsByState: Map[EnumerationValueType, IndexedSeq[Product]] = items.groupBy {
       p => (getProductByLcboId(p.lcboId), p) match {
-        case (None, _) => New
-        case (Some(product), lcboProduct) if product.isDirty(lcboProduct) => Dirty
-        case (_ , _) => Clean
+        case (None, _) => EntityRecordState.New
+        case (Some(product), lcboProduct) if product.isDirty(lcboProduct) => EntityRecordState.Dirty
+        case (_ , _) => EntityRecordState.Clean
       }
     }
-    val dirtyProducts = productsByState.getOrElse(Dirty, IndexedSeq[Product]())
-    val newProducts = productsByState.getOrElse(New, IndexedSeq[Product]())
+    val dirtyProducts = productsByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Product]())
+    val newProducts = productsByState.getOrElse(EntityRecordState.New, IndexedSeq[Product]())
     updateAndInsert(dirtyProducts, newProducts)
 
     if (cacheOnly) IndexedSeq() // to satisfy method signature only
     else {
       // productsByState has dirty PKID and so need refresh prior to use in memory, which we do with flatMap calls below.
-      val refreshedCleanProducts = for( prod <- productsByState.getOrElse(Clean, IndexedSeq[Product]());
+      val refreshedCleanProducts = for( prod <- productsByState.getOrElse(EntityRecordState.Clean, IndexedSeq[Product]());
                                         p <- getProductByLcboId(prod.lcboId)) yield p
       val updatedProducts = for ( prod <- dirtyProducts;
                                   p <- getProductByLcboId(prod.lcboId)) yield p

@@ -7,22 +7,22 @@
 var storeFinder = (function() {
   // Bay & Front LCBO address items.
   var defaultOntarioLocation;
-  var defaultOnLat=43.647219;
-  var defaultOnLng=-79.3789987;
+  var DEFAULT_ON_LAT=43.647219;
+  var DEFAULT_ON_LNG=-79.3789987;
 
-  var kmsPerLat = 111; // good approximation at 45' of latitude, which mostly works in Ontario (undefined if not near Ontario).
-  var kmsPerLng = 78.4;
+  var KMS_PER_LAT = 111; // good approximation at 45' of latitude, which mostly works in Ontario (undefined if not near Ontario).
+  var KMS_PER_LNG = 78.4;
 
-  var greenMarkerIconURI = "http://maps.google.com/mapfiles/ms/icons/green-dot.png";
-  var blueMarkerIconURI = "http://maps.google.com/mapfiles/ms/icons/blue-dot.png";
-  var currentLocMarkerTitle = "Current Location";
-  var closestName = "Closest store";
-  var selectedStoreCaption = 'Selected LCBO store:';
-  var selectedStoreErrCaption = "Downtown Toronto LCBO (user location unavailable)";
-  var geoLocationUnavailable = "Geolocation is not supported by this browser.";
+  var GREEN_MARKER_ICON_URI = 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
+  var BLUE_MARKER_ICON_URI = 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png';
+  var CURR_LOC_MARKER_TITLE = 'Current Location';
+  var CLOSEST_STORE = 'Closest store';
+  var SELECTED_STORE = 'Selected LCBO store:';
+  var DEFAULT_STORE_LOCATION_ERR = 'Downtown Toronto LCBO (user location unavailable)';
+  var GEO_LOC_UNAVAILABLE = 'Geolocation is not supported by this browser.';
 
-  var zoomShowMarkersLowerBound = 10;
-  var standardZoom = 12;
+  var ZOOM_LOWER_BOUND = 10;
+  var STD_ZOOM = 12;
 
   var distMatrixService;
   var directionsService;
@@ -41,8 +41,8 @@ var storeFinder = (function() {
 
   // evaluate distance ourselves because of 25 destination distances limit, we have more than 600. Some hack.
   var distanceByGeo = function(latLng1, latLng2) {
-    var x = kmsPerLat * (latLng1.lat()-latLng2.lat());
-    var y = kmsPerLng * (latLng1.lng()-latLng2.lng());
+    var x = KMS_PER_LAT * (latLng1.lat()-latLng2.lat());
+    var y = KMS_PER_LNG * (latLng1.lng()-latLng2.lng());
 
     return (Math.sqrt(Math.pow(x,2) + Math.pow(y,2)));
   };
@@ -71,7 +71,7 @@ var storeFinder = (function() {
     markers.forEach(
       function (marker, index, array) {
         if (marker.title.localeCompare(name) == 0) {
-          marker.setIcon(blueMarkerIconURI);
+          marker.setIcon(BLUE_MARKER_ICON_URI);
         }
       }
     );
@@ -84,16 +84,16 @@ var storeFinder = (function() {
       evaluateDistance(closestLatLng);
       getDirections(closestLatLng);
 
-      $("#storeNearby").html(selectedStoreCaption);
-      $("#storeName").html(theSelectedStore.name);
-      $("#storeAddressLine1").html(theSelectedStore.address_line_1);
-      $("#storeCity").html(theSelectedStore.city);
-      $("#storeLat").html(theSelectedStore.latitude);
-      $("#storeLon").html(theSelectedStore.longitude);
-      $("#storeAttributesTbl").show();
+      $('#storeNearby').html(SELECTED_STORE);
+      $('#storeName').html(theSelectedStore.name);
+      $('#storeAddressLine1').html(theSelectedStore.address_line_1);
+      $('#storeCity').html(theSelectedStore.city);
+      $('#storeLat').html(theSelectedStore.latitude);
+      $('#storeLon').html(theSelectedStore.longitude);
+      $('#storeAttributesTbl').show();
     } else {
-      $("#storeNearby").html(selectedStoreErrCaption);
-      $("#storeAttributesTbl").hide();
+      $('#storeNearby').html(DEFAULT_STORE_LOCATION_ERR);
+      $('#storeAttributesTbl').hide();
     }
   };
 
@@ -137,7 +137,7 @@ var storeFinder = (function() {
         fetchStore( userLocation);
       },
       error: function(data, status){
-        console.log("Error Data: " + data.responseText + "\nStatus: " + status );
+        console.log('Error Data: ' + data.responseText + '\nStatus: ' + status );
         alert(data.responseText );
       }
     });
@@ -145,7 +145,7 @@ var storeFinder = (function() {
 
   var boundsChangedListener = function() {
     clearMarkers();
-    if (this.zoom > zoomShowMarkersLowerBound) {
+    if (this.zoom > ZOOM_LOWER_BOUND) {
       showMarkers();
     }
     else {
@@ -160,7 +160,7 @@ var storeFinder = (function() {
     userLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
     mapOptions = {
       center:userLocation,
-      zoom:standardZoom,
+      zoom:STD_ZOOM,
       mapTypeId:google.maps.MapTypeId.HYBRID,
       mapTypeControl:true
     }
@@ -175,14 +175,14 @@ var storeFinder = (function() {
     userMarker = new google.maps.Marker(
       {position:userLocation,
        map:map,
-       title:currentLocMarkerTitle,
-       icon:greenMarkerIconURI});
+       title:CURR_LOC_MARKER_TITLE,
+       icon:GREEN_MARKER_ICON_URI});
     fetchAllStores();
-    $(mapCanvas).removeAttr( "hidden" );
+    $(mapCanvas).removeAttr( 'hidden' );
   };
 
   var showGeoError = function(error) {
-    defaultOntarioLocation = new google.maps.LatLng(defaultOnLat, defaultOnLng);
+    defaultOntarioLocation = new google.maps.LatLng(DEFAULT_ON_LAT, DEFAULT_ON_LNG);
     userLocation = defaultOntarioLocation;
     fetchStore(defaultOntarioLocation);
   };
@@ -246,7 +246,7 @@ var storeFinder = (function() {
           if(results.length > 0 ) {
             var element = results[0];
             storeDistance = element.distance.text;
-            $("#storeDistance").html(storeDistance);
+            $('#storeDistance').html(storeDistance);
           }
         }
       }
@@ -256,9 +256,9 @@ var storeFinder = (function() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(userLocationCallback, showGeoError);
       } else  {
-        $("#storeNearby").html(geoLocationUnavailable);
+        $('#storeNearby').html(GEO_LOC_UNAVAILABLE);
         fetchStore(defaultOntarioLocation);
-        $(mapCanvas).removeAttr( "hidden" );
+        $(mapCanvas).removeAttr( 'hidden' );
       }
     }
   }
