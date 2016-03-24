@@ -34,12 +34,12 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
 
   implicit val formats = net.liftweb.json.DefaultFormats
 
-  def load(xactLastStep: => (Iterable[T])=> Unit = {x: Iterable[T] => Unit }): Unit = {
+  def load(): Iterable[T] = {
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     inTransaction {
       val items = from(table())(s => select(s))
       cacheNewItems(items)
-      xactLastStep(items)
+      items
     }
   }
 
