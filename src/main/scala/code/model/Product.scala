@@ -21,7 +21,7 @@ case class Attribute(key: String, value: String)
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends Persistable[Product] with CreatedUpdated[Product] {
+class Product private() extends Persistable[Product] with Loader[Product] with LcboJSONCreator[Product] with CreatedUpdated[Product] {
   def meta = Product
 
   @Column(name="pkid")
