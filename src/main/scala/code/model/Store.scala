@@ -444,10 +444,15 @@ object Store extends Store with MetaRecord[Store] with Loggable {
   }
 
   def init(): Unit = {
-    def asyncLoad: (Iterable[Store]) => Unit = {items: Iterable[Store] => asyncGetStores(items.map { s => s.idField.get -> s }(breakOut))}
     logger.info("Store.init start")
-    load(asyncLoad)  // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
+    load()
     logger.info("Store.init end")
+  }
+
+  override def load(): Iterable[Store] = {
+    val items = super.load()
+    inTransaction { asyncGetStores(items.map { s => s.idField.get -> s }(breakOut)) } // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
+    items
   }
 
   def asyncGetStores(x: Map[Long, Store]): Unit = {
