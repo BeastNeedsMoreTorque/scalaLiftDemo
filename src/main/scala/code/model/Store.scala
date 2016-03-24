@@ -24,7 +24,7 @@ import net.liftweb.util.Props
 import org.squeryl.annotations._
 import code.model.Product._
 
-class Store  private() extends Persistable[Store] with CreatedUpdated[Store] with Loggable  {
+class Store  private() extends Persistable[Store] with Loader[Store] with LcboJSONCreator[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -110,11 +110,12 @@ class Store  private() extends Persistable[Store] with CreatedUpdated[Store] wit
       val permutedKeys = Random.shuffle(matchingKeys).take(2 * requestSize)
       // generate double the keys and hope it's enough to find enough products with positive inventory as a result
       // checking quantity in for comprehension below is cost prohibitive.
-      for (id <- permutedKeys;
+      val x = for (id <- permutedKeys;
            p <- productsCache.get(id);
            inv <- inventoryByProductId.get(p.id);
            q = inv.quantity if q > 0
       ) yield (q,p)
+      x.take(requestSize)
     }
 
     def getSerialResult: IndexedSeq[(Long, Product)] = {
