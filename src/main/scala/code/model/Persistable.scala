@@ -3,7 +3,7 @@ package code.model
 import java.net.URLEncoder
 import java.sql.SQLException
 
-import scala.collection.{IndexedSeq, concurrent}
+import scala.collection.{IndexedSeq, Iterable, concurrent}
 import scala.collection.mutable.ArrayBuffer
 import net.liftweb.util.Props
 import net.liftweb.common.Loggable
@@ -34,7 +34,7 @@ trait Persistable[T <: Persistable[T]] extends Record[T] with KeyedRecord[Long] 
 
   implicit val formats = net.liftweb.json.DefaultFormats
 
-  def init(xactLastStep: => (Iterable[T])=> Unit ): Unit = {
+  def load(xactLastStep: => (Iterable[T])=> Unit = {x: Iterable[T] => Unit }): Unit = {
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     inTransaction {
       val items = from(table())(s => select(s))

@@ -140,8 +140,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
 
   def init(): Unit = {
     logger.info("Product.init start")
-    val voidLastStep: (Iterable[Product]) => Unit = {x: Iterable[Product] => Unit }
-    init(voidLastStep)
+    load()
     logger.info("Product.init end")
   }
 
