@@ -1,59 +1,47 @@
 package code.Rest
 
-import java.net.{HttpURLConnection, URL}
-
-import net.liftweb.util.Props
+import org.apache.http.HttpEntity
+import org.apache.http.client._
+import org.apache.http.client.methods.{CloseableHttpResponse, HttpGet}
+import org.apache.http.impl.client.{CloseableHttpClient, HttpClients}
+import org.apache.http.util.EntityUtils
 
 /**
-  * Created by philippederome on 2015-12-19.
+  * Created by philippederome on 2015-12-19. See Alvin Alexander: http://alvinalexander.com/scala/how-to-write-scala-http-get-request-client-source-fromurl
   */
 trait RestClient {
 
-  // Following values must be read as config externally. We don't mean to rely on defaults below, rather properties should be set sensibly.
-  def HttpClientConnTimeOut = Props.getInt("http.ClientConnTimeOut", 5000)
-  def HttpClientReadTimeOut = Props.getInt("http.ClientReadTimeOut", HttpClientConnTimeOut)
   /**
-    * @author Alvin Alexander
-    *         Returns the text (content) from a REST URL as a String.
-    *         Inspired by http://matthewkwong.blogspot.com/2009/09/scala-scalaiosource-fromurl-blo...
-    * @see http://alvinalexander.com/blog/post/java/how-open-url-read-contents-http...
+    * Returns the text (content) from a REST URL as a String.
+    * Returns a blank String if there was a problem.
+    * This function will also throw exceptions if there are problems trying
+    * to connect to the url.
     *
-    *      The `connectTimeout` and `readTimeout` comes from the Java URLConnection
-    *      class Javadoc.
-    * @param url The full URL to connect to.
-    * @param connectTimeout Sets a specified timeout value, in milliseconds,
-    *                       to be used when opening a communications link to the resource referenced
-    *                       by this URLConnection. If the timeout expires before the connection can
-    *                       be established, a java.net.SocketTimeoutException
-    *                       is raised. A timeout of zero is interpreted as an infinite timeout.
-    *                       Defaults to 5000 ms.
-    * @param readTimeout If the timeout expires before there is data available
-    *                    for read, a java.net.SocketTimeoutException is raised. A timeout of zero
-    *                    is interpreted as an infinite timeout. Defaults to 5000 ms.
-    * @param requestMethod Defaults to "GET". (Other methods have not been tested.)
-    * @see http://alvinalexander.com/comment/reply/6774
-    * @example get("http://www.example.com/getInfo")
-    * @example get("http://www.example.com/getInfo", 5000)
-    * @example get("http://www.example.com/getInfo", 5000, 5000)
-    * @throws java.io.IOException I/O issue
-    * @throws java.net.SocketTimeoutException timeout reached
-    * @throws java.net.UnknownHostException perhaps no local network connection
-
+    * @param url               A complete URL, such as "http://foo.com/bar"
     */
-  @throws(classOf[java.io.IOException])
-  @throws(classOf[java.net.SocketTimeoutException])
-  @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-  def get(url: String,
-          connectTimeout: Int = HttpClientConnTimeOut,
-          readTimeout: Int = HttpClientReadTimeOut,
-          requestMethod: String = "GET"): String = {
-    val connection = new URL(url).openConnection.asInstanceOf[HttpURLConnection]
-    connection.setConnectTimeout(connectTimeout)
-    connection.setReadTimeout(readTimeout)
-    connection.setRequestMethod(requestMethod)
-    val inputStream = connection.getInputStream
-    val content: String = io.Source.fromInputStream(inputStream).mkString
-    if (inputStream ne null) inputStream.close()
-    content
+  def get(url: String): String = {
+
+    val httpclient: CloseableHttpClient = HttpClients.createDefault()
+    val httpGet: HttpGet = new HttpGet(url)
+    val response: CloseableHttpResponse = httpclient.execute(httpGet)
+    // The underlying HTTP connection is still held by the response object
+    // to allow the response content to be streamed directly from the network socket.
+    // In order to ensure correct deallocation of system resources
+    // the user MUST call CloseableHttpResponse#close() from a finally clause.
+    // Please note that if response content is not fully consumed the underlying
+    // connection cannot be safely re-used and will be shut down and discarded
+    // by the connection manager.
+    try {
+
+      val status = response.getStatusLine().getStatusCode()
+      if (status >= 200 && status < 300) {
+        val entity: HttpEntity = response.getEntity()
+        if (entity != null) EntityUtils.toString(entity)
+        else ""
+      } else {
+        throw new ClientProtocolException("Unexpected response status: " + status)
+      }
+    } finally {
+      response.close()
+    }
   }
-}
