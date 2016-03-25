@@ -18,7 +18,7 @@ trait RestClient {
     * This function will also throw exceptions if there are problems trying
     * to connect to the url.
     *
-    * @param url               A complete URL, such as "http://foo.com/bar"
+    * @param url A complete URL, such as "http://foo.com/bar"
     */
   def get(url: String): String = {
 
@@ -46,3 +46,4 @@ trait RestClient {
       response.close()
     }
   }
+}
