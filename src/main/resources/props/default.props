@@ -16,7 +16,7 @@ radio.selectClass=thickBorder
 radio.unselectClass=thinBorder
 
 # implied with LCBO tests
-product.lcboMaxPerPage=20
+product.lcboMaxPerPage=40
 product.CategoriesMap={"wine":"Wine","spirits":"Spirits","beer":"Beer","ciders":"Ciders","coolers":"Ready-to-Drink/Coolers","non-Alc":"Non-Alc"}
 product.CategoriesImageMap={"wine":"/images/wineGlassPour.jpg","spirits":"/images/brandy.jpg","beer":"/images/beerGlass.jpg","ciders":"/images/ciderGlass.jpg","coolers":"/images/coolerGlass.jpg","non-Alc":"/images/giftBox.jpg"}
 product.interactionsImageMap={"recommend":"/images/recommend.jpg","cancel":"/images/cancel.jpg"}
@@ -27,6 +27,6 @@ product.Category=wine
 product.DBBatchSize=512
 product.cacheSize=20000
 
+# When going synchronously to select products of a category, we'll request no more than store.maxSampleSize from LCBO
 store.maxSampleSize=150
 store.lcboMaxPerPage=50
-store.lcboMinPerPage=10
