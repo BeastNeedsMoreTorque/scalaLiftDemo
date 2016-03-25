@@ -17,7 +17,7 @@ trait LcboJSONCreator[T <: LcboJSONCreator[T]] extends Record[T] with RestClient
 
   def setLcboId(id: Long): Unit
 
-  def buildUrl(urlRoot: String, params: Seq[(String, Any)] ): String = {
+  def buildUrl(urlRoot: String, params: (String, Any)* ): String = {
     val encoding = "UTF-8"
     urlRoot + (params.map(v => URLEncoder.encode(v._1, encoding) + "=" + URLEncoder.encode(v._2.toString, encoding)).mkString("&")
     match {case s if s.length == 0 => ""; case s => "?" + s})  // if there are parameters, prepend with ?
@@ -25,10 +25,11 @@ trait LcboJSONCreator[T <: LcboJSONCreator[T]] extends Record[T] with RestClient
 
   implicit val formats = net.liftweb.json.DefaultFormats
 
-  def extractLcboItems(urlRoot: String, params: Seq[(String, Any)], pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
+  def extractLcboItems(urlRoot: String, pageNo: Int, maxPerPage: Int, params: (String, Any)*): (IndexedSeq[T], JValue, String) = {
     // specify the URI for the LCBO api url for liquor selection
-    val fullParams = params ++ Seq(("per_page", maxPerPage), ("page", pageNo)) // get as many as possible on a page because we could have few matches.
-    val uri = buildUrl(urlRoot, fullParams)
+    // get as many as possible on a page because we could have few matches.
+    val fullParams = Seq("per_page" -> maxPerPage, "page" -> pageNo) ++ params
+    val uri = buildUrl(urlRoot, fullParams:_* )
     val pageContent = get(uri) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val nodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
