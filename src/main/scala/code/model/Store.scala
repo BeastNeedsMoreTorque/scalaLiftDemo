@@ -24,7 +24,11 @@ import net.liftweb.util.Props
 import org.squeryl.annotations._
 import code.model.Product._
 
-class Store  private() extends Persistable[Store] with Loader[Store] with LcboJSONCreator[Store] with CreatedUpdated[Store] with Loggable  {
+trait IStore {
+  def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]]
+}
+
+class Store  private() extends IStore with Persistable[Store] with Loader[Store] with LcboJSONCreator[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -59,8 +63,8 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
   // following three caches leverage ORM's stateful cache of storeProducts and inventories above (which are not presented as map but as slower sequence;
   // we organize as map for faster access).
   // They're recomputed when needed by the three helper functions that follow.
-  private val productsCache = TrieMap[Long, Product]()  // keyed by lcboId
-  private val productsCacheByCategory = TrieMap[String, IndexedSeq[Product]]()
+  private val productsCache = TrieMap[Long, IProduct]()  // keyed by lcboId
+  private val productsCacheByCategory = TrieMap[String, IndexedSeq[IProduct]]()
   private val inventoryByProductId = TrieMap[Long, Inventory]()
 
   private def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
@@ -84,7 +88,7 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
     * @param requestSize a number representing how many items we need to sample
     * @return quantity found in inventory for product and the product
     */
-  def recommend(category: String, requestSize: Int): Box[Iterable[(Long, Product)]] = {
+  def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]] = {
     /**
       * Queries LCBO matching category
       * Full URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage>
@@ -95,9 +99,9 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
       * @param category wine, spirits, and so on
       * @return collection of LCBO products while throwing.
       */
-    def productsByStoreCategory(category: String): IndexedSeq[Product] = {
+    def productsByStoreCategory(category: String): IndexedSeq[IProduct] = {
       collectItemsOnAPage(
-        accumItems=IndexedSeq[Product](),
+        accumItems=IndexedSeq[IProduct](),
         urlRoot= s"${Store.LcboDomainURL}/products",
         params = Seq(("store_id", lcboId), ("q", category)),
         Some(Store.MaxSampleSize),
@@ -105,7 +109,7 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
         Store.notDiscontinued)
     }
 
-    def getRequestFromCache(matchingKeys: IndexedSeq[Long]): IndexedSeq[(Long, Product)] = {
+    def getRequestFromCache(matchingKeys: IndexedSeq[Long]): IndexedSeq[(Long, IProduct)] = {
       // get some random sampling.
       val permutedKeys = Random.shuffle(matchingKeys).take(2 * requestSize)
       // generate double the keys and hope it's enough to find enough products with positive inventory as a result
@@ -118,7 +122,7 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
       x.take(requestSize)
     }
 
-    def getSerialResult: IndexedSeq[(Long, Product)] = {
+    def getSerialResult: IndexedSeq[(Long, IProduct)] = {
       val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
@@ -167,12 +171,12 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
   @throws(classOf[java.net.SocketTimeoutException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @tailrec
-  private final def collectItemsOnAPage(accumItems: IndexedSeq[Product],
+  private final def collectItemsOnAPage(accumItems: IndexedSeq[IProduct],
                                         urlRoot: String,
                                         params: Seq[(String, Any)],
                                         requiredSize: Option[Int],
                                         pageNo: Int,
-                                        filter: Product => Boolean): IndexedSeq[Product] = {
+                                        filter: Product => Boolean): IndexedSeq[IProduct] = {
 
     val (rawItems, jsonRoot, uri) = Product.extractLcboItems(urlRoot, params, pageNo=pageNo, Product.MaxPerPage)
     val items = rawItems.filter(filter)
@@ -380,7 +384,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
   def availableStores: Set[Long] = storesCache.toMap.keySet
   def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
   def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)
-  def getStore(s: Long): Option[Store] = storesCache.get(s)
+  def getStore(s: Long): Option[IStore] = storesCache.get(s)
   def getStoreByLcboId(id: Long): Option[Store] =
     for (dbid <- lcboidToDBId(id);
           s <- storesCache.get(dbid)) yield s

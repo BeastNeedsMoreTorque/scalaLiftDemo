@@ -35,7 +35,7 @@ class User extends MegaProtoUser[User] with Loggable {
     * @return the user who requested the product and the number of times the user has purchased this product as a pair/tuple.
     *         May throw but would be caught as a Failure within Box to be consumed higher up.
     */
-  def consume(p: Product, quantity: Long): Box[(String, Long)] = {
+  def consume(p: IProduct, quantity: Long): Box[(String, Long)] = {
     // update it with new details; we could verify that there is a difference between LCBO and our version first...
     // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
     // tryo captures database provider errors (column size too small for example, reporting it as an Empty Box with Failure)
