@@ -99,12 +99,10 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
       collectItemsOnAPage(
         accumItems=IndexedSeq[Product](),
         urlRoot= s"${Store.LcboDomainURL}/products",
+        params = Seq(("store_id", lcboId), ("q", category)),
         Some(Store.MaxSampleSize),
         pageNo = 1,
-        Store.notDiscontinued,
-        "store_id" -> lcboId,
-        "q" -> category
-      )
+        Store.notDiscontinued)
     }
 
     def getRequestFromCache(matchingKeys: IndexedSeq[Long]): IndexedSeq[(Long, Product)] = {
@@ -171,13 +169,12 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
   @tailrec
   private final def collectItemsOnAPage(accumItems: IndexedSeq[Product],
                                         urlRoot: String,
+                                        params: Seq[(String, Any)],
                                         requiredSize: Option[Int],
                                         pageNo: Int,
-                                        filter: Product => Boolean,
-                                        params: (String, Any)*
-                                       ): IndexedSeq[Product] = {
+                                        filter: Product => Boolean): IndexedSeq[Product] = {
 
-    val (rawItems, jsonRoot, uri) = Product.extractLcboItems(urlRoot, pageNo, Product.MaxPerPage, params:_*)
+    val (rawItems, jsonRoot, uri) = Product.extractLcboItems(urlRoot, params, pageNo=pageNo, Product.MaxPerPage)
     val items = rawItems.filter(filter)
     val revisedAccumItems =  accumItems ++ Product.reconcile(requiredSize.isEmpty, items)  // global product db and cache update.
     productsCache ++= revisedAccumItems.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
@@ -191,10 +188,10 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
     collectItemsOnAPage(
       revisedAccumItems, // union of this page with next page when we are asked for a full sample
       urlRoot,
+      params,
       requiredSize,
       pageNo + 1,
-      filter,
-      params:_*)
+      filter)
   }
 
   @throws(classOf[SocketTimeoutException])
@@ -210,7 +207,7 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
     @tailrec
     def collectInventoriesOnAPage(  urlRoot: String,
                                     pageNo: Int,
-                                    params: (String, Any)*): Unit = {
+                                    params: Seq[(String, Any)]): Unit = {
       def stateOfInventory(item: InventoryAsLCBOJson): EnumerationValueType = {
         val prodId = Product.lcboidToDBId(item.product_id)
         val invOption = for (x <- prodId;
@@ -225,8 +222,8 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
       }
 
       // specify the URI for the LCBO api url for liquor selection
-      val fullParams = Seq("per_page" -> Store.MaxPerPage) ++ params
-      val uri = buildUrl(urlRoot, fullParams:_* )
+      val fullParams: Seq[(String, Any)] = params ++ Seq(("per_page", Store.MaxPerPage), ("page", pageNo))
+      val uri = buildUrl(urlRoot, fullParams)
       val pageContent = get(uri)
       val jsonRoot = parse(pageContent)
       val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
@@ -283,9 +280,9 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
         logger.info(uri) // show what's going after several pages of background requests
         return
       }
-      collectInventoriesOnAPage( urlRoot, pageNo + 1, params:_*) // recurse to cache all we can
+      collectInventoriesOnAPage( urlRoot, pageNo + 1, params) // recurse to cache all we can
     }
-    collectInventoriesOnAPage(s"${Store.LcboDomainURL}/inventories", 1, "store_id" -> lcboId)
+    collectInventoriesOnAPage(s"${Store.LcboDomainURL}/inventories", 1, params=Seq(("store_id", lcboId)))
   }
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
@@ -295,11 +292,10 @@ class Store  private() extends Persistable[Store] with Loader[Store] with LcboJS
         collectItemsOnAPage(
           accumItems=IndexedSeq[Product](),
           s"${Store.LcboDomainURL}/products",
+          params= Seq(("store_id", lcboId)),
           requiredSize=None,  // ignored if not set meaning take them all
           pageNo = 1,
-          filter=Store.notDiscontinued,
-          "store_id" -> lcboId
-        ) // We make a somewhat arbitrary assumption that discontinued products are of zero interest.
+          filter=Store.notDiscontinued) // We make a somewhat arbitrary assumption that discontinued products are of zero interest.
       }
       inTransaction {  // needed
         tryo { fetchProductsByStore() } match {
@@ -410,7 +406,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
       @tailrec
       def collectStoresOnAPage(urlRoot: String,
                                pageNo: Int): Unit = {
-        val (items, jsonRoot, uri) = extractLcboItems(urlRoot, pageNo=pageNo, MaxPerPage)
+        val (items, jsonRoot, uri) = extractLcboItems(urlRoot, Seq(), pageNo=pageNo, MaxPerPage)
         // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
         val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = items.groupBy {
           s =>  ( getStoreByLcboId(s.lcboId), s) match {
