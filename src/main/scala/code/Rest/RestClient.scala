@@ -7,7 +7,8 @@ import org.apache.http.impl.client.{CloseableHttpClient, HttpClients}
 import org.apache.http.util.EntityUtils
 
 /**
-  * Created by philippederome on 2015-12-19. See Alvin Alexander: http://alvinalexander.com/scala/how-to-write-scala-http-get-request-client-source-fromurl
+  * Created by philippederome on 2015-12-19. First implementation had been from Alvin Alexander: http://alvinalexander.com/scala/how-to-write-scala-http-get-request-client-source-fromurl
+  * With errors of data truncation, I settled for Apache Commons on 2016-03-25.
   */
 trait RestClient {
 
