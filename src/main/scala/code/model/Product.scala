@@ -17,24 +17,6 @@ import org.squeryl.annotations._
 
 case class Attribute(key: String, value: String)
 
-trait IProduct {
-  def lcboId: Long
-
-  def id: Long
-
-  def Name: String
-  def primaryCategory: String
-  def isDiscontinued: Boolean
-  def totalPackageUnits: Int
-  def imageThumbUrl: String
-  def Package: String
-
-  // Change unit of currency from cents to dollars and Int to String
-  def price: String
-  def isDirty(p: IProduct): Boolean
-  def streamAttributes: IndexedSeq[Attribute]
-
-}
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.

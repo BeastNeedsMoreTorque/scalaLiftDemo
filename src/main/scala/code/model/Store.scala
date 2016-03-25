@@ -24,10 +24,6 @@ import net.liftweb.util.Props
 import org.squeryl.annotations._
 import code.model.Product._
 
-trait IStore {
-  def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]]
-}
-
 class Store  private() extends IStore with Persistable[Store] with Loader[Store] with LcboJSONCreator[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")

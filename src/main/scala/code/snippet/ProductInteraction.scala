@@ -1,7 +1,9 @@
 package code.snippet
 
-import code.model._
-import code.snippet.SessionCache._
+import java.text.NumberFormat
+
+import scala.xml._
+import scala.language.implicitConversions
 import net.liftweb.common._
 import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds._
@@ -11,10 +13,12 @@ import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
 import net.liftweb.http.SHtml._
 
-import scala.xml._
-import scala.language.implicitConversions
-
-import java.text.NumberFormat
+import code.model.IStore
+import code.model.IProduct
+import code.model.Product
+import code.model.Store
+import code.model.User
+import code.snippet.SessionCache._
 
 /**
   * This snippet contains state only via HTTP session (A Liftweb snippet is a web page fragment that has autonomous existence
