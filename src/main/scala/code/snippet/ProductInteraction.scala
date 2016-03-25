@@ -25,7 +25,7 @@ import java.text.NumberFormat
   */
 object ProductInteraction extends Loggable {
   case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
-  case class QuantityOfProduct(quantity: Long, product: Product)  // quantity available at the current store for a product (store is implied by context)
+  case class QuantityOfProduct(quantity: Long, product: IProduct)  // quantity available at the current store for a product (store is implied by context)
   case class SelectedProduct(id: Int, quantity: Long, cost: Double) // to capture user input via JS and JSON
   case class SelectedProductFeedback(selectedProduct: SelectedProduct, feedback: Feedback)
   case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
@@ -62,9 +62,9 @@ object ProductInteraction extends Loggable {
           // and to its right (Blueprint classes span-8 last) other data containing img and selection details as selectionMarkup.
           // selectionMarkup is top to bottom: image, then checkbox, quantity and cost input text fields right justified (CSS class prodSelectInput).
           // We also add a hiddenCost, so that the cost per item is always available for our calculation (visible to user in attributes in any event, but harder for us to get at for computation)
-          def attributesMarkup(prod: Product, quantityAttr: Attribute, attrs: IndexedSeq[Attribute]): NodeSeq = {
-            def setProdIdName( attr: Attribute) =
-              if (attr == quantityAttr) prod.lcbo_id.get.toString else ""
+          def attributesMarkup(prod: IProduct, quantityAttr: Attribute, attrs: IndexedSeq[Attribute]): NodeSeq = {
+            def setProdIdName( attr: Attribute): String =
+              if (attr == quantityAttr) prod.lcboId.toString else ""
 
             val x = {
               for (attr <- attrs)
@@ -80,13 +80,14 @@ object ProductInteraction extends Loggable {
             <div class="span-8"><table>{x}</table></div>
           }
 
-          def selectionMarkup(prod: Product) = {
+          def selectionMarkup(prod: IProduct) = {
             val imgNS = <img src={prod.imageThumbUrl}/>
 
             // create a checkBox with value being product id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
+            val lcboId = prod.lcboId.toString
             val checkBoxNS = <label>
-              <input type="checkbox" class="prodSelectInput" value={prod.lcbo_id.get.toString}/>
-              {prod.name.get}
+              <input type="checkbox" class="prodSelectInput" value={lcboId}/>
+              {prod.Name}
             </label><br/>
 
             val quantityNS = <label>Item Quantity:
@@ -121,7 +122,7 @@ object ProductInteraction extends Loggable {
         Store.getStore(storeId).fold {
           S.error("We need to establish your local store first, please wait for local geo to become available")
           Noop
-        }{ s: Store =>
+        }{ s: IStore =>
           // validate expected numeric input storeId then access LCBO data
           val quantityProdSeq = s.recommend(theCategory.is, theRecommendCount.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
@@ -170,16 +171,16 @@ object ProductInteraction extends Loggable {
       }
 
       def mayConsume(selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
-        def mayConsumeItem(p: Product, quantity: Long): Feedback = {
+        def mayConsumeItem(p: IProduct, quantity: Long): Feedback = {
           User.currentUser.dmap { Feedback(userName="", success=false, "unable to process transaction, Login first!") }
           { user =>
             user.consume(p, quantity) match {
               case Full((userName, count)) => // the good
-                Feedback(userName, success = true, s"${p.name} $count unit(s) over the years")
+                Feedback(userName, success = true, s"${p.Name} $count unit(s) over the years")
               case Failure(e, ex, _) =>  // the bad
-                Feedback(userName = "", success = false, s"Unable to sell you product ${p.name} with error $e and exception '$ex'")
+                Feedback(userName = "", success = false, s"Unable to sell you product ${p.Name} with error $e and exception '$ex'")
               case Empty =>  // the ugly
-                Feedback(userName = "", success = false, s"Unable to sell you product ${p.name}")
+                Feedback(userName = "", success = false, s"Unable to sell you product ${p.Name}")
             }
           }
         }

@@ -17,11 +17,30 @@ import org.squeryl.annotations._
 
 case class Attribute(key: String, value: String)
 
+trait IProduct {
+  def lcboId: Long
+
+  def id: Long
+
+  def Name: String
+  def primaryCategory: String
+  def isDiscontinued: Boolean
+  def totalPackageUnits: Int
+  def imageThumbUrl: String
+  def Package: String
+
+  // Change unit of currency from cents to dollars and Int to String
+  def price: String
+  def isDirty(p: IProduct): Boolean
+  def streamAttributes: IndexedSeq[Attribute]
+
+}
+
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends Persistable[Product] with Loader[Product] with LcboJSONCreator[Product] with CreatedUpdated[Product] {
+class Product private() extends IProduct with Persistable[Product] with Loader[Product] with LcboJSONCreator[Product] with CreatedUpdated[Product] {
   def meta = Product
 
   @Column(name="pkid")
@@ -68,6 +87,7 @@ class Product private() extends Persistable[Product] with Loader[Product] with L
   }
 
   // intentional aliasing allowing more standard naming convention and not having to call get on.
+  def Name = name.get
   def primaryCategory = primary_category.get
   def isDiscontinued = is_discontinued.get
   def totalPackageUnits = total_package_units.get
@@ -111,9 +131,9 @@ class Product private() extends Persistable[Product] with Loader[Product] with L
       Attribute ("Origin:", origin.get) ::
       Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
 
-  def isDirty(p: Product): Boolean = {
-    price_in_cents.get != p.price_in_cents.get ||
-      image_thumb_url.get != p.image_thumb_url.get
+  def isDirty(p: IProduct): Boolean = {
+    price != p.price ||
+      imageThumbUrl != p.imageThumbUrl
   }
 }
 
@@ -127,7 +147,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
 
-  def getProductByLcboId(id: Long): Option[Product] =
+  def getProductByLcboId(id: Long): Option[IProduct] =
     for (dbId <- LcboIdsToDBIds.get(id);
          p <- productsCache.get(dbId)) yield p
 
@@ -144,7 +164,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     logger.info("Product.init end")
   }
 
-  def reconcile(cacheOnly: Boolean, items: IndexedSeq[Product]): IndexedSeq[Product] = {
+  def reconcile(cacheOnly: Boolean, items: IndexedSeq[Product]): IndexedSeq[IProduct] = {
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val productsByState: Map[EnumerationValueType, IndexedSeq[Product]] = items.groupBy {
       p => (getProductByLcboId(p.lcboId), p) match {
