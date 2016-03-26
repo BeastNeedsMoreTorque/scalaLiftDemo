@@ -56,3 +56,4 @@ Feb 7: added google maps support with directions, markers, and store selection.
 Mar 25: LCBO starts truncating data at more than 50 items per page, definitely at 100.
 Apache httpclient commons gives a nicer exception:
 2016-03-25 17:48:11,273 [ForkJoinPool-1-worker-1] ERROR code.model.Store - Problem loading LCBO stores into cache with message 'Truncated chunk ( expected size: 8192; actual size: 6042)' and exception error 'Full(org.apache.http.TruncatedChunkException: Truncated chunk ( expected size: 8192; actual size: 6042))'
+https://forums.aws.amazon.com/thread.jspa?threadID=92047

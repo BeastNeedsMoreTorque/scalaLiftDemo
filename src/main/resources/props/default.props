@@ -15,7 +15,7 @@ DBWrite.BatchSize=1024
 radio.selectClass=thickBorder
 radio.unselectClass=thinBorder
 
-# implied with LCBO tests
+# implied with LCBO tests (80 throws!)
 product.lcboMaxPerPage=40
 product.CategoriesMap={"wine":"Wine","spirits":"Spirits","beer":"Beer","ciders":"Ciders","coolers":"Ready-to-Drink/Coolers","non-Alc":"Non-Alc"}
 product.CategoriesImageMap={"wine":"/images/wineGlassPour.jpg","spirits":"/images/brandy.jpg","beer":"/images/beerGlass.jpg","ciders":"/images/ciderGlass.jpg","coolers":"/images/coolerGlass.jpg","non-Alc":"/images/giftBox.jpg"}
@@ -29,4 +29,5 @@ product.cacheSize=20000
 
 # When going synchronously to select products of a category, we'll request no more than store.maxSampleSize from LCBO
 store.maxSampleSize=150
+# implied with LCBO tests as max we can query on a page
 store.lcboMaxPerPage=50
