@@ -1,16 +1,19 @@
 package code.Rest
 
-import org.apache.http.HttpEntity
+import java.io.IOException
+import net.liftweb.common.Loggable
+import org.apache.http.{HttpEntity, HttpResponse}
 import org.apache.http.client._
-import org.apache.http.client.methods.{CloseableHttpResponse, HttpGet}
-import org.apache.http.impl.client.{CloseableHttpClient, HttpClients}
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.impl.client.HttpClients
 import org.apache.http.util.EntityUtils
+import org.apache.http.client.ClientProtocolException
 
 /**
   * Created by philippederome on 2015-12-19. First implementation had been from Alvin Alexander: http://alvinalexander.com/scala/how-to-write-scala-http-get-request-client-source-fromurl
-  * With errors of data truncation, I settled for Apache Commons on 2016-03-25.
+  * With errors of data truncation, I settled for Apache Commons on 2016-03-25 and simply translated to Scala.
   */
-trait RestClient {
+trait RestClient extends Loggable {
 
   /**
     * Returns the text (content) from a REST URL as a String.
@@ -20,30 +23,31 @@ trait RestClient {
     *
     * @param url A complete URL, such as "http://foo.com/bar"
     */
+  @throws(classOf[ClientProtocolException])
+  @throws(classOf[IOException])  // say LCBO sends less data than they promise by chopping off data, a distinct possibility!
   def get(url: String): String = {
 
-    val httpclient: CloseableHttpClient = HttpClients.createDefault()
-    val httpGet: HttpGet = new HttpGet(url)
-    val response: CloseableHttpResponse = httpclient.execute(httpGet)
-    // The underlying HTTP connection is still held by the response object
-    // to allow the response content to be streamed directly from the network socket.
-    // In order to ensure correct deallocation of system resources
-    // the user MUST call CloseableHttpResponse#close() from a finally clause.
-    // Please note that if response content is not fully consumed the underlying
-    // connection cannot be safely re-used and will be shut down and discarded
-    // by the connection manager.
+    val httpclient = HttpClients.createDefault()
     try {
+      val httpget = new HttpGet(url)
+      // Create a custom response handler
+      val responseHandler = new ResponseHandler[String]() {
+        @Override
+        def handleResponse( response: HttpResponse): String = {
+          val status  = response.getStatusLine().getStatusCode()
+          if (status >= 200 && status < 300) {
+            val entity: HttpEntity  = response.getEntity()
+            if (entity != null) EntityUtils.toString(entity)
+            else ""
+          } else {
+            throw new ClientProtocolException("Unexpected response status: " + status)
+          }
+        }
 
-      val status = response.getStatusLine().getStatusCode()
-      if (status >= 200 && status < 300) {
-        val entity: HttpEntity = response.getEntity()
-        if (entity != null) EntityUtils.toString(entity)
-        else ""
-      } else {
-        throw new ClientProtocolException("Unexpected response status: " + status)
       }
+      httpclient.execute(httpget, responseHandler)
     } finally {
-      response.close()
+      httpclient.close()
     }
   }
 }
