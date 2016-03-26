@@ -1,7 +1,5 @@
 package code.snippet
 
-import code.model.Product
-import net.liftweb.common.{Empty, Box}
 import net.liftweb.http.SessionVar
 import net.liftweb.util.Props
 
