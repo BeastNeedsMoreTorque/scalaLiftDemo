@@ -27,7 +27,7 @@ import code.snippet.SessionCache._
   * Much html and Javascript is generated here thanks to the capabilities of liftweb.
   * Created by philippederome on 15-10-26.
   */
-object ProductInteraction extends Loggable {
+class ProductInteraction extends JSUtilities with Loggable {
   case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
   case class QuantityOfProduct(quantity: Long, product: IProduct)  // quantity available at the current store for a product (store is implied by context)
   case class SelectedProduct(id: Int, quantity: Long, cost: Double) // to capture user input via JS and JSON
@@ -228,13 +228,13 @@ object ProductInteraction extends Loggable {
     // call to setBorderJS after button activation simply highlights that button was pressed.
     "@consume [onclick]" #>
       jsonCall( JE.Call("prodSelection.currentProds"),
-                      { j: JValue => consumeProducts(j) & JSUtilities.setBorderJS(actionButtonsContainer, "consume")}) & // fetch in JSON with JS Call the lcbo product IDs and then deal with them
+                      { j: JValue => consumeProducts(j) & setBorderJS(actionButtonsContainer, "consume")}) & // fetch in JSON with JS Call the lcbo product IDs and then deal with them
     "@cancel [onclick]" #>
-      ajaxInvoke({() => cancel & JSUtilities.setBorderJS(actionButtonsContainer, "cancel")}) &
+      ajaxInvoke({() => cancel & setBorderJS(actionButtonsContainer, "cancel")}) &
     "select" #> ajaxSelect(RecommendCount.options, RecommendCount.default,
       { selected: String => theRecommendCount.set(toInt(selected)); Noop }) andThen // always before recommend so it takes effect.
     "@recommend [onclick]" #>
       jsonCall( JE.Call("storeFinder.getTheSelectedStore"),
-        { j: JValue => recommend(j) & JSUtilities.setBorderJS(actionButtonsContainer, "recommend")})
+        { j: JValue => recommend(j) & setBorderJS(actionButtonsContainer, "recommend")})
   }
 }

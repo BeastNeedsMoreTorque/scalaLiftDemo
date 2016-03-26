@@ -6,7 +6,7 @@ import net.liftweb.http.js.JsCmd
 /**
   * Created by philippederome on 2016-02-15.
   */
-object JSUtilities {
+trait JSUtilities {
   def setBorderJS(container: String, elt: String): JsCmd = Call("toggleButton.frame", container, elt)
 
 }
