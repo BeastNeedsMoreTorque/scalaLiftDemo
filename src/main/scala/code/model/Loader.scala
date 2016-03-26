@@ -13,19 +13,19 @@ trait Loader[T <: Loader[T]] extends Record[T]
 {
   self: T =>
 
-  def table(): Table[T]
-  def cache(): concurrent.Map[Long, T]  // primary cache
-  def LcboIdsToDBIds(): concurrent.Map[Long, Long]  // secondary cache
+  protected def table(): Table[T]
+  protected def cache(): concurrent.Map[Long, T]  // primary cache
+  protected def LcboIdsToDBIds(): concurrent.Map[Long, Long]  // secondary cache
 
-  def pKey: Long
-  def lcboId: Long
+  protected def pKey: Long
+  protected def lcboId: Long
 
-  def cacheNewItems(items: Iterable[T]): Unit = {
+  protected def cacheNewItems(items: Iterable[T]): Unit = {
     cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)
     LcboIdsToDBIds() ++= cache().map { case(k, v) => v.lcboId -> k }
   }
 
-  def load(): Iterable[T] = {
+  protected def load(): Iterable[T] = {
     // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     inTransaction {
       val items = from(table())(s => select(s))

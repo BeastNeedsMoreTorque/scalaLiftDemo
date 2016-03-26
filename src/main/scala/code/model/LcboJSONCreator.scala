@@ -5,6 +5,7 @@ import java.net.URLEncoder
 import code.Rest.RestClient
 import net.liftweb.json._
 import net.liftweb.record.Record
+import net.liftweb.util.Props
 
 import scala.collection.IndexedSeq
 import scala.collection.mutable.ArrayBuffer
@@ -24,6 +25,15 @@ trait LcboJSONCreator[T <: LcboJSONCreator[T]] extends Record[T] with RestClient
   }
 
   implicit val formats = net.liftweb.json.DefaultFormats
+
+  def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
+
+  def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
+    //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
+    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
+    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
+    isFinalPage || totalPages < pageNo + 1
+  }
 
   def extractLcboItems(urlRoot: String, params: Seq[(String, Any)], pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
     // specify the URI for the LCBO api url for liquor selection
