@@ -1,10 +1,7 @@
 package code.model
 
-import org.squeryl.dsl.CompositeKey2
-
-import org.squeryl.{KeyedEntity, ForeignKeyDeclaration, Schema}
+import org.squeryl.{ForeignKeyDeclaration, Schema}
 import net.liftweb.squerylrecord.RecordTypeMode._
-
 
 /**
   * Created by philippederome on 2016-01-01.
