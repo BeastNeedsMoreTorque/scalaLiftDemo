@@ -142,7 +142,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   def collectProducts(params: Seq[(String, Any)],
                       requiredSize: Option[Int]): IndexedSeq[IProduct] = {
     collectItemsOnAPage(
-      accumItems=IndexedSeq[Product](),
+      accumItems=IndexedSeq[IProduct](),
       s"$LcboDomainURL/products",
       params,
       requiredSize,  // ignored if not set meaning take them all
