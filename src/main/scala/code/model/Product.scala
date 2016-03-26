@@ -15,8 +15,9 @@ import net.liftweb.util.Props
 import net.liftweb.json.Xml
 import org.squeryl.annotations._
 
-case class Attribute(key: String, value: String)
+import scala.annotation.tailrec
 
+case class Attribute(key: String, value: String)
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -123,18 +124,10 @@ class Product private() extends IProduct with Persistable[Product] with Loader[P
   * object Product: supports reconcile that does insert or update on items needing updating, and refresh caches
   */
 object Product extends Product with MetaRecord[Product] with Loggable {
-  private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
-
-  def getProductByLcboId(id: Long): Option[IProduct] =
-    for (dbId <- LcboIdsToDBIds.get(id);
-         p <- productsCache.get(dbId)) yield p
-
-  def lcboidToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
-  def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
 
   /* Convert a store to XML @see progscala2 chapter on implicits */
   implicit def toXml(p: Product): Node =
@@ -146,7 +139,25 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     logger.info("Product.init end")
   }
 
-  def reconcile(cacheOnly: Boolean, items: IndexedSeq[Product]): IndexedSeq[IProduct] = {
+  def collectProducts(params: Seq[(String, Any)],
+                      requiredSize: Option[Int]): IndexedSeq[IProduct] = {
+    collectItemsOnAPage(
+      accumItems=IndexedSeq[Product](),
+      s"$LcboDomainURL/products",
+      params,
+      requiredSize,  // ignored if not set meaning take them all
+      pageNo = 1)
+  }
+
+  def lcboIdToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
+  def getProductByLcboId(id: Long): Option[IProduct] =
+    for (dbId <- LcboIdsToDBIds.get(id);
+         p <- productsCache.get(dbId)) yield p
+
+  private def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
+  private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
+
+  private def reconcile(cacheOnly: Boolean, items: IndexedSeq[Product]): IndexedSeq[IProduct] = {
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val productsByState: Map[EnumerationValueType, IndexedSeq[Product]] = items.groupBy {
       p => (getProductByLcboId(p.lcboId), p) match {
@@ -170,6 +181,56 @@ object Product extends Product with MetaRecord[Product] with Loggable {
                                   p <- getProductByLcboId(prod.lcboId)) yield p
       (refreshedCleanProducts ++ refreshedNewProducts ++ updatedProducts).toIndexedSeq // client wants full set.
     }
+  }
+
+  /**
+    * LCBO client JSON query handler.
+    *
+    * @see https://github.com/lift/lift/tree/master/framework/lift-base/lift-json/
+    *      don't go to more pages than user implicitly requests via requiredSize that should not be exceeded.
+    *      Uses tail recursion.
+    * @param accumItems accumulator to facilitate tail recursion
+    * @param urlRoot a LCBO product query without the details of paging, which we handle here
+    * @param requiredSize required size of products that are asked for. May get less if there are fewer matches, but will not go above that size.
+    *                      if cacheOnly is true, this value can be arbitrary and ignored.
+    * @param cacheOnly true if we don't need a full return result set, false if we need data we can consume (side effect is to cache all the time)
+    * @param pageNo client calls this with value 1 (initial page), recursion increments it, designates the pageno for LCBO JSON data when data fits on several pages
+    * @param filter client's filter that can be applied as we process the data before mapping/extracting it out to client data.
+    *                 In principle, should be faster when user filters reject many values, but no empirical evidence here.
+    * @return a vector of product items matching the query and size constraint (or none if cacheOnly is true). Always side effect to cache.
+    * @throws java.net.SocketTimeoutException timeout is reached, slow connection
+    * @throws java.io.IOException I/O issue
+    * @throws net.liftweb.json.JsonParser.ParseException parse problem
+    * @throws net.liftweb.json.MappingException our case class does not match JSon object from API
+    *
+    */
+  @throws(classOf[net.liftweb.json.MappingException])
+  @throws(classOf[net.liftweb.json.JsonParser.ParseException])
+  @throws(classOf[java.io.IOException])
+  @throws(classOf[java.net.SocketTimeoutException])
+  @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
+  @tailrec
+  private final def collectItemsOnAPage(accumItems: IndexedSeq[IProduct],
+                                        urlRoot: String,
+                                        params: Seq[(String, Any)],
+                                        requiredSize: Option[Int],
+                                        pageNo: Int): IndexedSeq[IProduct] = {
+
+    val (rawItems, jsonRoot, uri) = extractLcboItems(urlRoot, params, pageNo=pageNo, MaxPerPage)
+    val items = rawItems.filterNot(p => p.isDiscontinued)
+    val revisedAccumItems =  accumItems ++ reconcile(requiredSize.isEmpty, items)  // global product db and cache update.
+
+    if (isFinalPage(jsonRoot, pageNo=pageNo) ||
+        requiredSize.forall{x => x <= items.size + accumItems.size }) {
+      logger.info(uri) // log only last one to be less verbose
+      return revisedAccumItems
+    }
+    collectItemsOnAPage(
+      revisedAccumItems, // union of this page with next page when we are asked for a full sample
+      urlRoot,
+      params,
+      requiredSize,
+      pageNo + 1)
   }
 
 }
