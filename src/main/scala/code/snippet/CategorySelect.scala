@@ -9,7 +9,7 @@ import net.liftweb.util.Helpers._
 /**
   * Created by philippederome on 2015-12-05.
   */
-object CategorySelect {
+class CategorySelect extends JSUtilities {
   private val categoryImg = LiquorCategory.toImg(SessionCache.defaultCategory)
   private val defaultOption = RadioElements.selectOption(SessionCache.defaultCategory, categoryImg)  // selected with style that frames it
   private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.categoriesSeq, SessionCache.defaultCategory, LiquorCategory.toImg)
@@ -29,7 +29,7 @@ object CategorySelect {
       radioOptions, Full(defaultOption),
       (choice: RadioElements) => {
         theCategory.set(choice.name)
-        JSUtilities.setBorderJS("prodCategoryContainer", choice.name)
+        setBorderJS("prodCategoryContainer", choice.name)
       }))
   }
 }
