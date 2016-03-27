@@ -70,7 +70,7 @@ class ProductInteraction extends JSUtilities with Loggable {
             def setProdIdName( attr: Attribute): String =
               if (attr == quantityAttr) prod.lcboId.toString else ""
 
-            val x = {
+            val tbody = {
               for (attr <- attrs)
                 yield <tr>
                   <td class="prodAttrHead">
@@ -81,7 +81,19 @@ class ProductInteraction extends JSUtilities with Loggable {
                   </td>
                 </tr>
             }
-            <div class="span-8"><table>{x}</table></div>
+            <div class="span-8">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Attribute</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tbody}
+                </tbody>
+              </table>
+            </div>
           }
 
           def selectionMarkup(prod: IProduct) = {
@@ -89,19 +101,22 @@ class ProductInteraction extends JSUtilities with Loggable {
 
             // create a checkBox with value being product id (key for lookups) and label's html representing name. The checkbox state is picked up when we call JS in this class
             val lcboId = prod.lcboId.toString
-            val checkBoxNS = <label>
-              <input type="checkbox" class="prodSelectInput" value={lcboId}/>
-              {prod.Name}
-            </label><br/>
+            val checkBoxNS =
+              <label>
+                <input type="checkbox" class="prodSelectInput" value={lcboId}/>
+                {prod.Name}
+              </label><br/>
 
-            val quantityNS = <label>Item Quantity:
-              <input type="text" class="prodQty prodSelectInput" onchange="prodSelection.updateQtyItem(this);" value="1"/>
-            </label><br/>
+            val quantityNS =
+              <label>Item Quantity:
+                <input type="text" class="prodQty prodSelectInput" onchange="prodSelection.updateQtyItem(this);" value="1"/>
+              </label><br/>
 
             // read-only costNS, so user can see it clearly but cannot update it.
-            val costNS = <label>Cost:
-              <input type="text" class="prodCost prodSelectInput" value={prod.price} readonly="readonly"/>
-            </label>
+            val costNS =
+              <label>Cost:
+                <input type="text" class="prodCost prodSelectInput" value={prod.price} readonly="readonly"/>
+              </label>
 
             val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"/>
 
