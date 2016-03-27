@@ -126,7 +126,7 @@ class ProductInteraction extends JSUtilities with Loggable {
         Store.getStore(storeId).fold {
           S.error("We need to establish your local store first, please wait for local geo to become available")
           Noop
-        }{ s: IStore =>
+        }{ s =>
           // validate expected numeric input storeId then access LCBO data
           val quantityProdSeq = s.recommend(theCategory.is, theRecommendCount.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
