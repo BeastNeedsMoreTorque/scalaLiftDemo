@@ -5,7 +5,7 @@ import java.text.NumberFormat
 import code.model.EntityRecordState.EnumerationValueType
 
 import scala.collection.concurrent.TrieMap
-import scala.collection._
+import scala.collection.{IndexedSeq, concurrent}
 import scala.language.implicitConversions
 import scala.xml.Node
 import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField}
@@ -121,7 +121,7 @@ class Product private() extends IProduct with Persistable[Product] with Loader[P
 }
 
 /**
-  * object Product: supports reconcile that does insert or update on items needing updating, and refresh caches
+  *
   */
 object Product extends Product with MetaRecord[Product] with Loggable {
   // thread-safe lock free objects
@@ -140,13 +140,36 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   }
 
   def collectProducts(params: Seq[(String, Any)],
-                      requiredSize: Option[Int]): IndexedSeq[IProduct] = {
+                      requiredSize: Int): IndexedSeq[IProduct] =
     collectItemsOnAPage(
-      accumItems=IndexedSeq[IProduct](),
+      accumItems=IndexedSeq[Product](),
       s"$LcboDomainURL/products",
       params,
-      requiredSize,  // ignored if not set meaning take them all
+      Some(requiredSize),  // ignored if not set meaning take them all
       pageNo = 1)
+
+  // side effect to store updates of the products
+  def notifyProducts(params: Seq[(String, Any)]): IndexedSeq[IProduct] = {
+    val items = collectItemsOnAPage(
+      accumItems=IndexedSeq[Product](),
+      s"$LcboDomainURL/products",
+      params,
+      None,  // ignored if not set meaning take them all
+      pageNo = 1)
+
+    // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
+    val productsByState: Map[EnumerationValueType, IndexedSeq[Product]] = items.groupBy {
+      p => (getProductByLcboId(p.lcboId), p) match {
+        case (None, _) => EntityRecordState.New
+        case (Some(product), lcboProduct) if product.isDirty(lcboProduct) => EntityRecordState.Dirty
+        case (_ , _) => EntityRecordState.Clean
+      }
+    }
+    val dirtyItems = productsByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Product]())
+    val newItems = productsByState.getOrElse(EntityRecordState.New, IndexedSeq[Product]())
+    updateAndInsert(dirtyItems, newItems)
+    val cleanItems = productsByState.getOrElse(EntityRecordState.Clean, IndexedSeq[Product]())
+    cleanItems ++ dirtyItems ++ newItems
   }
 
   def lcboIdToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
@@ -156,32 +179,6 @@ object Product extends Product with MetaRecord[Product] with Loggable {
 
   private def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
-
-  private def reconcile(cacheOnly: Boolean, items: IndexedSeq[Product]): IndexedSeq[IProduct] = {
-    // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-    val productsByState: Map[EnumerationValueType, IndexedSeq[Product]] = items.groupBy {
-      p => (getProductByLcboId(p.lcboId), p) match {
-        case (None, _) => EntityRecordState.New
-        case (Some(product), lcboProduct) if product.isDirty(lcboProduct) => EntityRecordState.Dirty
-        case (_ , _) => EntityRecordState.Clean
-      }
-    }
-    val dirtyProducts = productsByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Product]())
-    val newProducts = productsByState.getOrElse(EntityRecordState.New, IndexedSeq[Product]())
-    updateAndInsert(dirtyProducts, newProducts)
-
-    if (cacheOnly) IndexedSeq() // to satisfy method signature only
-    else {
-      // productsByState has dirty PKID and so need refresh prior to use in memory, which we do with flatMap calls below.
-      val refreshedCleanProducts = for( prod <- productsByState.getOrElse(EntityRecordState.Clean, IndexedSeq[Product]());
-                                        p <- getProductByLcboId(prod.lcboId)) yield p
-      val updatedProducts = for ( prod <- dirtyProducts;
-                                  p <- getProductByLcboId(prod.lcboId)) yield p
-      val refreshedNewProducts = for ( prod <- newProducts;
-                                  p <- getProductByLcboId(prod.lcboId)) yield p
-      (refreshedCleanProducts ++ refreshedNewProducts ++ updatedProducts).toIndexedSeq // client wants full set.
-    }
-  }
 
   /**
     * LCBO client JSON query handler.
@@ -210,15 +207,15 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   @throws(classOf[java.net.SocketTimeoutException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @tailrec
-  private final def collectItemsOnAPage(accumItems: IndexedSeq[IProduct],
+  private final def collectItemsOnAPage(accumItems: IndexedSeq[Product],
                                         urlRoot: String,
                                         params: Seq[(String, Any)],
                                         requiredSize: Option[Int],
-                                        pageNo: Int): IndexedSeq[IProduct] = {
+                                        pageNo: Int): IndexedSeq[Product] = {
 
     val (rawItems, jsonRoot, uri) = extractLcboItems(urlRoot, params, pageNo=pageNo, MaxPerPage)
     val items = rawItems.filterNot(p => p.isDiscontinued)
-    val revisedAccumItems =  accumItems ++ reconcile(requiredSize.isEmpty, items)  // global product db and cache update.
+    val revisedAccumItems =  accumItems ++ items
 
     if (isFinalPage(jsonRoot, pageNo=pageNo) ||
         requiredSize.forall{x => x <= items.size + accumItems.size }) {

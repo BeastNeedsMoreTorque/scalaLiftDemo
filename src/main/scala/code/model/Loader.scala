@@ -25,12 +25,11 @@ trait Loader[T <: Loader[T]] extends Record[T]
     LcboIdsToDBIds() ++= cache().map { case(k, v) => v.lcboId -> k }
   }
 
-  protected def load(): Iterable[T] = {
-    // load all stores from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
+  protected def load(): Unit = {
+    // load all items from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
     inTransaction {
       val items = from(table())(s => select(s))
       cacheNewItems(items)
-      items
     }
   }
 }

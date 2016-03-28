@@ -21,7 +21,7 @@ import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
 import org.squeryl.annotations._
-import code.model.Product.collectProducts
+import code.model.Product.{collectProducts, notifyProducts}
 
 class Store  private() extends IStore with Persistable[Store] with Loader[Store] with LcboJSONCreator[Store] with CreatedUpdated[Store] with Loggable  {
 
@@ -67,6 +67,10 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
   private def getInventories: Map[Long, Inventory] =
     inventories.toIndexedSeq.map { inv => inv.productid -> inv } (breakOut)  // moderately slow because of iteration
 
+  private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
+    productsCache ++= items.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
+    productsCacheByCategory ++= items.groupBy(_.primaryCategory)
+  }
   private def emptyInventory: Boolean =
     inventories.toIndexedSeq.forall(_.quantity == 0)
 
@@ -95,10 +99,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       * @return collection of LCBO products while throwing.
       */
     def productsByStoreCategory(category: String): IndexedSeq[IProduct] = {
-      val items = collectProducts(Seq(("store_id", lcboId), ("q", category)), Some(Store.MaxSampleSize))
-      productsCache ++= items.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
-      productsCacheByCategory ++= items.groupBy(_.primaryCategory)
-      items
+      collectProducts(Seq(("store_id", lcboId), ("q", category)), Store.MaxSampleSize)
     }
 
     def getRequestFromCache(matchingKeys: IndexedSeq[Long]): IndexedSeq[(Long, IProduct)] = {
@@ -114,8 +115,10 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       x.take(requestSize)
     }
 
+    // side effect
     def getSerialResult: IndexedSeq[(Long, IProduct)] = {
       val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
+      addToCaches(prods)
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
                      lcbo_id = prods(id).lcboId.toInt;
@@ -139,11 +142,9 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
     def fetchProducts(): Unit = {
-      def fetchProductsByStore(): Unit = {
-        val items = Product.collectProducts(Seq(("store_id", lcboId)), requiredSize=None)  // ignored if not set meaning take them all
-        productsCache ++= items.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
-        productsCacheByCategory ++= items.groupBy(_.primaryCategory)
-      }
+      def fetchProductsByStore(): Unit =
+        addToCaches(notifyProducts( Seq("store_id" -> lcboId))) // ignored if not set meaning take them all
+
       inTransaction {  // needed
         tryo { fetchProductsByStore() } match {
           case net.liftweb.common.Failure(m, ex, _) =>
@@ -161,6 +162,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       @throws(classOf[net.liftweb.json.JsonParser.ParseException])
       @throws(classOf[MappingException])
       def fetchInventoriesByStore(): Unit = {
+        // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
         @throws(classOf[net.liftweb.json.MappingException])
         @throws(classOf[net.liftweb.json.JsonParser.ParseException])
         @throws(classOf[java.io.IOException])
@@ -376,10 +378,12 @@ object Store extends Store with MetaRecord[Store] with Loggable {
     logger.info("Store.init end")
   }
 
-  override def load(): Iterable[Store] = {
-    val items = super.load()
-    inTransaction { asyncGetStores(items.map { s => s.idField.get -> s }(breakOut)) } // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
-    items
+  override def load(): Unit = {
+    inTransaction {
+      val items = from(table())(s => select(s))
+      cacheNewItems(items)
+      asyncGetStores(items.map { s => s.idField.get -> s }(breakOut)) // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
+    }
   }
 
   def asyncGetStores(x: Map[Long, Store]): Unit = {
