@@ -30,4 +30,4 @@ product.cacheSize=20000
 # When going synchronously to select products of a category, we'll request no more than store.maxSampleSize from LCBO
 store.maxSampleSize=150
 # implied with LCBO tests as max we can query on a page
-store.lcboMaxPerPage=50
+store.lcboMaxPerPage=40
