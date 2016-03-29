@@ -12,7 +12,7 @@ import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField}
 import net.liftweb.record.MetaRecord
 import net.liftweb.common._
 import net.liftweb.util.Props
-import net.liftweb.json.Xml
+import net.liftweb.json._
 import org.squeryl.annotations._
 
 import scala.annotation.tailrec
@@ -222,12 +222,13 @@ object Product extends Product with MetaRecord[Product] with Loggable {
                                         requiredSize: Option[Int],
                                         pageNo: Int): IndexedSeq[Product] = {
 
-    val (rawItems, jsonRoot, uri) = extractLcboItems(urlRoot, params, pageNo=pageNo, MaxPerPage)
+    val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage, params:_*)
+    val (rawItems, jsonRoot) = extractLcboItems(uri)
     val items = rawItems.filterNot(p => p.isDiscontinued)
     val revisedAccumItems =  accumItems ++ items
 
     if (isFinalPage(jsonRoot, pageNo) ||
-        requiredSize.exists{x => x <= items.size + accumItems.size }) {
+      requiredSize.exists{x => x <= items.size + accumItems.size }) {
       logger.info(uri) // log only last one to be less verbose
       return revisedAccumItems
     }
@@ -238,5 +239,4 @@ object Product extends Product with MetaRecord[Product] with Loggable {
       requiredSize,
       pageNo + 1)
   }
-
 }

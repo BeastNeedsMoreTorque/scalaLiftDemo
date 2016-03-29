@@ -18,6 +18,11 @@ trait LcboJSONCreator[T <: LcboJSONCreator[T]] extends Record[T] with RestClient
 
   def setLcboId(id: Long): Unit
 
+  final def buildUrlWithPaging(urlRoot: String, pageNo: Int, maxPerPage: Int, params: (String, Any)* ): String = {
+    val fullParams = params ++ Seq(("per_page", maxPerPage), ("page", pageNo)) // get as many as possible on a page because we could have few matches.
+    buildUrl(urlRoot, fullParams)
+  }
+
   final def buildUrl(urlRoot: String, params: Seq[(String, Any)] ): String = {
     val encoding = "UTF-8"
     urlRoot + (params.map(v => URLEncoder.encode(v._1, encoding) + "=" + URLEncoder.encode(v._2.toString, encoding)).mkString("&")
@@ -35,10 +40,7 @@ trait LcboJSONCreator[T <: LcboJSONCreator[T]] extends Record[T] with RestClient
     isFinalPage || totalPages < pageNo + 1
   }
 
-  final def extractLcboItems(urlRoot: String, params: Seq[(String, Any)], pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
-    // specify the URI for the LCBO api url for liquor selection
-    val fullParams = params ++ Seq(("per_page", maxPerPage), ("page", pageNo)) // get as many as possible on a page because we could have few matches.
-    val uri = buildUrl(urlRoot, fullParams)
+  final def extractLcboItems(uri: String): (IndexedSeq[T], JValue) = {
     val pageContent = get(uri) // fyi: throws IOException or SocketTimeoutException
     val jsonRoot = parse(pageContent) // fyi: throws ParseException
     val nodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
@@ -51,7 +53,7 @@ trait LcboJSONCreator[T <: LcboJSONCreator[T]] extends Record[T] with RestClient
       rec.setLcboId(key) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl.
       items += rec
     }
-    (items.toIndexedSeq, jsonRoot, uri)
+    (items.toIndexedSeq, jsonRoot)
   }
 }
 

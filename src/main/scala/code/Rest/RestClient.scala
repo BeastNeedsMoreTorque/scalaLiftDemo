@@ -29,6 +29,7 @@ trait RestClient extends Loggable {
 
     val httpclient = HttpClients.createDefault()
     try {
+      logger.trace(s"RestClient.get $url")
       val httpget = new HttpGet(url)
       // Create a custom response handler
       val responseHandler = new ResponseHandler[String]() {

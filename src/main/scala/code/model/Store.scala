@@ -88,13 +88,6 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
     * @return quantity found in inventory for product and the product
     */
   def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]] = {
-    /**
-      * @param category wine, spirits, and so on spelled out in way LCBO understands as value for "q".
-      * @return collection of LCBO products, though possibly throwing and captured in Box.
-      */
-    def productsByStoreCategory(category: String): IndexedSeq[IProduct] =
-      collectProducts(lcboId, category, Store.MaxSampleSize)
-
     def getRequestFromCache(matchingKeys: IndexedSeq[Long]): IndexedSeq[(Long, IProduct)] = {
       // get some random sampling.
       val permutedKeys = Random.shuffle(matchingKeys).toStream
@@ -104,19 +97,17 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
            inv <- inventoryByProductId.get(p.pKey);
            q = inv.quantity if q > 0
       ) yield (q,p)
-      x.take(requestSize).toIndexedSeq
+      x.take(requestSize).toIndexedSeq // Stream allows ourselves to limit the use of comprehension to a smaller set bound by the take call here.
     }
 
-    // side effect
     def getSerialResult: IndexedSeq[(Long, IProduct)] = {
-      val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
+      val prods = collectProducts(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
-                     lcbo_id = prods(id).lcboId.toInt;
-                     p <- productsCache.get(lcbo_id)) yield (0.toLong, p)
+                     p = prods(id)) yield (0.toLong, p)
       // we may have 0 inventory, browser should try to finish off that work not web server.
       seq.take(requestSize)
-      }
+    }
 
     // we could get errors going to LCBO, this tryo captures those.
     tryo {
@@ -242,9 +233,9 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       inTransaction { // needed
         tryo { fetchInventoriesByStore() } match {
           case net.liftweb.common.Failure(m, ex, _) =>
-            logger.error(s"Problem loading inventories into cache for '${lcboId}' with message $m and exception error $ex")
+            logger.error(s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $ex")
           case Empty =>
-            logger.error(s"Problem loading inventories into cache for '${lcboId}'")
+            logger.error(s"Problem loading inventories into cache for '$lcboId'")
           case _ => ;
         }
       }
@@ -325,7 +316,8 @@ object Store extends Store with MetaRecord[Store] with Loggable {
       @tailrec
       def collectStoresOnAPage(urlRoot: String,
                                pageNo: Int): Unit = {
-        val (items, jsonRoot, uri) = extractLcboItems(urlRoot, Seq(), pageNo=pageNo, MaxPerPage)
+        val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage)
+        val (items, jsonRoot) = extractLcboItems(uri)
         // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
         val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = items.groupBy {
           s =>  ( getStoreByLcboId(s.lcboId), s) match {

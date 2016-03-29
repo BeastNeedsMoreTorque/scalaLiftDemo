@@ -12,8 +12,6 @@
         </encoder>
     </appender>
 
-
-    <logger name="code.comet" level="info"/>
     <logger name="code.model" level="info"/>
     <logger name="code.model.Store" level="debug"/>
     <logger name="code.model.Product" level="debug"/>
