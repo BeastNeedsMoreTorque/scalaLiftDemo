@@ -21,7 +21,7 @@ import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
 import org.squeryl.annotations._
-import code.model.Product.{collectProducts, notifyProducts}
+import code.model.Product.{collectProducts, fetchByStore}
 
 class Store  private() extends IStore with Persistable[Store] with Loader[Store] with LcboJSONCreator[Store] with CreatedUpdated[Store] with Loggable  {
 
@@ -89,36 +89,27 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
     */
   def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]] = {
     /**
-      * Queries LCBO matching category
-      * Full URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage>
-      * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
-      * for pattern match LCBO uses lower case but for actual product category it's upper case, so to make comparisons, we will need to account for that
-      * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
-      *
-      * @param category wine, spirits, and so on
-      * @return collection of LCBO products while throwing.
+      * @param category wine, spirits, and so on spelled out in way LCBO understands as value for "q".
+      * @return collection of LCBO products, though possibly throwing and captured in Box.
       */
-    def productsByStoreCategory(category: String): IndexedSeq[IProduct] = {
-      collectProducts(Seq(("store_id", lcboId), ("q", category)), Store.MaxSampleSize)
-    }
+    def productsByStoreCategory(category: String): IndexedSeq[IProduct] =
+      collectProducts(lcboId, category, Store.MaxSampleSize)
 
     def getRequestFromCache(matchingKeys: IndexedSeq[Long]): IndexedSeq[(Long, IProduct)] = {
       // get some random sampling.
-      val permutedKeys = Random.shuffle(matchingKeys).take(2 * requestSize)
-      // generate double the keys and hope it's enough to find enough products with positive inventory as a result
-      // checking quantity in for comprehension below is cost prohibitive.
+      val permutedKeys = Random.shuffle(matchingKeys).toStream
+      // @see http://stackoverflow.com/questions/13596385/how-to-cut-a-for-comprehension-short-break-out-of-it-in-scala (good use of Stream!)
       val x = for (id <- permutedKeys;
            p <- productsCache.get(id);
-           inv <- inventoryByProductId.get(p.id);
+           inv <- inventoryByProductId.get(p.pKey);
            q = inv.quantity if q > 0
       ) yield (q,p)
-      x.take(requestSize)
+      x.take(requestSize).toIndexedSeq
     }
 
     // side effect
     def getSerialResult: IndexedSeq[(Long, IProduct)] = {
       val prods = productsByStoreCategory(category) // take a hit of one go to LCBO, no more.
-      addToCaches(prods)
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
                      lcbo_id = prods(id).lcboId.toInt;
@@ -129,7 +120,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
 
     // we could get errors going to LCBO, this tryo captures those.
     tryo {
-      val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results
+      val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results (more or less upper case such as Beer)
       val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
@@ -143,14 +134,14 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
   private def loadCache(): Unit = {
     def fetchProducts(): Unit = {
       def fetchProductsByStore(): Unit =
-        addToCaches(notifyProducts( Seq("store_id" -> lcboId))) // ignored if not set meaning take them all
+        addToCaches(fetchByStore( lcboId)) // ignored if not set meaning take them all
 
       inTransaction {  // needed
         tryo { fetchProductsByStore() } match {
           case net.liftweb.common.Failure(m, ex, _) =>
-            logger.error(s"Problem loading products into cache for '${lcboId}' with message $m and exception error $ex")
+            logger.error(s"Problem loading products into cache for '$lcboId' with message $m and exception error $ex")
           case Empty =>
-            logger.error(s"Problem loading products into cache for '${lcboId}'")
+            logger.error(s"Problem loading products into cache for '$lcboId'")
           case _ => ;
         }
       }

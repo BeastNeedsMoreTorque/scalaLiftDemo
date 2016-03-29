@@ -8,7 +8,7 @@ import scala.collection.IndexedSeq
 trait IProduct {
   def lcboId: Long
 
-  def id: Long
+  def pKey: Long
 
   def Name: String
   def primaryCategory: String

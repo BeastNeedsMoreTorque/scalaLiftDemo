@@ -18,7 +18,7 @@ trait LcboJSONCreator[T <: LcboJSONCreator[T]] extends Record[T] with RestClient
 
   def setLcboId(id: Long): Unit
 
-  def buildUrl(urlRoot: String, params: Seq[(String, Any)] ): String = {
+  final def buildUrl(urlRoot: String, params: Seq[(String, Any)] ): String = {
     val encoding = "UTF-8"
     urlRoot + (params.map(v => URLEncoder.encode(v._1, encoding) + "=" + URLEncoder.encode(v._2.toString, encoding)).mkString("&")
     match {case s if s.length == 0 => ""; case s => "?" + s})  // if there are parameters, prepend with ?
@@ -26,16 +26,16 @@ trait LcboJSONCreator[T <: LcboJSONCreator[T]] extends Record[T] with RestClient
 
   implicit val formats = net.liftweb.json.DefaultFormats
 
-  def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
+  final def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
 
-  def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
+  final def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
     //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
     val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
     isFinalPage || totalPages < pageNo + 1
   }
 
-  def extractLcboItems(urlRoot: String, params: Seq[(String, Any)], pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
+  final def extractLcboItems(urlRoot: String, params: Seq[(String, Any)], pageNo: Int, maxPerPage: Int): (IndexedSeq[T], JValue, String) = {
     // specify the URI for the LCBO api url for liquor selection
     val fullParams = params ++ Seq(("per_page", maxPerPage), ("page", pageNo)) // get as many as possible on a page because we could have few matches.
     val uri = buildUrl(urlRoot, fullParams)

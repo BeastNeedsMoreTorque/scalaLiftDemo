@@ -139,21 +139,29 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     logger.info("Product.init end")
   }
 
-  def collectProducts(params: Seq[(String, Any)],
-                      requiredSize: Int): IndexedSeq[IProduct] =
+  /*
+   * Queries LCBO matching category
+   * Full URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage>
+   * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
+   * for pattern match LCBO uses lower case but for actual product category it's upper case, so to make comparisons, we will need to account for that
+   * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
+   */
+  def collectProducts(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
     collectItemsOnAPage(
       accumItems=IndexedSeq[Product](),
       s"$LcboDomainURL/products",
-      params,
+      Seq("store_id" -> lcboStoreId, "q" -> category),
       Some(requiredSize),  // ignored if not set meaning take them all
       pageNo = 1)
 
   // side effect to store updates of the products
-  def notifyProducts(params: Seq[(String, Any)]): IndexedSeq[IProduct] = {
+  def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
+    // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
+    // and gives us opportunity to bring our cache up to date about firmwide products.
     val items = collectItemsOnAPage(
       accumItems=IndexedSeq[Product](),
       s"$LcboDomainURL/products",
-      params,
+      Seq("store_id" -> lcboStoreId),
       None,  // ignored if not set meaning take them all
       pageNo = 1)
 
@@ -165,11 +173,12 @@ object Product extends Product with MetaRecord[Product] with Loggable {
         case (_ , _) => EntityRecordState.Clean
       }
     }
-    val dirtyItems = productsByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Product]())
-    val newItems = productsByState.getOrElse(EntityRecordState.New, IndexedSeq[Product]())
+    val dirtyItems = productsByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Product]()) // unusable for cache
+    val newItems = productsByState.getOrElse(EntityRecordState.New, IndexedSeq[Product]()) // unusable for cache
     updateAndInsert(dirtyItems, newItems)
-    val cleanItems = productsByState.getOrElse(EntityRecordState.Clean, IndexedSeq[Product]())
-    cleanItems ++ dirtyItems ++ newItems
+    val cleanItems = productsByState.getOrElse(EntityRecordState.Clean, IndexedSeq[Product]()) // unusable for cache
+    val refreshedItems = (cleanItems ++ dirtyItems ++ newItems).map{ p => p.lcboId}.flatMap{ id => getProductByLcboId(id)} // usable for cache
+    refreshedItems
   }
 
   def lcboIdToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
@@ -217,8 +226,8 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     val items = rawItems.filterNot(p => p.isDiscontinued)
     val revisedAccumItems =  accumItems ++ items
 
-    if (isFinalPage(jsonRoot, pageNo=pageNo) ||
-        requiredSize.forall{x => x <= items.size + accumItems.size }) {
+    if (isFinalPage(jsonRoot, pageNo) ||
+        requiredSize.exists{x => x <= items.size + accumItems.size }) {
       logger.info(uri) // log only last one to be less verbose
       return revisedAccumItems
     }

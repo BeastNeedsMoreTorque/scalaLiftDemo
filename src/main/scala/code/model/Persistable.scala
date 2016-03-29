@@ -18,7 +18,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
   def batchSize: Int = Props.getInt("DBWrite.BatchSize", 1024)
 
   // Always call update before insert just to be consistent and safe. Enforce it.
-  def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = {
+  final def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = {
     update(updateItems)
     insert(insertItems)
   }
