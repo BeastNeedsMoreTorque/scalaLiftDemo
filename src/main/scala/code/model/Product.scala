@@ -1,7 +1,7 @@
 package code.model
 
 import java.text.NumberFormat
-
+import org.apache.http.TruncatedChunkException
 import code.model.EntityRecordState.EnumerationValueType
 
 import scala.collection.concurrent.TrieMap
@@ -215,6 +215,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   @throws(classOf[java.io.IOException])
   @throws(classOf[java.net.SocketTimeoutException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
+  @throws(classOf[TruncatedChunkException])  // that's a brutal one.
   @tailrec
   private final def collectItemsOnAPage(accumItems: IndexedSeq[Product],
                                         urlRoot: String,
