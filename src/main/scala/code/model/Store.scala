@@ -151,85 +151,90 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
         @throws(classOf[java.net.SocketTimeoutException])
         @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
         @tailrec
-        def collectInventoriesOnAPage(  urlRoot: String,
+        def collectInventoriesOnAPage(  accumItems: IndexedSeq[InventoryAsLCBOJson],
+                                        urlRoot: String,
                                         pageNo: Int,
-                                        params: Seq[(String, Any)]): Unit = {
-          def stateOfInventory(item: InventoryAsLCBOJson): EnumerationValueType = {
-            val prodId = Product.lcboIdToDBId(item.product_id)
-            val invOption = for (x <- prodId;
-                                 inv <- inventoryByProductId.get(x)) yield inv
-
-            (prodId, invOption)  match {
-              case (Some(id), None)  => EntityRecordState.New
-              case (Some(id), Some(inv)) if inv.dirty_?(item) => EntityRecordState.Dirty
-              case (Some(id), _) => EntityRecordState.Clean
-              case _ => EntityRecordState.Undefined  // on a product we don't yet know, so consider it as undefined so we don't violate FK on products (LCBO makes no guaranty to be consistent here)
-            }
-          }
+                                        params: Seq[(String, Any)]): IndexedSeq[InventoryAsLCBOJson] = {
 
           // specify the URI for the LCBO api url for liquor selection
-          val fullParams: Seq[(String, Any)] = params ++ Seq(("per_page", Store.MaxPerPage), ("page", pageNo))
+          val fullParams = params ++ Seq("per_page" -> Store.MaxPerPage, "page" -> pageNo)
           val uri = buildUrl(urlRoot, fullParams)
           val pageContent = get(uri)
           val jsonRoot = parse(pageContent)
           val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
-          val items = (for (p <- itemNodes) yield p.extract[InventoryAsLCBOJson]).filter(!_.is_dead)
+          val items = (for (p <- itemNodes) yield p.extract[InventoryAsLCBOJson]).filterNot(_.is_dead)
 
-          // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
-          val storeProductsByState: Map[EnumerationValueType, IndexedSeq[InventoryAsLCBOJson]] = items.toIndexedSeq.groupBy( stateOfInventory )
-
-          val dirtyInventories = ArrayBuffer[Inventory]()
-          for (jsInvs <- storeProductsByState.get(EntityRecordState.Dirty);
-               jsInv <- jsInvs;
-               dbId <- Product.lcboIdToDBId(jsInv.product_id);
-               dbInv <- inventoryByProductId.get(dbId))
-          {
-            val updInv = dbInv.copyAttributes(jsInv)
-            dirtyInventories += updInv
-          }
-
-          val newInventories = ArrayBuffer[Inventory]()
-          for (jsInvs <- storeProductsByState.get(EntityRecordState.New);
-               jsInv <- jsInvs;
-               dbId <- Product.lcboIdToDBId(jsInv.product_id))
-          {
-            val newInv = new Inventory(idField.get, dbId, jsInv.quantity, jsInv.updated_on, jsInv.is_dead )
-            newInventories += newInv
-          }
-
-          // God forbid, we might supply ourselves data that violates composite key. Weed it out!
-          def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]): Iterable[Inventory] = {
-            invs.groupBy(x => (x.productid, x.storeid)).map{ case (k,v) => v.last }
-          }
-          val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
-          val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories.toIndexedSeq)
-
-          try {  // getNextException in catch is what is useful to log (along with the data that led to the exception)
-            inTransaction {
-              // we refresh just before splitting the inventories into clean, dirty, new classes.
-              MainSchema.inventories.update(CompKeyFilterDirtyInventories)
-              MainSchema.inventories.insert(CompKeyFilterNewInventories)
-              refreshInventories() // always update cache after updating DB
-            }
-          } catch {
-            case se: SQLException =>  // the bad
-              logger.error(s"SQLException New Invs $CompKeyFilterNewInventories Dirty Invs $CompKeyFilterDirtyInventories")
-              logger.error("Code: " + se.getErrorCode)
-              logger.error("SqlState: " + se.getSQLState)
-              logger.error("Error Message: " + se.getMessage)
-              logger.error("NextException:" + se.getNextException)  // the "good".
-            case e: Exception =>  // the UGLY!
-              logger.error("General exception caught: " + e)
-          }
-
+          val revisedItems = accumItems ++ items
           if (isFinalPage(jsonRoot, pageNo=pageNo)) {
             logger.info(uri) // show what's going after several pages of background requests
-            return
+            return revisedItems
           }
-          collectInventoriesOnAPage( urlRoot, pageNo + 1, params) // recurse to cache all we can
+          collectInventoriesOnAPage( revisedItems, urlRoot, pageNo + 1, params) // recurse to cache all we can
         }
-        collectInventoriesOnAPage(s"$LcboDomainURL/inventories", 1, params=Seq(("store_id", lcboId)))
+
+        def stateOfInventory(item: InventoryAsLCBOJson): EnumerationValueType = {
+          val pKey = Product.lcboIdToDBId(item.product_id)
+          val invOption = for (x <- pKey;
+                               inv <- inventoryByProductId.get(x)) yield inv
+
+          (pKey, invOption)  match {
+            case (Some(id), None)  => EntityRecordState.New
+            case (Some(id), Some(inv)) if inv.dirty_?(item) => EntityRecordState.Dirty
+            case (Some(id), _) => EntityRecordState.Clean
+            case _ => EntityRecordState.Undefined  // on a product we don't yet know, so consider it as undefined so we don't violate FK on products (LCBO makes no guaranty to be consistent here)
+          }
+        }
+
+        val items = collectInventoriesOnAPage(IndexedSeq[InventoryAsLCBOJson](),
+          s"$LcboDomainURL/inventories",
+          1,
+          Seq("store_id" -> lcboId))
+        // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
+        val inventoriesByState = items.groupBy( stateOfInventory )
+
+        // update in memory our inventories with stale quantity to reflect the trusted LCBO up to date source
+        val dirtyInventories = ArrayBuffer[Inventory]()
+        for (jsInvs <- inventoriesByState.get(EntityRecordState.Dirty);
+             jsInv <- jsInvs;
+             prodKey <- Product.lcboIdToDBId(jsInv.product_id);
+             dbInv <- inventoryByProductId.get(prodKey))
+        { dirtyInventories += dbInv.copyAttributes(jsInv) }
+
+        // create new inventories we didn't know about
+        val newInventories = ArrayBuffer[Inventory]()
+        for (jsInvs <- inventoriesByState.get(EntityRecordState.New);
+             jsInv <- jsInvs;
+             prodKey <- Product.lcboIdToDBId(jsInv.product_id))
+        { newInventories += new Inventory(pKey, prodKey, jsInv.quantity, jsInv.updated_on, jsInv.is_dead ) }
+
+        // God forbid, we might supply ourselves data that violates composite key. Weed it out!
+        def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]): Iterable[Inventory] = {
+          invs.groupBy(x => (x.productid, x.storeid)).map{ case (k,v) => v.last }
+        }
+        // filter the inventories that go to DB to remove dupes and keep a handle of them to help diagnose exceptions should we encounter them.
+        val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
+        val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories)
+
+        try {  // getNextException in catch is what is useful to log (along with the data that led to the exception)
+          inTransaction {
+            // we refresh just before splitting the inventories into clean, dirty, new classes.
+            MainSchema.inventories.update(CompKeyFilterDirtyInventories)
+            MainSchema.inventories.insert(CompKeyFilterNewInventories)
+            refreshInventories() // always update cache after updating DB
+          }
+        } catch {
+          case se: SQLException =>  // the bad
+            // show me the data that caused the problem!
+            logger.error(s"SQLException New Invs $CompKeyFilterNewInventories Dirty Invs $CompKeyFilterDirtyInventories")
+            logger.error("Code: " + se.getErrorCode)
+            logger.error("SqlState: " + se.getSQLState)
+            logger.error("Error Message: " + se.getMessage)
+            logger.error("NextException:" + se.getNextException)  // the "good". Show me why.
+          case e: Exception =>  // the UGLY!
+            logger.error("General exception caught: " + e) // we'll pay the price on that one.
+        }
       }
+
       inTransaction { // needed
         tryo { fetchInventoriesByStore() } match {
           case net.liftweb.common.Failure(m, ex, _) =>
@@ -278,7 +283,6 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       productsCacheByCategory ++= productsByCategory
       inventoryByProductId ++= getInventories
     }
-
 }
 
 object Store extends Store with MetaRecord[Store] with Loggable {

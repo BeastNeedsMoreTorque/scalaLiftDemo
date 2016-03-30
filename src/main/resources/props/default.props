@@ -28,6 +28,6 @@ product.DBBatchSize=512
 product.cacheSize=20000
 
 # When going synchronously to select products of a category, we'll request no more than store.maxSampleSize from LCBO
-store.maxSampleSize=150
+store.maxSampleSize=60
 # implied with LCBO tests as max we can query on a page
 store.lcboMaxPerPage=40
