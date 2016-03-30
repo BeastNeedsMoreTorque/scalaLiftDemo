@@ -278,7 +278,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
 
   def refreshProducts(): Unit =
     inTransaction {
-      storeProducts.refresh // key for whole inventory caching to work!
+      storeProducts.refresh // key for whole inventory caching and products caching to work!
       productsCache ++= productsByLcboId
       productsCacheByCategory ++= productsByCategory
       inventoryByProductId ++= getInventories
@@ -318,38 +318,37 @@ object Store extends Store with MetaRecord[Store] with Loggable {
     def collectAllStoresIntoCache(): Box[Unit] = {
       // collects stores individually from LCBO REST as Store on all pages starting from a pageNo.
       @tailrec
-      def collectStoresOnAPage(urlRoot: String,
-                               pageNo: Int): Unit = {
+      def collectStoresOnAPage(accumItems: IndexedSeq[Store],
+                               urlRoot: String,
+                               pageNo: Int): IndexedSeq[Store] = {
         val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage)
         val (items, jsonRoot) = extractLcboItems(uri)
-        // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-        val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = items.groupBy {
-          s =>  ( getStoreByLcboId(s.lcboId), s) match {
-            case (None, _) => EntityRecordState.New
-            case (Some(store), item) if store.isDirty(item) => EntityRecordState.Dirty
-            case (_ , _) => EntityRecordState.Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
-          }
-        }
-
-        // identify the dirty and new stores for batch update and cache them as side effect (automatically)
-        val dirtyStores =  storesByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Store]())
-        val newStores = storesByState.getOrElse(EntityRecordState.New, IndexedSeq[Store]()).toIndexedSeq
-        updateAndInsert(dirtyStores, newStores)
-
+        val revisedItems = accumItems ++ items
         if (isFinalPage(jsonRoot, pageNo=pageNo)) {
           logger.info(uri)
-          return
+          return revisedItems
         } // log only last one to be less verbose
-        collectStoresOnAPage(urlRoot, pageNo + 1) // fetch on next page
+        collectStoresOnAPage(accumItems, urlRoot, pageNo + 1) // fetch on next page
       }
-
       tryo {
-        // gather stores on this page (url) and recursively to following pages
-        inTransaction { collectStoresOnAPage(urlRoot=s"$LcboDomainURL/stores", pageNo=1) }
+        inTransaction {
+          val items =  collectStoresOnAPage(IndexedSeq(), s"$LcboDomainURL/stores", 1)
+          // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
+          val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = items.groupBy {
+            s =>  ( getStoreByLcboId(s.lcboId), s) match {
+              case (None, _) => EntityRecordState.New
+              case (Some(store), item) if store.isDirty(item) => EntityRecordState.Dirty
+              case (_ , _) => EntityRecordState.Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
+            }
+          }
+          // identify the dirty and new stores for batch update and cache them as side effect (automatically)
+          val dirtyStores =  storesByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Store]())
+          val newStores = storesByState.getOrElse(EntityRecordState.New, IndexedSeq[Store]()).toIndexedSeq
+          updateAndInsert(dirtyStores, newStores)
+        }
         logger.debug(s"done loading stores from LCBO")
       }
     }
-
     collectAllStoresIntoCache() match {
       case Full(m) => ;
       case net.liftweb.common.Failure(m, ex, _) =>
