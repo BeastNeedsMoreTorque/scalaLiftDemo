@@ -199,10 +199,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     * @param urlRoot a LCBO product query without the details of paging, which we handle here
     * @param requiredSize required size of products that are asked for. May get less if there are fewer matches, but will not go above that size.
     *                      if cacheOnly is true, this value can be arbitrary and ignored.
-    * @param cacheOnly true if we don't need a full return result set, false if we need data we can consume (side effect is to cache all the time)
     * @param pageNo client calls this with value 1 (initial page), recursion increments it, designates the pageno for LCBO JSON data when data fits on several pages
-    * @param filter client's filter that can be applied as we process the data before mapping/extracting it out to client data.
-    *                 In principle, should be faster when user filters reject many values, but no empirical evidence here.
     * @return a vector of product items matching the query and size constraint (or none if cacheOnly is true). Always side effect to cache.
     * @throws java.net.SocketTimeoutException timeout is reached, slow connection
     * @throws java.io.IOException I/O issue
