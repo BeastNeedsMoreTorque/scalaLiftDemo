@@ -149,10 +149,8 @@ object Product extends Product with MetaRecord[Product] with Loggable {
    */
   def collectProducts(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
     val sizeFulfilled: (Int) => Boolean = {(totalSize: Int) => requiredSize <= totalSize}
-    collectItemsOnAPage(
-      accumItems = IndexedSeq[Product](),
+    collectItemsOnPages(
       s"$LcboDomainURL/products",
-      pageNo = 1,
       Seq("store_id" -> lcboStoreId, "q" -> category),
       sizeFulfilled,
       isNotDiscontinued
@@ -164,10 +162,8 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
     // and gives us opportunity to bring our cache up to date about firmwide products.
     val sizeNeverFulfilled: (Int) => Boolean = {(totalSize: Int) => false}
-    val items = collectItemsOnAPage(
-      accumItems=IndexedSeq[Product](),
+    val items = collectItemsOnPages(
       s"$LcboDomainURL/products",
-      pageNo = 1,
       Seq("store_id" -> lcboStoreId),
       sizeNeverFulfilled,
       isNotDiscontinued
