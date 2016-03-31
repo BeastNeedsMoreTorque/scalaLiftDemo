@@ -4,7 +4,6 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.sql.SQLException
 
-import scala.annotation.tailrec
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
@@ -22,8 +21,10 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
 import org.squeryl.annotations._
 import code.model.Product.{collectProducts, fetchByStore}
+import org.apache.http.TruncatedChunkException
 
-class Store  private() extends IStore with Persistable[Store] with Loader[Store] with LcboJSONCreator[Store] with CreatedUpdated[Store] with Loggable  {
+
+class Store  private() extends IStore with Persistable[Store] with Loader[Store] with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -37,6 +38,8 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
   override def lcboId: Long = lcbo_id.get
   override def setLcboId(id: Long): Unit = lcbo_id.set(id)
   override def meta = Store
+
+  override def MaxPerPage = Store.MaxPerPage
 
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
@@ -123,6 +126,12 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
+    @throws(classOf[SocketTimeoutException])
+    @throws(classOf[IOException])
+    @throws(classOf[net.liftweb.json.JsonParser.ParseException])
+    @throws(classOf[MappingException])
+    @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
+    @throws(classOf[TruncatedChunkException])  // that's a brutal one.
     def fetchProducts(): Unit = {
       def fetchProductsByStore(): Unit =
         addToCaches(fetchByStore( lcboId)) // ignored if not set meaning take them all
@@ -143,40 +152,15 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       @throws(classOf[IOException])
       @throws(classOf[net.liftweb.json.JsonParser.ParseException])
       @throws(classOf[MappingException])
+      @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
+      @throws(classOf[TruncatedChunkException])  // that's a brutal one.
       def fetchInventoriesByStore(): Unit = {
         // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
-        @throws(classOf[net.liftweb.json.MappingException])
-        @throws(classOf[net.liftweb.json.JsonParser.ParseException])
-        @throws(classOf[java.io.IOException])
-        @throws(classOf[java.net.SocketTimeoutException])
-        @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-        @tailrec
-        def collectInventoriesOnAPage(  accumItems: IndexedSeq[InventoryAsLCBOJson],
-                                        urlRoot: String,
-                                        pageNo: Int,
-                                        params: Seq[(String, Any)]): IndexedSeq[InventoryAsLCBOJson] = {
-
-          // specify the URI for the LCBO api url for liquor selection
-          val fullParams = params ++ Seq("per_page" -> Store.MaxPerPage, "page" -> pageNo)
-          val uri = buildUrl(urlRoot, fullParams)
-          val pageContent = get(uri)
-          val jsonRoot = parse(pageContent)
-          val itemNodes = (jsonRoot \ "result").children.toVector // Uses XPath-like querying to extract data from parsed object jsObj.
-          val items = (for (p <- itemNodes) yield p.extract[InventoryAsLCBOJson]).filterNot(_.is_dead)
-
-          val revisedItems = accumItems ++ items
-          if (isFinalPage(jsonRoot, pageNo=pageNo)) {
-            logger.info(uri) // show what's going after several pages of background requests
-            return revisedItems
-          }
-          collectInventoriesOnAPage( revisedItems, urlRoot, pageNo + 1, params) // recurse to cache all we can
-        }
 
         def stateOfInventory(item: InventoryAsLCBOJson): EnumerationValueType = {
           val pKey = Product.lcboIdToDBId(item.product_id)
           val invOption = for (x <- pKey;
                                inv <- inventoryByProductId.get(x)) yield inv
-
           (pKey, invOption)  match {
             case (Some(id), None)  => EntityRecordState.New
             case (Some(id), Some(inv)) if inv.dirty_?(item) => EntityRecordState.Dirty
@@ -185,10 +169,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
           }
         }
 
-        val items = collectInventoriesOnAPage(IndexedSeq[InventoryAsLCBOJson](),
-          s"$LcboDomainURL/inventories",
-          1,
-          Seq("store_id" -> lcboId))
+        val items = InventoryFetcher.collectItemsOnAPage(IndexedSeq(), s"$LcboDomainURL/inventories", 1, Seq("store_id" -> lcboId))
         // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
         val inventoriesByState = items.groupBy( stateOfInventory )
 
@@ -308,7 +289,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
     for (dbid <- Product.lcboIdToDBId(id);
           s <- storesCache.get(dbid)) yield s
 
-  def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
+  override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
 
     /* Convert a store to XML */
   implicit def toXml(st: Store): Node =
@@ -316,23 +297,9 @@ object Store extends Store with MetaRecord[Store] with Loggable {
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
     def collectAllStoresIntoCache(): Box[Unit] = {
-      // collects stores individually from LCBO REST as Store on all pages starting from a pageNo.
-      @tailrec
-      def collectStoresOnAPage(accumItems: IndexedSeq[Store],
-                               urlRoot: String,
-                               pageNo: Int): IndexedSeq[Store] = {
-        val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage)
-        val (items, jsonRoot) = extractLcboItems(uri)
-        val revisedItems = accumItems ++ items
-        if (isFinalPage(jsonRoot, pageNo=pageNo)) {
-          logger.info(uri)
-          return revisedItems
-        } // log only last one to be less verbose
-        collectStoresOnAPage(accumItems, urlRoot, pageNo + 1) // fetch on next page
-      }
       tryo {
         inTransaction {
-          val items =  collectStoresOnAPage(IndexedSeq(), s"$LcboDomainURL/stores", 1)
+          val items =  collectItemsOnAPage(IndexedSeq(), s"$LcboDomainURL/stores", 1, Seq())
           // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
           val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = items.groupBy {
             s =>  ( getStoreByLcboId(s.lcboId), s) match {

@@ -31,3 +31,5 @@ product.cacheSize=20000
 store.maxSampleSize=60
 # implied with LCBO tests as max we can query on a page
 store.lcboMaxPerPage=40
+
+inventory.lcboMaxPerPage=100

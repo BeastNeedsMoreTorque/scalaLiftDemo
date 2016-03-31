@@ -1,7 +1,6 @@
 package code.model
 
 import java.text.NumberFormat
-import org.apache.http.TruncatedChunkException
 import code.model.EntityRecordState.EnumerationValueType
 
 import scala.collection.concurrent.TrieMap
@@ -15,15 +14,13 @@ import net.liftweb.util.Props
 import net.liftweb.json._
 import org.squeryl.annotations._
 
-import scala.annotation.tailrec
-
 case class Attribute(key: String, value: String)
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends IProduct with Persistable[Product] with Loader[Product] with LcboJSONCreator[Product] with CreatedUpdated[Product] {
+class Product private() extends IProduct with Persistable[Product] with Loader[Product] with LcboJSONExtractor[Product] with CreatedUpdated[Product] {
   def meta = Product
 
   @Column(name="pkid")
@@ -37,6 +34,8 @@ class Product private() extends IProduct with Persistable[Product] with Loader[P
   override def pKey: Long = idField.get
   override def lcboId: Long = lcbo_id.get
   override def setLcboId(id: Long): Unit = lcbo_id.set(id)
+
+  override def MaxPerPage = Product.MaxPerPage
 
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
@@ -139,6 +138,8 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     logger.info("Product.init end")
   }
 
+  val isNotDiscontinued: (Product) => Boolean = { p: Product => !p.isDiscontinued }
+
   /*
    * Queries LCBO matching category
    * Full URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage>
@@ -146,24 +147,31 @@ object Product extends Product with MetaRecord[Product] with Loggable {
    * for pattern match LCBO uses lower case but for actual product category it's upper case, so to make comparisons, we will need to account for that
    * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
    */
-  def collectProducts(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
+  def collectProducts(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
+    val sizeFulfilled: (Int) => Boolean = {(totalSize: Int) => requiredSize <= totalSize}
     collectItemsOnAPage(
-      accumItems=IndexedSeq[Product](),
+      accumItems = IndexedSeq[Product](),
       s"$LcboDomainURL/products",
+      pageNo = 1,
       Seq("store_id" -> lcboStoreId, "q" -> category),
-      Some(requiredSize),  // ignored if not set meaning take them all
-      pageNo = 1)
+      sizeFulfilled,
+      isNotDiscontinued
+    )
+  }
 
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
     // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
     // and gives us opportunity to bring our cache up to date about firmwide products.
+    val sizeNeverFulfilled: (Int) => Boolean = {(totalSize: Int) => false}
     val items = collectItemsOnAPage(
       accumItems=IndexedSeq[Product](),
       s"$LcboDomainURL/products",
+      pageNo = 1,
       Seq("store_id" -> lcboStoreId),
-      None,  // ignored if not set meaning take them all
-      pageNo = 1)
+      sizeNeverFulfilled,
+      isNotDiscontinued
+    )
 
     // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
     val productsByState: Map[EnumerationValueType, IndexedSeq[Product]] = items.groupBy {
@@ -186,55 +194,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     for (dbId <- LcboIdsToDBIds.get(id);
          p <- productsCache.get(dbId)) yield p
 
-  private def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
+  override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
 
-  /**
-    * LCBO client JSON query handler.
-    *
-    * @see https://github.com/lift/lift/tree/master/framework/lift-base/lift-json/
-    *      don't go to more pages than user implicitly requests via requiredSize that should not be exceeded.
-    *      Uses tail recursion.
-    * @param accumItems accumulator to facilitate tail recursion
-    * @param urlRoot a LCBO product query without the details of paging, which we handle here
-    * @param requiredSize required size of products that are asked for. May get less if there are fewer matches, but will not go above that size.
-    *                      if cacheOnly is true, this value can be arbitrary and ignored.
-    * @param pageNo client calls this with value 1 (initial page), recursion increments it, designates the pageno for LCBO JSON data when data fits on several pages
-    * @return a vector of product items matching the query and size constraint (or none if cacheOnly is true). Always side effect to cache.
-    * @throws java.net.SocketTimeoutException timeout is reached, slow connection
-    * @throws java.io.IOException I/O issue
-    * @throws net.liftweb.json.JsonParser.ParseException parse problem
-    * @throws net.liftweb.json.MappingException our case class does not match JSon object from API
-    *
-    */
-  @throws(classOf[net.liftweb.json.MappingException])
-  @throws(classOf[net.liftweb.json.JsonParser.ParseException])
-  @throws(classOf[java.io.IOException])
-  @throws(classOf[java.net.SocketTimeoutException])
-  @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-  @throws(classOf[TruncatedChunkException])  // that's a brutal one.
-  @tailrec
-  private final def collectItemsOnAPage(accumItems: IndexedSeq[Product],
-                                        urlRoot: String,
-                                        params: Seq[(String, Any)],
-                                        requiredSize: Option[Int],
-                                        pageNo: Int): IndexedSeq[Product] = {
-
-    val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage, params:_*)
-    val (rawItems, jsonRoot) = extractLcboItems(uri)
-    val items = rawItems.filterNot(p => p.isDiscontinued)
-    val revisedAccumItems =  accumItems ++ items
-
-    if (isFinalPage(jsonRoot, pageNo) ||
-      requiredSize.exists{x => x <= items.size + accumItems.size }) {
-      logger.info(uri) // log only last one to be less verbose
-      return revisedAccumItems
-    }
-    collectItemsOnAPage(
-      revisedAccumItems, // union of this page with next page when we are asked for a full sample
-      urlRoot,
-      params,
-      requiredSize,
-      pageNo + 1)
-  }
 }
