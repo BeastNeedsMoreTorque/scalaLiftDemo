@@ -174,7 +174,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
           }
         }
 
-        val items = InventoryFetcher.collectItemsOnAPage(IndexedSeq(), s"$LcboDomainURL/inventories", 1, Seq("store_id" -> lcboId))
+        val items = InventoryFetcher.collectItemsOnPages( s"$LcboDomainURL/inventories", Seq("store_id" -> lcboId))
         // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
         val inventoriesByState = items.groupBy( stateOfInventory )
 
@@ -304,7 +304,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
     def collectAllStoresIntoCache(): Box[Unit] = {
       tryo {
         inTransaction {
-          val items =  collectItemsOnAPage(IndexedSeq(), s"$LcboDomainURL/stores", 1, Seq())
+          val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
           // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
           val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = items.groupBy {
             s =>  ( getStoreByLcboId(s.lcboId), s) match {

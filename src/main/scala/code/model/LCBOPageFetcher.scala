@@ -88,6 +88,18 @@ trait LCBOPageFetcher[T] extends RestClient {
       f)
   }
 
+  final def collectItemsOnPages(urlRoot: String,
+                                params: Seq[(String, Any)] = Seq(),
+                                sizeFulfilled: (Int) => Boolean = {(totalSize: Int) => false},
+                                f: (T) => Boolean = { item: T => true }): IndexedSeq[T] = {
+    collectItemsOnAPage(
+      IndexedSeq[T](), // union of this page with next page when we are asked for a full sample
+      urlRoot,
+      1,
+      params,
+      sizeFulfilled,
+      f)
+  }
 }
 
 
