@@ -20,9 +20,9 @@ import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
 import org.squeryl.annotations._
-import code.model.Product.{collectProducts, fetchByStore}
 import org.apache.http.TruncatedChunkException
 
+import code.model.Product.{collectProducts, fetchByStore}
 
 class Store  private() extends IStore with Persistable[Store] with Loader[Store] with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
@@ -103,13 +103,18 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       x.take(requestSize).toIndexedSeq // Stream allows ourselves to limit the use of comprehension to a smaller set bound by the take call here.
     }
 
-    def getSerialResult: IndexedSeq[(Long, IProduct)] = {
+    /**
+      *
+      * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO. It's been known that they would send a Wiser's Whiskey on a wine request.
+      * @return
+      */
+    def getSerialResult(lcboProdCategory: String): IndexedSeq[(Long, IProduct)] = {
       val prods = collectProducts(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
                      p = prods(id)) yield (0.toLong, p)
       // we may have 0 inventory, browser should try to finish off that work not web server.
-      seq.take(requestSize)
+      seq.filter {pair => pair._2.primaryCategory == lcboProdCategory}.take(requestSize)
     }
 
     // we could get errors going to LCBO, this tryo captures those.
@@ -120,7 +125,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
       val cached = getRequestFromCache(matchingKeys)
       if (cached.nonEmpty) cached
-      else getSerialResult
+      else getSerialResult(lcboProdCategory)
     }
   }
 
