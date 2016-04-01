@@ -6,7 +6,7 @@ import net.liftweb.util.Props
 import scala.collection.IndexedSeq
 
 /**
-  * Created by philippederome on 2016-03-30.
+  * Created by philippederome on 2016-03-30. Stateless singleton.
   */
 object InventoryFetcher extends LCBOPageFetcher[InventoryAsLCBOJson] {
   override def MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)

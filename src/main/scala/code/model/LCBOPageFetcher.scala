@@ -17,6 +17,8 @@ trait LCBOPageFetcher[T] extends RestClient {
   def MaxPerPage: Int
   def extractItems(uri: String): (IndexedSeq[T], JValue)
 
+  type SizeChecker = (Int) => Boolean
+
   final def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
 
   implicit val formats = net.liftweb.json.DefaultFormats
@@ -90,7 +92,7 @@ trait LCBOPageFetcher[T] extends RestClient {
 
   final def collectItemsOnPages(urlRoot: String,
                                 params: Seq[(String, Any)] = Seq(),
-                                sizeFulfilled: (Int) => Boolean = {(totalSize: Int) => false},
+                                sizeFulfilled: SizeChecker = {(totalSize: Int) => false},
                                 f: (T) => Boolean = { item: T => true }): IndexedSeq[T] = {
     collectItemsOnAPage(
       IndexedSeq[T](), // union of this page with next page when we are asked for a full sample
