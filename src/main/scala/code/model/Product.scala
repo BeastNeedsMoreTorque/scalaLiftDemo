@@ -127,6 +127,11 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
+  override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
+  private val isNotDiscontinued: (Product) => Boolean = { p: Product => !p.isDiscontinued }
+  private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
+  private val sizeFulfilled: (Int) => SizeChecker = { requiredSize => (totalSize: Int) => requiredSize <= totalSize}
+  private val sizeNeverFulfilled: SizeChecker = {(totalSize: Int) => false}
 
   /* Convert a store to XML @see progscala2 chapter on implicits */
   implicit def toXml(p: Product): Node =
@@ -138,8 +143,6 @@ object Product extends Product with MetaRecord[Product] with Loggable {
     logger.info("Product.init end")
   }
 
-  val isNotDiscontinued: (Product) => Boolean = { p: Product => !p.isDiscontinued }
-
   /*
    * Queries LCBO matching category
    * Full URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage>
@@ -148,11 +151,10 @@ object Product extends Product with MetaRecord[Product] with Loggable {
    * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
    */
   def collectProducts(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
-    val sizeFulfilled: (Int) => Boolean = {(totalSize: Int) => requiredSize <= totalSize}
     collectItemsOnPages(
       s"$LcboDomainURL/products",
       Seq("store_id" -> lcboStoreId, "q" -> category),
-      sizeFulfilled,
+      sizeFulfilled(requiredSize),
       isNotDiscontinued
     )
   }
@@ -161,7 +163,6 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
     // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
     // and gives us opportunity to bring our cache up to date about firmwide products.
-    val sizeNeverFulfilled: (Int) => Boolean = {(totalSize: Int) => false}
     val items = collectItemsOnPages(
       s"$LcboDomainURL/products",
       Seq("store_id" -> lcboStoreId),
@@ -189,8 +190,4 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   def getProductByLcboId(id: Long): Option[IProduct] =
     for (dbId <- LcboIdsToDBIds.get(id);
          p <- productsCache.get(dbId)) yield p
-
-  override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
-  private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
-
 }
