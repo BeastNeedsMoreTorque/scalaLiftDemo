@@ -206,7 +206,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
     }
 }
 
-object Store extends Store with MetaRecord[Store] with LcboItem[Store, IStore] with Loggable {
+object Store extends Store with MetaRecord[Store] with ItemStateGrouper[Store, IStore] with Loggable {
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
 
   private val storesCache: concurrent.Map[Long, Store] = TrieMap()  // primary cache

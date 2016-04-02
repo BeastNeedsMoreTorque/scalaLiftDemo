@@ -116,7 +116,7 @@ class Product private() extends IProduct with Persistable[Product] with Loader[P
 /**
   *
   */
-object Product extends Product with MetaRecord[Product] with LcboItem[Product, IProduct] with Loggable {
+object Product extends Product with MetaRecord[Product] with ItemStateGrouper[Product, IProduct] with Loggable {
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
