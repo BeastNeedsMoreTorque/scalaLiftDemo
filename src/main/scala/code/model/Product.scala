@@ -18,7 +18,7 @@ import net.liftweb.squerylrecord.RecordTypeMode._
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends IProduct with LcboItem[Product, IProduct] with Persistable[Product] with Loader[Product]
+class Product private() extends IProduct with Persistable[Product] with Loader[Product]
   with LcboJSONExtractor[Product] with CreatedUpdated[Product] {
   def meta = Product
 
@@ -35,9 +35,6 @@ class Product private() extends IProduct with LcboItem[Product, IProduct] with P
   override def setLcboId(id: Long): Unit = lcbo_id.set(id)
 
   override def MaxPerPage = Product.MaxPerPage
-
-  override def getItemByLcboId(id: Long): Option[IProduct] =
-    Product.getItemByLcboId(id)
 
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
@@ -119,7 +116,7 @@ class Product private() extends IProduct with LcboItem[Product, IProduct] with P
 /**
   *
   */
-object Product extends Product with MetaRecord[Product] with Loggable {
+object Product extends Product with MetaRecord[Product] with LcboItem[Product, IProduct] with Loggable {
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
@@ -130,6 +127,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   private val sizeFulfilled: (Int) => SizeChecker =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
   private val sizeNeverFulfilled: SizeChecker = {(totalSize: Int) => false}
+  private val getCachedItem: (Product) => Option[IProduct] = {s => getItemByLcboId(s.lcboId)}
 
   /* Convert a store to XML @see progscala2 chapter on implicits */
   implicit def toXml(p: Product): Node =
@@ -166,7 +164,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
       sizeNeverFulfilled,
       isNotDiscontinued
     )
-    val productsByState = itemsByState(items)
+    val productsByState = itemsByState(items, getCachedItem, dirtyPredicate)
     val dirtyItems = productsByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Product]()) // unusable for cache
     val newItems = productsByState.getOrElse(EntityRecordState.New, IndexedSeq[Product]()) // unusable for cache
     updateAndInsert(dirtyItems, newItems)
@@ -175,7 +173,7 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   }
 
   def lcboIdToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
-  override def getItemByLcboId(id: Long): Option[IProduct] =
+  def getItemByLcboId(id: Long): Option[IProduct] =
     for (dbId <- LcboIdsToDBIds.get(id);
          p <- productsCache.get(dbId)) yield p
 

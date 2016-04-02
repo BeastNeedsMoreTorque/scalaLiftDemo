@@ -22,7 +22,7 @@ object MainSchema extends Schema {
 
   val inventories = manyToManyRelation(stores, products).
     via[Inventory]((s,p,inv) => (inv.storeid === s.idField.get, p.idField.get === inv.productid))
-  // The table in database needs to be called "Inventory".
+  // The table in database needs to be called "Inventory". See Inventory class for all columns.
   //alter table "Inventory" add primary key ("storeid","productid");
 
   val userProducts = table[UserProduct]("userproduct")
