@@ -164,7 +164,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
           logger.error(s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $ex")
         case Empty =>
           logger.error(s"Problem loading inventories into cache for '$lcboId'")
-        case _ => inTransaction { refreshInventories() } // always update cache after updating DB
+        case _ => refreshInventories() // always update cache after updating DB
       }
 
     val fetches = Future {
@@ -215,7 +215,7 @@ object Store extends Store with MetaRecord[Store] with ItemStateGrouper[Store, I
 
   override def cacheNewItems(items: Iterable[Store]): Unit = {
     super.cacheNewItems(items)
-    inTransaction { storesCache.foreach { case (id, s)  => s.refreshProducts() } } // ensure inventories are refreshed INCLUDING on start up.
+    storesCache.foreach { case (id, s)  => s.refreshProducts() }  // ensure inventories are refreshed INCLUDING on start up.
   }
 
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
@@ -239,14 +239,13 @@ object Store extends Store with MetaRecord[Store] with ItemStateGrouper[Store, I
   private def getStores(dbStores: Map[Long, Store]): Unit = {
     def collectAllStoresIntoCache() = {
       tryo {
-        inTransaction {
           val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
           val storesByState  = itemsByState(items, getCachedItem, dirtyPredicate)
           // identify the dirty and new stores for batch update and cache them as side effect (automatically)
           val dirtyStores =  storesByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Store]())
           val newStores = storesByState.getOrElse(EntityRecordState.New, IndexedSeq[Store]()).toIndexedSeq
           updateAndInsert(dirtyStores, newStores)
-        }
+
         logger.debug(s"done loading stores from LCBO")
       }
     }
