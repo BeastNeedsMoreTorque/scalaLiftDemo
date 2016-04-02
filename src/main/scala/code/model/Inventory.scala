@@ -13,10 +13,12 @@ case class InventoryAsLCBOJson(product_id: Int,
                                updated_on: String,
                                quantity: Int) {}
 
-class Inventory(val storeid: Long, val productid: Long, var quantity: Long, var updated_on: String, var is_dead: Boolean) extends KeyedEntity[CompositeKey2[Long,Long]] {
+class Inventory(val storeid: Long, val productid: Long, var quantity: Long, var updated_on: String, var is_dead: Boolean)
+  extends KeyedEntity[CompositeKey2[Long,Long]] {
+
   def id = compositeKey(storeid, productid)
 
-  def dirty_?(inv: InventoryAsLCBOJson): Boolean =
+  def isDirty(inv: InventoryAsLCBOJson): Boolean =
     quantity != inv.quantity
 
   def notNull(s: String) = if (s eq null) "" else s

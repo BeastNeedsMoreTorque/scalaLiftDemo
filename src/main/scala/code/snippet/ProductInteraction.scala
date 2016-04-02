@@ -207,7 +207,7 @@ class ProductInteraction extends JSUtilities with Loggable {
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
         val feedback =
           for(sp <- selectedProds;
-              product <- Product.getProductByLcboId(sp.id);
+              product <- Product.getItemByLcboId(sp.id);
               f = mayConsumeItem(product, sp.quantity)) yield SelectedProductFeedback(sp, f)
         val goodAndBackFeedback = feedback.groupBy(_.feedback.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
         goodAndBackFeedback.getOrElse(false, Nil).map( _.feedback.message).foreach(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
