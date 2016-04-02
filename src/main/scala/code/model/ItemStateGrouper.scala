@@ -6,7 +6,7 @@ import scala.collection.IndexedSeq
   * Created by philippederome on 2016-04-01.
   */
 
-trait LcboItem[T, I] {
+trait ItemStateGrouper[T, I] {
 
   type EnumerationValueType = Enumeration#Value
   // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
