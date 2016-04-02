@@ -18,7 +18,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
   def batchSize: Int = Props.getInt("DBWrite.BatchSize", 1024)
 
   // Always call update before insert just to be consistent and safe. Enforce it.
-  final def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = {
+  final def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = inTransaction {
     update(updateItems)
     insert(insertItems)
   }
@@ -31,21 +31,20 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
       foreach { subItems =>
         var itemsWithPK: Query[T] = null
         val ids = items.map(_.pKey)
-        inTransaction {
-          try {
-            t.forceUpdate(subItems) // @see http://squeryl.org/occ.html.
-            itemsWithPK = from(t)(p => where( p.idField in ids) select(p))
-          } catch {
-            case se: SQLException =>
-              logger.error(s"SQLException $subItems")
-              logger.error("Code: " + se.getErrorCode)
-              logger.error("SqlState: " + se.getSQLState)
-              logger.error("Error Message: " + se.getMessage)
-              logger.error("NextException:" + se.getNextException)
-            case e: Exception =>
-              logger.error("General exception caught: " + e+ " " + subItems)
-          }
+        try {
+          t.forceUpdate(subItems) // @see http://squeryl.org/occ.html.
+          itemsWithPK = from(t)(p => where( p.idField in ids) select(p))
+        } catch {
+          case se: SQLException =>
+            logger.error(s"SQLException $subItems")
+            logger.error("Code: " + se.getErrorCode)
+            logger.error("SqlState: " + se.getSQLState)
+            logger.error("Error Message: " + se.getMessage)
+            logger.error("NextException:" + se.getNextException)
+          case e: Exception =>
+            logger.error("General exception caught: " + e+ " " + subItems)
         }
+
         // regular call as update throws.
         // We don't care if two threads attempt to update the same product (from two distinct stores and one is a bit more stale than the other)
         // However, there are other situations where we might well care.
@@ -61,22 +60,20 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
       // insert them
       var filteredProdsWithPKs: Query[T] = null
       val ids = items.map(_.lcboId)
-      inTransaction {
-        try {  // getNextException in catch is why we want to try catch here.
-          // the DB could fail for PK or whatever other reason.
-          // we require transaction for insert and following refresh select.
-          t.insert(items) // refresh them with PKs assigned by DB server.
-          filteredProdsWithPKs = from(t)(p => where( p.lcboId in ids) select(p))
-        } catch {
-          case se: SQLException =>
-            logger.error(s"SQLException $items")
-            logger.error("Code: " + se.getErrorCode)
-            logger.error("SqlState: " + se.getSQLState)
-            logger.error("Error Message: " + se.getMessage)
-            logger.error("NextException:" + se.getNextException)
-          case e: Exception =>
-            logger.error("General exception caught: " + e)
-        }
+      try {  // getNextException in catch is why we want to try catch here.
+        // the DB could fail for PK or whatever other reason.
+        // we require transaction for insert and following refresh select.
+        t.insert(items) // refresh them with PKs assigned by DB server.
+        filteredProdsWithPKs = from(t)(p => where( p.lcboId in ids) select(p))
+      } catch {
+        case se: SQLException =>
+          logger.error(s"SQLException $items")
+          logger.error("Code: " + se.getErrorCode)
+          logger.error("SqlState: " + se.getSQLState)
+          logger.error("Error Message: " + se.getMessage)
+          logger.error("NextException:" + se.getNextException)
+        case e: Exception =>
+          logger.error("General exception caught: " + e)
       }
       if (filteredProdsWithPKs ne null) cacheNewItems(filteredProdsWithPKs)
     }

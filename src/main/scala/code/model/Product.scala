@@ -155,7 +155,7 @@ object Product extends Product with MetaRecord[Product] with ItemStateGrouper[Pr
     )
 
   // side effect to store updates of the products
-  def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = inTransaction {
+  def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
     // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
     // and gives us opportunity to bring our cache up to date about firmwide products.
     val items = collectItemsOnPages(
