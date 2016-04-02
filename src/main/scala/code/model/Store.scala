@@ -24,7 +24,7 @@ import org.apache.http.TruncatedChunkException
 
 import code.model.Product.{collectProducts, fetchByStore}
 
-class Store  private() extends IStore with Persistable[Store] with Loader[Store] with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
+class Store  private() extends IStore with LcboItem[Store, IStore] with Persistable[Store] with Loader[Store] with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -40,6 +40,8 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
   override def meta = Store
 
   override def MaxPerPage = Store.MaxPerPage
+  override def getItemByLcboId(id: Long): Option[IStore] =
+    Store.getItemByLcboId(id)
 
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
@@ -53,6 +55,8 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
   val city = new StringField(this, 30) {
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
+  override def isDead = is_dead.get
+  override def addressLine1 = address_line_1.get
 
   //products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)
@@ -168,7 +172,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
                                inv <- inventoryByProductId.get(x)) yield inv
           (pKey, invOption)  match {
             case (Some(id), None)  => EntityRecordState.New
-            case (Some(id), Some(inv)) if inv.dirty_?(item) => EntityRecordState.Dirty
+            case (Some(id), Some(inv)) if inv.isDirty(item) => EntityRecordState.Dirty
             case (Some(id), _) => EntityRecordState.Clean
             case _ => EntityRecordState.Undefined  // on a product we don't yet know, so consider it as undefined so we don't violate FK on products (LCBO makes no guaranty to be consistent here)
           }
@@ -290,9 +294,9 @@ object Store extends Store with MetaRecord[Store] with Loggable {
   def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
   def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)
   def getStore(s: Long): Option[IStore] = storesCache.get(s)
-  def getStoreByLcboId(id: Long): Option[Store] =
-    for (dbid <- Product.lcboIdToDBId(id);
-          s <- storesCache.get(dbid)) yield s
+  override def getItemByLcboId(id: Long): Option[IStore] =
+    for (dbId <- LcboIdsToDBIds.get(id);
+         s <- storesCache.get(dbId)) yield s
 
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
 
@@ -305,14 +309,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
       tryo {
         inTransaction {
           val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
-          // partition pageStoreSeq into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
-          val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = items.groupBy {
-            s =>  ( getStoreByLcboId(s.lcboId), s) match {
-              case (None, _) => EntityRecordState.New
-              case (Some(store), item) if store.isDirty(item) => EntityRecordState.Dirty
-              case (_ , _) => EntityRecordState.Clean  // or decided not to handle such as stores "out of bound" that we won't cache.
-            }
-          }
+          val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = itemsByState(items)
           // identify the dirty and new stores for batch update and cache them as side effect (automatically)
           val dirtyStores =  storesByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Store]())
           val newStores = storesByState.getOrElse(EntityRecordState.New, IndexedSeq[Store]()).toIndexedSeq
@@ -340,7 +337,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
     inTransaction {
       val items = from(table())(s => select(s))
       cacheNewItems(items)
-      asyncGetStores(items.map { s => s.idField.get -> s }(breakOut)) // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
+      asyncGetStores(items.map { s => s.pKey -> s }(breakOut)) // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
     }
   }
 
