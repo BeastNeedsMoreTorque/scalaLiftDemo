@@ -2,8 +2,6 @@ package code.model
 
 import scala.collection.IndexedSeq
 
-case class Attribute(key: String, value: String)
-
 /**
   * Created by philippederome on 2016-03-25.
   */

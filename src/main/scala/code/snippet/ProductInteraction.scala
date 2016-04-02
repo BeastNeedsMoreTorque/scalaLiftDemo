@@ -13,7 +13,6 @@ import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
 import net.liftweb.http.SHtml._
 
-import code.model.IStore
 import code.model.IProduct
 import code.model.Product
 import code.model.Store
@@ -172,7 +171,7 @@ class ProductInteraction extends JSUtilities with Loggable {
     def consumeProducts(selection: JValue): JsCmd = {
       def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
         def getItem(item: PurchasedProductConfirmation): NodeSeq = {
-          def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Long): String =
+          def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Long) =
             s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
 
           val formattedCost = formatter format item.selectedProduct.cost
@@ -225,7 +224,7 @@ class ProductInteraction extends JSUtilities with Loggable {
         }
       }
 
-      val jsonOpt = selection.extractOpt[String].map( parse)
+      val jsonOpt = selection.extractOpt[String].map(parse)
       val selectedProducts = jsonOpt.map(json => {for (p <- json.children.toVector) yield p.extractOpt[SelectedProduct]}.flatten )
       selectedProducts.fold {
         S.warning("Select some recommended products before attempting to consume")

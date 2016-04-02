@@ -24,7 +24,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
   }
 
   // @see http://squeryl.org/occ.html
-  private def update(items: Iterable[T]): Unit = {
+  private def update(items: Iterable[T]) = {
     val t = table()
 
     items.grouped(batchSize).
@@ -53,7 +53,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
       }
   }
 
-  private def insert( items: IndexedSeq[T]): Unit = {
+  private def insert( items: IndexedSeq[T]) = {
     val t = table()
 
     // Do special handling to filter out duplicate keys, which would throw.

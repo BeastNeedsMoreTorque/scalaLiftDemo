@@ -19,11 +19,13 @@ class Inventory(val storeid: Long, val productid: Long, var quantity: Long, var 
   def id = compositeKey(storeid, productid)
 
   def isDirty(inv: InventoryAsLCBOJson): Boolean =
-    quantity != inv.quantity
-
-  def notNull(s: String) = if (s eq null) "" else s
+    quantity != inv.quantity ||
+    is_dead != inv.is_dead ||
+    updated_on != inv.updated_on
 
   def copyAttributes(inv: InventoryAsLCBOJson): Inventory = {
+    def notNull(s: String) = if (s eq null) "" else s
+
     quantity = inv.quantity
     updated_on = notNull(inv.updated_on)
     is_dead = inv.is_dead
