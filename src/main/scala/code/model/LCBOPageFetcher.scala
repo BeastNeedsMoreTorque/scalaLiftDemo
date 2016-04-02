@@ -65,7 +65,7 @@ trait LCBOPageFetcher[T] extends RestClient {
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @throws(classOf[TruncatedChunkException])  // that's a brutal one.
   @tailrec
-  final def collectItemsOnAPage(accumItems: IndexedSeq[T],
+  final private def collectItemsOnAPage(accumItems: IndexedSeq[T],
                                 urlRoot: String,
                                 pageNo: Int,
                                 params: Seq[(String, Any)],
@@ -90,6 +90,7 @@ trait LCBOPageFetcher[T] extends RestClient {
       f)
   }
 
+  // tp present a cleaner interface than the tail recursive method
   final def collectItemsOnPages(urlRoot: String,
                                 params: Seq[(String, Any)] = Seq(),
                                 sizeFulfilled: SizeChecker = {(totalSize: Int) => false},

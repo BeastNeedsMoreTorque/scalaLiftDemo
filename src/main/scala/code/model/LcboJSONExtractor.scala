@@ -10,7 +10,7 @@ import org.apache.http.TruncatedChunkException
 /**
   * Created by philippederome on 2016-03-23.
   */
-trait LcboJSONExtractor[T <: LcboJSONExtractor[T]] extends Record[T] with  LCBOPageFetcher[T] {
+trait LcboJSONExtractor[T <: LcboJSONExtractor[T]] extends Record[T] with LCBOPageFetcher[T] {
   self: T =>
 
   def setLcboId(id: Long): Unit

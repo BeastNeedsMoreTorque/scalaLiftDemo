@@ -12,13 +12,14 @@ import net.liftweb.common._
 import net.liftweb.util.Props
 import net.liftweb.json._
 import org.squeryl.annotations._
-
+import net.liftweb.squerylrecord.RecordTypeMode._
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends IProduct with LcboItem[Product, IProduct] with Persistable[Product] with Loader[Product] with LcboJSONExtractor[Product] with CreatedUpdated[Product] {
+class Product private() extends IProduct with LcboItem[Product, IProduct] with Persistable[Product] with Loader[Product]
+  with LcboJSONExtractor[Product] with CreatedUpdated[Product] {
   def meta = Product
 
   @Column(name="pkid")
@@ -80,9 +81,8 @@ class Product private() extends IProduct with LcboItem[Product, IProduct] with P
   val formatter = NumberFormat.getCurrencyInstance() // Not French Canada, which does it differently...
 
   // Change unit of currency from cents to dollars and Int to String
-  def price: String = {
-    formatter format (price_in_cents.get / 100.0)
-  } // since we perverted meaning somewhat by changing unit from cents to dollars
+  def price: String =
+    formatter format (price_in_cents.get / 100.0) // since we perverted meaning somewhat by changing unit from cents to dollars
 
   // Change scale by 100 to normal conventions, foregoing LCBO's use of Int (for ex. 1200 becomes "12.0%" including the percent sign)
   def alcoholContent: String = {
@@ -114,7 +114,6 @@ class Product private() extends IProduct with LcboItem[Product, IProduct] with P
       Attribute ("Origin:", origin.get) ::
       Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
 
-
 }
 
 /**
@@ -126,9 +125,10 @@ object Product extends Product with MetaRecord[Product] with Loggable {
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
   override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
-  private val isNotDiscontinued: (Product) => Boolean = { p: Product => !p.isDiscontinued }
+  private val isNotDiscontinued: (Product) => Boolean = { !_.isDiscontinued }
   private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
-  private val sizeFulfilled: (Int) => SizeChecker = { requiredSize => (totalSize: Int) => requiredSize <= totalSize}
+  private val sizeFulfilled: (Int) => SizeChecker =
+    requiredSize => (totalSize: Int) => requiredSize <= totalSize
   private val sizeNeverFulfilled: SizeChecker = {(totalSize: Int) => false}
 
   /* Convert a store to XML @see progscala2 chapter on implicits */
@@ -148,38 +148,35 @@ object Product extends Product with MetaRecord[Product] with Loggable {
    * for pattern match LCBO uses lower case but for actual product category it's upper case, so to make comparisons, we will need to account for that
    * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
    */
-  def collectProducts(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
+  def collectProducts(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
     collectItemsOnPages(
       s"$LcboDomainURL/products",
       Seq("store_id" -> lcboStoreId, "q" -> category),
       sizeFulfilled(requiredSize),
       isNotDiscontinued
     )
-  }
 
   // side effect to store updates of the products
-  def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
+  def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = inTransaction {
     // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
     // and gives us opportunity to bring our cache up to date about firmwide products.
-    val items: IndexedSeq[Product] = collectItemsOnPages(
+    val items = collectItemsOnPages(
       s"$LcboDomainURL/products",
       Seq("store_id" -> lcboStoreId),
       sizeNeverFulfilled,
       isNotDiscontinued
     )
-
-    val productsByState: Map[EnumerationValueType, IndexedSeq[Product]] = itemsByState(items)
+    val productsByState = itemsByState(items)
     val dirtyItems = productsByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Product]()) // unusable for cache
     val newItems = productsByState.getOrElse(EntityRecordState.New, IndexedSeq[Product]()) // unusable for cache
     updateAndInsert(dirtyItems, newItems)
     val cleanItems = productsByState.getOrElse(EntityRecordState.Clean, IndexedSeq[Product]()) // unusable for cache
-    val refreshedItems = (cleanItems ++ dirtyItems ++ newItems).map{ p => p.lcboId}.flatMap{ id => getItemByLcboId(id)} // usable for cache
-    refreshedItems
+    (cleanItems ++ dirtyItems ++ newItems).map{ p => p.lcboId}.flatMap{  getItemByLcboId } // usable for cache, now that we refreshed them all
   }
 
   def lcboIdToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
-  override   def getItemByLcboId(id: Long): Option[IProduct] =
+  override def getItemByLcboId(id: Long): Option[IProduct] =
     for (dbId <- LcboIdsToDBIds.get(id);
-      p <- productsCache.get(dbId)) yield p
+         p <- productsCache.get(dbId)) yield p
 
 }

@@ -24,7 +24,8 @@ import org.apache.http.TruncatedChunkException
 
 import code.model.Product.{collectProducts, fetchByStore}
 
-class Store  private() extends IStore with LcboItem[Store, IStore] with Persistable[Store] with Loader[Store] with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
+class Store  private() extends IStore with LcboItem[Store, IStore] with Persistable[Store] with Loader[Store]
+  with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -40,8 +41,7 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
   override def meta = Store
 
   override def MaxPerPage = Store.MaxPerPage
-  override def getItemByLcboId(id: Long): Option[IStore] =
-    Store.getItemByLcboId(id)
+  override def getItemByLcboId(id: Long): Option[IStore] = Store.getItemByLcboId(id)
 
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
@@ -69,22 +69,22 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
   private val productsCacheByCategory = TrieMap[String, IndexedSeq[IProduct]]()
   private val inventoryByProductId = TrieMap[Long, Inventory]()
 
-  private def productsByLcboId: Map[Long, Product] = storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
-  private def productsByCategory: Map[String, IndexedSeq[Product]] = storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
+  private def productsByLcboId: Map[Long, Product] =
+    storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
+
+  private def productsByCategory: Map[String, IndexedSeq[Product]] =
+    storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
+
   private def getInventories: Map[Long, Inventory] =
     inventories.toIndexedSeq.map { inv => inv.productid -> inv } (breakOut)  // moderately slow because of iteration
 
-  private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
+  private def addToCaches(items: IndexedSeq[IProduct]) = {
     productsCache ++= items.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
     productsCacheByCategory ++= items.groupBy(_.primaryCategory)
   }
-  private def emptyInventory: Boolean =
-    inventories.toIndexedSeq.forall(_.quantity == 0)
 
-  def isDirty(s: Store): Boolean = {
-    is_dead.get != s.is_dead.get ||
-      address_line_1.get != s.address_line_1.get
-  }
+  private def emptyInventory =
+    inventories.toIndexedSeq.forall(_.quantity == 0)
 
   /**
     * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
@@ -95,16 +95,16 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
     * @return quantity found in inventory for product and the product
     */
   def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]] = {
-    def getRequestFromCache(matchingKeys: IndexedSeq[Long]): IndexedSeq[(Long, IProduct)] = {
+    def getRequestFromCache(matchingKeys: IndexedSeq[Long]) = {
       // get some random sampling.
       val permutedKeys = Random.shuffle(matchingKeys).toStream
       // @see http://stackoverflow.com/questions/13596385/how-to-cut-a-for-comprehension-short-break-out-of-it-in-scala (good use of Stream!)
-      val x = for (id <- permutedKeys;
+      val stream = for (id <- permutedKeys;
            p <- productsCache.get(id);
            inv <- inventoryByProductId.get(p.pKey);
            q = inv.quantity if q > 0
       ) yield (q,p)
-      x.take(requestSize).toIndexedSeq // Stream allows ourselves to limit the use of comprehension to a smaller set bound by the take call here.
+      stream.take(requestSize).toIndexedSeq // Stream allows ourselves to limit the use of comprehension to a smaller set bound by the take call here.
     }
 
     /**
@@ -112,7 +112,7 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO. It's been known that they would send a Wiser's Whiskey on a wine request.
       * @return
       */
-    def getSerialResult(lcboProdCategory: String): IndexedSeq[(Long, IProduct)] = {
+    def getSerialResult(lcboProdCategory: String) = {
       val prods = collectProducts(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
@@ -140,19 +140,17 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
     @throws(classOf[net.liftweb.json.JsonParser.ParseException])
     @throws(classOf[MappingException])
     @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-    @throws(classOf[TruncatedChunkException])  // that's a brutal one.
-    def fetchProducts(): Unit = {
-      def fetchProductsByStore(): Unit =
+    @throws(classOf[TruncatedChunkException])  // that's a brutal one. Advertize the throws at a higher level of abstraction now everywhere down below.
+    def fetchProducts() = {
+      def fetchProductsByStore() =
         addToCaches(fetchByStore( lcboId)) // ignored if not set meaning take them all
 
-      inTransaction {  // needed
-        tryo { fetchProductsByStore() } match {
-          case net.liftweb.common.Failure(m, ex, _) =>
-            logger.error(s"Problem loading products into cache for '$lcboId' with message $m and exception error $ex")
-          case Empty =>
-            logger.error(s"Problem loading products into cache for '$lcboId'")
-          case _ => ;
-        }
+      tryo { fetchProductsByStore() } match {
+        case net.liftweb.common.Failure(m, ex, _) =>
+          logger.error(s"Problem loading products into cache for '$lcboId' with message $m and exception error $ex")
+        case Empty =>
+          logger.error(s"Problem loading products into cache for '$lcboId'")
+        case _ => ;
       }
     }
 
@@ -163,14 +161,14 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
       @throws(classOf[MappingException])
       @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
       @throws(classOf[TruncatedChunkException])  // that's a brutal one.
-      def fetchInventoriesByStore(): Unit = {
+      def fetchInventoriesByStore() = inTransaction {
         // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
 
         def stateOfInventory(item: InventoryAsLCBOJson): EnumerationValueType = {
           val pKey = Product.lcboIdToDBId(item.product_id)
           val invOption = for (x <- pKey;
                                inv <- inventoryByProductId.get(x)) yield inv
-          (pKey, invOption)  match {
+          (pKey, invOption) match {
             case (Some(id), None)  => EntityRecordState.New
             case (Some(id), Some(inv)) if inv.isDirty(item) => EntityRecordState.Dirty
             case (Some(id), _) => EntityRecordState.Clean
@@ -198,9 +196,9 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
         { newInventories += new Inventory(pKey, prodKey, jsInv.quantity, jsInv.updated_on, jsInv.is_dead ) }
 
         // God forbid, we might supply ourselves data that violates composite key. Weed it out!
-        def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]): Iterable[Inventory] = {
+        def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
           invs.groupBy(x => (x.productid, x.storeid)).map{ case (k,v) => v.last }
-        }
+
         // filter the inventories that go to DB to remove dupes and keep a handle of them to help diagnose exceptions should we encounter them.
         val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
         val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories)
@@ -225,38 +223,37 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
         }
       }
 
-      inTransaction { // needed
-        tryo { fetchInventoriesByStore() } match {
-          case net.liftweb.common.Failure(m, ex, _) =>
-            logger.error(s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $ex")
-          case Empty =>
-            logger.error(s"Problem loading inventories into cache for '$lcboId'")
-          case _ => ;
-        }
+      tryo { fetchInventoriesByStore() } match {
+        case net.liftweb.common.Failure(m, ex, _) =>
+          logger.error(s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $ex")
+        case Empty =>
+          logger.error(s"Problem loading inventories into cache for '$lcboId'")
+        case _ => ;
       }
+
     }
 
-    val doubleFetch = Future {
+    val fetches = Future {
       fetchProducts() // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
     } andThen {
       case x => fetchInventories() // similarly for inventories and serialize intentionally because of Ref.  if no exception was thrown
     }
-    doubleFetch foreach {
+    fetches foreach {
       case m =>
         //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
-        logger.debug(s"loadCache succeeded for ${lcboId}")
+        logger.debug(s"loadCache succeeded for $lcboId")
         if (emptyInventory) {
-          logger.warn(s"got NO product inventory for storeId ${lcboId} !") // No provision for retrying.
+          logger.warn(s"got NO product inventory for storeId $lcboId !") // No provision for retrying.
         }
     }
-    doubleFetch.failed foreach {
+    fetches.failed foreach {
       case f =>
-        logger.info(s"loadCache explicitly failed for ${lcboId} cause $f")
+        logger.info(s"loadCache explicitly failed for $lcboId cause $f")
     }
-    logger.info(s"loadCache ended ${lcboId}") // about 15 seconds, likely depends mostly on network/teleco infrastructure
+    logger.info(s"loadCache ended $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
   }
 
-  def asyncLoadCache(): Unit =
+  private def asyncLoadCache() =
     // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
@@ -305,11 +302,11 @@ object Store extends Store with MetaRecord[Store] with Loggable {
     <store>{Xml.toXml(st.asJValue)}</store>
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
-    def collectAllStoresIntoCache(): Box[Unit] = {
+    def collectAllStoresIntoCache() = {
       tryo {
         inTransaction {
           val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
-          val storesByState: Map[EnumerationValueType, IndexedSeq[Store]] = itemsByState(items)
+          val storesByState  = itemsByState(items)
           // identify the dirty and new stores for batch update and cache them as side effect (automatically)
           val dirtyStores =  storesByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Store]())
           val newStores = storesByState.getOrElse(EntityRecordState.New, IndexedSeq[Store]()).toIndexedSeq
@@ -318,6 +315,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
         logger.debug(s"done loading stores from LCBO")
       }
     }
+
     collectAllStoresIntoCache() match {
       case Full(m) => ;
       case net.liftweb.common.Failure(m, ex, _) =>
@@ -341,7 +339,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
     }
   }
 
-  def asyncGetStores(x: Map[Long, Store]): Unit = {
+  private def asyncGetStores(x: Map[Long, Store]) = {
     val fut = Future { getStores(x) }
     fut foreach {
       case m =>
@@ -353,7 +351,6 @@ object Store extends Store with MetaRecord[Store] with Loggable {
     }
   }
 
- def findAll(): Iterable[Store] =
-    storesCache.values
+ def findAll(): Iterable[Store] = storesCache.values
 
 }
