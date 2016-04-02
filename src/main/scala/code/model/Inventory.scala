@@ -81,48 +81,46 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper[Invent
                               getCachedItem: (Inventory) => Option[Inventory],
                               mapByProductId: Map[Long, Inventory]): Unit = {
 
-    inTransaction {
-      // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
-      val items = collectItemsOnPages(uri, Seq("store_id" -> storeLcboId))
-      // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
-      val inventoriesByState = itemsByState(items, getCachedItem, dirtyPredicate)
+    // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
+    val items = collectItemsOnPages(uri, Seq("store_id" -> storeLcboId))
+    // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
+    val inventoriesByState = itemsByState(items, getCachedItem, dirtyPredicate)
+    // identify the dirty ones for update and new ones for insert, clean up duplicate keys, store to DB and catch errors
+    // update in memory COPIES of our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
+    val dirtyInventories = ArrayBuffer[Inventory]()
+    for (srcInvs <- inventoriesByState.get(EntityRecordState.Dirty);
+         srcInv <- srcInvs;
+         dbInv <- mapByProductId.get(srcInv.productid)) {
+      dirtyInventories += dbInv.copyDiffs(srcInv)   // not a replacement, rather a copy!
+    }
+    // create new inventories we didn't know about
+    val newInventories = inventoriesByState.get(EntityRecordState.New).map( identity).getOrElse(IndexedSeq())
 
-      // update in memory COPIES of our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
-      val dirtyInventories = ArrayBuffer[Inventory]()
-      for (srcInvs <- inventoriesByState.get(EntityRecordState.Dirty);
-           srcInv <- srcInvs;
-           dbInv <- mapByProductId.get(srcInv.productid)) {
-        dirtyInventories += dbInv.copyDiffs(srcInv)   // not a replacement, rather a copy!
+    // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
+    def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
+      invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (k, v) => v.last }
+
+    // filter the inventories that go to DB to remove dupes and keep a handle of them to help diagnose exceptions should we encounter them.
+    val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
+    val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories)
+
+    try {
+      // getNextException in catch is what is useful to log (along with the data that led to the exception)
+      inTransaction {
+        // we refresh just before splitting the inventories intoå clean, dirty, new classes.
+        MainSchema.inventories.update(CompKeyFilterDirtyInventories)
+        MainSchema.inventories.insert(CompKeyFilterNewInventories)
       }
-      // create new inventories we didn't know about
-      val newInventories = inventoriesByState.get(EntityRecordState.New).map( identity).getOrElse(IndexedSeq())
-
-      // God forbid, we might supply ourselves data that violates composite key. Weed it out!
-      def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
-        invs.groupBy(x => (x.productid, x.storeid)).map { case (k, v) => v.last }
-
-      // filter the inventories that go to DB to remove dupes and keep a handle of them to help diagnose exceptions should we encounter them.
-      val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
-      val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories)
-
-      try {
-        // getNextException in catch is what is useful to log (along with the data that led to the exception)
-        inTransaction {
-          // we refresh just before splitting the inventories into clean, dirty, new classes.
-          MainSchema.inventories.update(CompKeyFilterDirtyInventories)
-          MainSchema.inventories.insert(CompKeyFilterNewInventories)
-        }
-      } catch {
-        case se: SQLException => // the bad
-          // show me the data that caused the problem!
-          logger.error(s"SQLException New Invs $CompKeyFilterNewInventories Dirty Invs $CompKeyFilterDirtyInventories")
-          logger.error("Code: " + se.getErrorCode)
-          logger.error("SqlState: " + se.getSQLState)
-          logger.error("Error Message: " + se.getMessage)
-          logger.error("NextException:" + se.getNextException) // the "good". Show me why.
-        case e: Exception => // the UGLY!
-          logger.error("General exception caught: " + e) // we'll pay the price on that one.
-      }
+    } catch {
+      case se: SQLException => // the bad
+        // show me the data that caused the problem!
+        logger.error(s"SQLException New Invs $CompKeyFilterNewInventories Dirty Invs $CompKeyFilterDirtyInventories")
+        logger.error("Code: " + se.getErrorCode)
+        logger.error("SqlState: " + se.getSQLState)
+        logger.error("Error Message: " + se.getMessage)
+        logger.error("NextException:" + se.getNextException) // the "good". Show me why.
+      case e: Exception => // the UGLY!
+        logger.error("General exception caught: " + e) // we'll pay the price on that one.
     }
   }
 }
