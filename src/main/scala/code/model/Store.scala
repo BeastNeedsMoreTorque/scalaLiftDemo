@@ -2,10 +2,8 @@ package code.model
 
 import java.io.IOException
 import java.net.SocketTimeoutException
-import java.sql.SQLException
 
 import scala.collection._
-import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
 import scala.util.Random
 import scala.xml.Node
@@ -23,6 +21,7 @@ import org.squeryl.annotations._
 import org.apache.http.TruncatedChunkException
 
 import code.model.Product.{collectProducts, fetchByStore}
+import code.model.Inventory.fetchInventoriesByStore
 
 class Store  private() extends IStore with LcboItem[Store, IStore] with Persistable[Store] with Loader[Store]
   with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
@@ -141,97 +140,31 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
     @throws(classOf[MappingException])
     @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
     @throws(classOf[TruncatedChunkException])  // that's a brutal one. Advertize the throws at a higher level of abstraction now everywhere down below.
-    def fetchProducts() = {
-      def fetchProductsByStore() =
-        addToCaches(fetchByStore( lcboId)) // ignored if not set meaning take them all
-
-      tryo { fetchProductsByStore() } match {
+    def fetchProducts() =
+      tryo {
+        addToCaches(fetchByStore( lcboId))
+      } match {
         case net.liftweb.common.Failure(m, ex, _) =>
           logger.error(s"Problem loading products into cache for '$lcboId' with message $m and exception error $ex")
         case Empty =>
           logger.error(s"Problem loading products into cache for '$lcboId'")
         case _ => ;
       }
-    }
 
-    def fetchInventories(): Unit = {
-      @throws(classOf[SocketTimeoutException])
-      @throws(classOf[IOException])
-      @throws(classOf[net.liftweb.json.JsonParser.ParseException])
-      @throws(classOf[MappingException])
-      @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-      @throws(classOf[TruncatedChunkException])  // that's a brutal one.
-      def fetchInventoriesByStore() = inTransaction {
-        // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
-
-        def stateOfInventory(item: InventoryAsLCBOJson): EnumerationValueType = {
-          val pKey = Product.lcboIdToDBId(item.product_id)
-          val invOption = for (x <- pKey;
-                               inv <- inventoryByProductId.get(x)) yield inv
-          (pKey, invOption) match {
-            case (Some(id), None)  => EntityRecordState.New
-            case (Some(id), Some(inv)) if inv.isDirty(item) => EntityRecordState.Dirty
-            case (Some(id), _) => EntityRecordState.Clean
-            case _ => EntityRecordState.Undefined  // on a product we don't yet know, so consider it as undefined so we don't violate FK on products (LCBO makes no guaranty to be consistent here)
-          }
-        }
-
-        val items = InventoryFetcher.collectItemsOnPages( s"$LcboDomainURL/inventories", Seq("store_id" -> lcboId))
-        // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
-        val inventoriesByState = items.groupBy( stateOfInventory )
-
-        // update in memory our inventories with stale quantity to reflect the trusted LCBO up to date source
-        val dirtyInventories = ArrayBuffer[Inventory]()
-        for (jsInvs <- inventoriesByState.get(EntityRecordState.Dirty);
-             jsInv <- jsInvs;
-             prodKey <- Product.lcboIdToDBId(jsInv.product_id);
-             dbInv <- inventoryByProductId.get(prodKey))
-        { dirtyInventories += dbInv.copyAttributes(jsInv) }
-
-        // create new inventories we didn't know about
-        val newInventories = ArrayBuffer[Inventory]()
-        for (jsInvs <- inventoriesByState.get(EntityRecordState.New);
-             jsInv <- jsInvs;
-             prodKey <- Product.lcboIdToDBId(jsInv.product_id))
-        { newInventories += new Inventory(pKey, prodKey, jsInv.quantity, jsInv.updated_on, jsInv.is_dead ) }
-
-        // God forbid, we might supply ourselves data that violates composite key. Weed it out!
-        def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
-          invs.groupBy(x => (x.productid, x.storeid)).map{ case (k,v) => v.last }
-
-        // filter the inventories that go to DB to remove dupes and keep a handle of them to help diagnose exceptions should we encounter them.
-        val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
-        val CompKeyFilterDirtyInventories = removeCompositeKeyDupes(dirtyInventories)
-
-        try {  // getNextException in catch is what is useful to log (along with the data that led to the exception)
-          inTransaction {
-            // we refresh just before splitting the inventories into clean, dirty, new classes.
-            MainSchema.inventories.update(CompKeyFilterDirtyInventories)
-            MainSchema.inventories.insert(CompKeyFilterNewInventories)
-            refreshInventories() // always update cache after updating DB
-          }
-        } catch {
-          case se: SQLException =>  // the bad
-            // show me the data that caused the problem!
-            logger.error(s"SQLException New Invs $CompKeyFilterNewInventories Dirty Invs $CompKeyFilterDirtyInventories")
-            logger.error("Code: " + se.getErrorCode)
-            logger.error("SqlState: " + se.getSQLState)
-            logger.error("Error Message: " + se.getMessage)
-            logger.error("NextException:" + se.getNextException)  // the "good". Show me why.
-          case e: Exception =>  // the UGLY!
-            logger.error("General exception caught: " + e) // we'll pay the price on that one.
-        }
-      }
-
-      tryo { fetchInventoriesByStore() } match {
+    def fetchInventories() =
+      tryo {
+        fetchInventoriesByStore(
+          uri = s"$LcboDomainURL/inventories",
+          storeLcboId= lcboId,
+          storeKey = pKey,
+          mapByProductId = inventoryByProductId.toMap)
+      } match {
         case net.liftweb.common.Failure(m, ex, _) =>
           logger.error(s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $ex")
         case Empty =>
           logger.error(s"Problem loading inventories into cache for '$lcboId'")
-        case _ => ;
+        case _ => inTransaction { refreshInventories() } // always update cache after updating DB
       }
-
-    }
 
     val fetches = Future {
       fetchProducts() // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
