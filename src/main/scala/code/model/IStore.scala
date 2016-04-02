@@ -16,5 +16,6 @@ trait IStore  {
       addressLine1 == that.addressLine1
     case _ => false
   }
+  val dirtyPredicate: (IStore, IStore) => Boolean = {(x, y)=> !x.equals(y)}
 
 }

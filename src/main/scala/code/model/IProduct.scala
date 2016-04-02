@@ -25,6 +25,7 @@ trait IProduct  {
       imageThumbUrl == that.imageThumbUrl
     case _ => false
   }
+  val dirtyPredicate: (IProduct, IProduct) => Boolean = {(x, y)=> !x.equals(y)}
 
   def streamAttributes: IndexedSeq[Attribute]
 

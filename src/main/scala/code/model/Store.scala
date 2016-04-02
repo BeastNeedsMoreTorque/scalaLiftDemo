@@ -23,7 +23,7 @@ import org.apache.http.TruncatedChunkException
 import code.model.Product.{collectProducts, fetchByStore}
 import code.model.Inventory.fetchInventoriesByStore
 
-class Store  private() extends IStore with LcboItem[Store, IStore] with Persistable[Store] with Loader[Store]
+class Store  private() extends IStore with Persistable[Store] with Loader[Store]
   with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
@@ -40,7 +40,6 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
   override def meta = Store
 
   override def MaxPerPage = Store.MaxPerPage
-  override def getItemByLcboId(id: Long): Option[IStore] = Store.getItemByLcboId(id)
 
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
@@ -67,6 +66,7 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
   private val productsCache = TrieMap[Long, IProduct]()  // keyed by lcboId
   private val productsCacheByCategory = TrieMap[String, IndexedSeq[IProduct]]()
   private val inventoryByProductId = TrieMap[Long, Inventory]()
+  private val getCachedInventoryItem: (Inventory) => Option[Inventory] = { (inv: Inventory) => inventoryByProductId.get(inv.productid) }
 
   private def productsByLcboId: Map[Long, Product] =
     storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
@@ -157,7 +157,8 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
           uri = s"$LcboDomainURL/inventories",
           storeLcboId= lcboId,
           storeKey = pKey,
-          mapByProductId = inventoryByProductId.toMap)
+          getCachedInventoryItem,
+          inventoryByProductId.toMap)
       } match {
         case net.liftweb.common.Failure(m, ex, _) =>
           logger.error(s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $ex")
@@ -205,7 +206,7 @@ class Store  private() extends IStore with LcboItem[Store, IStore] with Persista
     }
 }
 
-object Store extends Store with MetaRecord[Store] with Loggable {
+object Store extends Store with MetaRecord[Store] with LcboItem[Store, IStore] with Loggable {
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
 
   private val storesCache: concurrent.Map[Long, Store] = TrieMap()  // primary cache
@@ -220,11 +221,12 @@ object Store extends Store with MetaRecord[Store] with Loggable {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
+  private val getCachedItem: (Store) => Option[IStore] = {s => getItemByLcboId(s.lcboId)}
   def availableStores: Set[Long] = storesCache.toMap.keySet
   def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
   def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)
   def getStore(s: Long): Option[IStore] = storesCache.get(s)
-  override def getItemByLcboId(id: Long): Option[IStore] =
+  def getItemByLcboId(id: Long): Option[IStore] =
     for (dbId <- LcboIdsToDBIds.get(id);
          s <- storesCache.get(dbId)) yield s
 
@@ -239,7 +241,7 @@ object Store extends Store with MetaRecord[Store] with Loggable {
       tryo {
         inTransaction {
           val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
-          val storesByState  = itemsByState(items)
+          val storesByState  = itemsByState(items, getCachedItem, dirtyPredicate)
           // identify the dirty and new stores for batch update and cache them as side effect (automatically)
           val dirtyStores =  storesByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Store]())
           val newStores = storesByState.getOrElse(EntityRecordState.New, IndexedSeq[Store]()).toIndexedSeq
