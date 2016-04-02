@@ -79,7 +79,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper[Invent
   @throws(classOf[TruncatedChunkException])  // that's a brutal one.
   def fetchInventoriesByStore(uri: String, storeLcboId: Long, storeKey: Long,
                               getCachedItem: (Inventory) => Option[Inventory],
-                              mapByProductId: Map[Long, Inventory]) = {
+                              mapByProductId: Map[Long, Inventory]): Unit = {
 
     inTransaction {
       // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
@@ -87,22 +87,15 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper[Invent
       // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
       val inventoriesByState = itemsByState(items, getCachedItem, dirtyPredicate)
 
-      // update in memory our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
+      // update in memory COPIES of our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
       val dirtyInventories = ArrayBuffer[Inventory]()
       for (srcInvs <- inventoriesByState.get(EntityRecordState.Dirty);
            srcInv <- srcInvs;
-           prodKey <- Product.lcboIdToDBId(srcInv.product_id);
-           dbInv <- mapByProductId.get(prodKey)) {
-        dirtyInventories += dbInv.copyDiffs(srcInv)
+           dbInv <- mapByProductId.get(srcInv.productid)) {
+        dirtyInventories += dbInv.copyDiffs(srcInv)   // not a replacement, rather a copy!
       }
-
       // create new inventories we didn't know about
-      val newInventories = ArrayBuffer[Inventory]()
-      for (srcInvs <- inventoriesByState.get(EntityRecordState.New);
-           srcInv <- srcInvs;
-           prodKey <- Product.lcboIdToDBId(srcInv.product_id)) {
-        newInventories += new Inventory(storeKey, prodKey, srcInv.quantity, srcInv.updated_on, srcInv.is_dead, srcInv.store_id, srcInv.product_id)
-      }
+      val newInventories = inventoriesByState.get(EntityRecordState.New).map( identity).getOrElse(IndexedSeq())
 
       // God forbid, we might supply ourselves data that violates composite key. Weed it out!
       def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
