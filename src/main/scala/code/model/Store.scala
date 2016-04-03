@@ -94,18 +94,6 @@ class Store  private() extends IStore with Persistable[Store, IStore]
     * @return quantity found in inventory for product and the product
     */
   def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]] = {
-    def getRequestFromCache(matchingKeys: IndexedSeq[Long]) = {
-      // get some random sampling.
-      val permutedKeys = Random.shuffle(matchingKeys).toStream
-      // @see http://stackoverflow.com/questions/13596385/how-to-cut-a-for-comprehension-short-break-out-of-it-in-scala (good use of Stream!)
-      val stream = for (id <- permutedKeys;
-           p <- productsCache.get(id);
-           inv <- inventoryByProductId.get(p.pKey);
-           q = inv.quantity if q > 0
-      ) yield (q,p)
-      stream.take(requestSize).toIndexedSeq // Stream allows ourselves to limit the use of comprehension to a smaller set bound by the take call here.
-    }
-
     /**
       *
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO. It's been known that they would send a Wiser's Whiskey on a wine request.
@@ -124,9 +112,15 @@ class Store  private() extends IStore with Persistable[Store, IStore]
     tryo {
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results (more or less upper case such as Beer)
       val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
+      val inStockMatchingKeys =
+      for (id <- matchingKeys;
+           p <- productsCache.get(id);
+           inv <- inventoryByProductId.get(p.pKey);
+           q = inv.quantity if q > 0) yield (q,p)
+
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val cached = getRequestFromCache(matchingKeys)
+      val cached = Random.shuffle(inStockMatchingKeys).take(requestSize).toIndexedSeq //getRequestFromCache(inStockMatchingKeys)
       if (cached.nonEmpty) cached
       else getSerialResult(lcboProdCategory)
     }
@@ -236,7 +230,7 @@ object Store extends Store with MetaRecord[Store] {
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
     tryo {
-      val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
+      val items =  collectItemsOnPages(s"$LcboDomainURL/stores", Seq("where_not" -> "is_dead"))
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
       logger.debug(s"done loading stores from LCBO")
     }
