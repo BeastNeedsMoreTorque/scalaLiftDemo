@@ -100,7 +100,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store,
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
                      p = prods(id)) yield (0.toLong, p)
-      seq.filter {pair => pair._2.primaryCategory == lcboProdCategory}.take(requestSize)
+      seq.filter {pair => pair._2.primaryCategory == lcboProdCategory}.take(requestSize)  // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
     }
 
     // we could get errors going to LCBO, this tryo captures those.
