@@ -23,7 +23,7 @@ import org.apache.http.TruncatedChunkException
 import code.model.Product.{fetchByStoreCategory, fetchByStore}
 import code.model.Inventory.fetchInventoriesByStore
 
-class Store  private() extends IStore with Persistable[Store, IStore] with Loader[Store]
+class Store  private() extends IStore with Persistable[Store, IStore]
   with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
@@ -204,7 +204,7 @@ class Store  private() extends IStore with Persistable[Store, IStore] with Loade
     }
 }
 
-object Store extends Store with MetaRecord[Store] with Loggable {
+object Store extends Store with MetaRecord[Store] {
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
 
   private val storesCache: concurrent.Map[Long, Store] = TrieMap()  // primary cache

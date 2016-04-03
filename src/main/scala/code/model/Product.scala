@@ -8,7 +8,6 @@ import scala.language.implicitConversions
 import scala.xml.Node
 import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField}
 import net.liftweb.record.MetaRecord
-import net.liftweb.common._
 import net.liftweb.util.Props
 import net.liftweb.json._
 import org.squeryl.annotations._
@@ -17,7 +16,7 @@ import org.squeryl.annotations._
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends IProduct with Persistable[Product, IProduct] with Loader[Product]
+class Product private() extends IProduct with Persistable[Product, IProduct]
   with LcboJSONExtractor[Product] with CreatedUpdated[Product] {
   def meta = Product
 
@@ -115,7 +114,7 @@ class Product private() extends IProduct with Persistable[Product, IProduct] wit
 /**
   *
   */
-object Product extends Product with MetaRecord[Product] with Loggable {
+object Product extends Product with MetaRecord[Product] {
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   def getProduct(id: Long): Option[IProduct] = productsCache.get(id)
