@@ -17,7 +17,7 @@ import org.squeryl.annotations._
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends IProduct with ErrorReporter with Persistable[Product, IProduct]
+class Product private() extends IProduct with ErrorReporter with Persistable[Product]
   with LcboJSONExtractor[Product] with CreatedUpdated[Product] {
   def meta = Product
 
@@ -130,7 +130,7 @@ object Product extends Product with MetaRecord[Product] {
   override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   private val sizeFulfilled: (Int) => SizeChecker =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
-  private val getCachedItem: (Product) => Option[IProduct] = {s => getItemByLcboId(s.lcboId)}
+  private val getCachedItem: (Product) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
   /* Convert a store to XML @see progscala2 chapter on implicits */
   implicit def toXml(p: Product): Node =
