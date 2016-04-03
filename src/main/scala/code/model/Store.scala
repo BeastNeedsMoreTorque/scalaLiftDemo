@@ -98,12 +98,10 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
       */
     def getSerialResult(lcboProdCategory: String) = {
       val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
-      val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
-      val seq = for (id <- permutedIndices;
-                     p = prods(id)) yield p
-      seq.filter { _.primaryCategory == lcboProdCategory}.
-        take(requestSize).
-        zip(Seq.fill(requestSize)(0.toLong))  // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
+      val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices).toStream  // stream avoids checking primary category on full collection (the permutation is done though).
+      val stream = for (id <- permutedIndices;
+                        p = prods(id) if p.primaryCategory == lcboProdCategory) yield p
+      stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))  // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
       // and then zip with list of zeroes because we are too slow to obtain inventories.
     }
 
@@ -112,14 +110,15 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results (more or less upper case such as Beer)
       val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
       val inStockItems =
-      for (id <- matchingKeys;
+      { for (id <- matchingKeys;
            p <- productsCache.get(id);
            inv <- inventoryByProductId.get(p.pKey);
-           q = inv.quantity if q > 0) yield (p, q)
+           q = inv.quantity if q > 0) yield (p, q)}.toStream
 
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val cached = Random.shuffle(inStockItems).take(requestSize)
+      val cachedStream: Stream[(IProduct, Long)] = Random.shuffle(inStockItems) // type declaration is to prove ourselves we still have a stream, yeah!
+      val cached = cachedStream.take(requestSize)
       if (cached.nonEmpty) cached
       else getSerialResult(lcboProdCategory)
     }
