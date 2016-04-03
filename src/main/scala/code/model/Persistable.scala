@@ -15,8 +15,6 @@ import org.squeryl.Query
 trait Persistable[T <: Persistable[T, I], I] extends Loader[T] with ItemStateGrouper[T, I] with KeyedRecord[Long] with Loggable {
   self: T =>
 
-  def batchSize: Int = Props.getInt("DBWrite.BatchSize", 1024)
-
   def synchDirtyAndNewItems(items: IndexedSeq[T], getCachedItem: (T) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
     val (dirtyItems, newItems) = itemsByState(items, getCachedItem, dirtyPred)
     updateAndInsert(dirtyItems, newItems) // updates DB AND cache.
@@ -26,6 +24,8 @@ trait Persistable[T <: Persistable[T, I], I] extends Loader[T] with ItemStateGro
     update(updateItems)
     insert(insertItems)
   }
+
+  private def batchSize: Int = Props.getInt("DBWrite.BatchSize", 1024)
 
   // @see http://squeryl.org/occ.html
   private def update(items: Iterable[T]) = {
