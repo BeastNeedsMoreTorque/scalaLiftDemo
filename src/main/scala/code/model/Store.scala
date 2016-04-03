@@ -90,7 +90,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
     * @param requestSize a number representing how many items we need to sample
     * @return quantity found in inventory for product and the product
     */
-  def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]] = {
+  def recommend(category: String, requestSize: Int): Box[Iterable[(IProduct, Long)]] = {
     /**
       *
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO. It's been known that they would send a Wiser's Whiskey on a wine request.
@@ -100,8 +100,11 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
       val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
-                     p = prods(id)) yield (0.toLong, p)
-      seq.filter {pair => pair._2.primaryCategory == lcboProdCategory}.take(requestSize)  // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
+                     p = prods(id)) yield p
+      seq.filter { _.primaryCategory == lcboProdCategory}.
+        take(requestSize).
+        zip(Seq.fill(requestSize)(0.toLong))  // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
+      // and then zip with list of zeroes because we are too slow to obtain inventories.
     }
 
     // we could get errors going to LCBO, this tryo captures those.
@@ -112,7 +115,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
       for (id <- matchingKeys;
            p <- productsCache.get(id);
            inv <- inventoryByProductId.get(p.pKey);
-           q = inv.quantity if q > 0) yield (q,p)
+           q = inv.quantity if q > 0) yield (p, q)
 
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory

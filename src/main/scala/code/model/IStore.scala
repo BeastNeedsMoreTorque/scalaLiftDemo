@@ -9,7 +9,7 @@ import net.liftweb.common.Box
 trait IStore  {
   def lcboId: Long
 
-  def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]]
+  def recommend(category: String, requestSize: Int): Box[Iterable[(IProduct, Long)]]
   def isDead: Boolean
   def addressLine1: String
 
