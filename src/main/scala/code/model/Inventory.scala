@@ -63,7 +63,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     val jsonRoot = parse(pageContent)
     val nodes = (jsonRoot \ "result").children.toIndexedSeq // Uses XPath-like querying to extract data from parsed object jsObj.
     val items = for (p <- nodes;
-         inv = p.extract[InventoryAsLCBOJson] if !inv.is_dead;
+         inv = p.extract[InventoryAsLCBOJson];
          sKey <- Store.lcboIdToDBId(inv.store_id);
          pKey <- Product.lcboIdToDBId(inv.product_id);
          newInv = Inventory.apply(sKey, pKey, inv)
@@ -77,9 +77,10 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
   @throws(classOf[MappingException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @throws(classOf[TruncatedChunkException])  // that's a brutal one. Caller must be ready to process these thrown exceptions.
-  def fetchInventoriesByStore(uri: String, LcboStoreId: Long,
+  def fetchInventoriesByStore(uri: String,
                               getCachedItem: (Inventory) => Option[Inventory],
-                              mapByProductId: Map[Long, Inventory]): Unit = {
+                              mapByProductId: Map[Long, Inventory],
+                              params: Seq[(String, Any)]): Unit = {
     // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
 
     // set up some functional transformers first, then get ready for real work.
@@ -95,7 +96,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
 
     val getDBReadyUpdatedInvs = (getUpdatedInvs _).compose(removeCompositeKeyDupes) // more of a toy here than anything; interesting to know we can compose.
-    val items = collectItemsOnPages(uri, Seq("store_id" -> LcboStoreId))
+    val items = collectItemsOnPages(uri, params)
     val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
     // identify the dirty ones for update and new ones for insert, clean up duplicate keys, store to DB and catch errors
     // update in memory COPIES of our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
