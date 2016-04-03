@@ -36,6 +36,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   override def meta = Store
 
   override def MaxPerPage = Store.MaxPerPage
+  override def getCachedItem: (IStore) => Option[IStore] =  s => Store.getItemByLcboId(s.lcboId)
 
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
@@ -186,7 +187,7 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
-  private val getCachedItem: (Store) => Option[IStore] =  s => getItemByLcboId(s.lcboId)
+  override def getCachedItem: (IStore) => Option[IStore] =  s => getItemByLcboId(s.lcboId)
   def availableStores: Set[Long] = storesCache.toMap.keySet
   def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
   def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)

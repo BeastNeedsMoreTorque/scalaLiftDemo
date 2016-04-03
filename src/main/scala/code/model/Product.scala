@@ -34,6 +34,7 @@ class Product private() extends IProduct with ErrorReporter with Persistable[Pro
   override def setLcboId(id: Long): Unit = lcbo_id.set(id)
 
   override def MaxPerPage = Product.MaxPerPage
+  override def getCachedItem: (IProduct) => Option[IProduct] = s => Product.getItemByLcboId(s.lcboId)
 
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
@@ -130,7 +131,7 @@ object Product extends Product with MetaRecord[Product] {
   override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   private val sizeFulfilled: (Int) => SizeChecker =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
-  private val getCachedItem: (Product) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
+  override def getCachedItem: (IProduct) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
   /* Convert a store to XML @see progscala2 chapter on implicits */
   implicit def toXml(p: Product): Node =
