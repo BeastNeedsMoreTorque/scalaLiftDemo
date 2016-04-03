@@ -52,8 +52,7 @@ trait Persistable[T <: Persistable[T, I], I] extends Loader[T] with ItemStateGro
             logger.error("SqlState: " + se.getSQLState)
             logger.error("Error Message: " + se.getMessage)
             logger.error("NextException:" + se.getNextException)
-          case e: Exception =>
-            logger.error("General exception caught: " + e+ " " + subItems)
+          // intentionally skip other errors and let it go higher up.
         }
 
         // regular call as update throws.
@@ -83,8 +82,7 @@ trait Persistable[T <: Persistable[T, I], I] extends Loader[T] with ItemStateGro
           logger.error("SqlState: " + se.getSQLState)
           logger.error("Error Message: " + se.getMessage)
           logger.error("NextException:" + se.getNextException)
-        case e: Exception =>
-          logger.error("General exception caught: " + e)
+        // intentionally skip other serious errors, and let them bubble up.
       }
       if (filteredProdsWithPKs ne null) cacheNewItems(filteredProdsWithPKs)
     }
