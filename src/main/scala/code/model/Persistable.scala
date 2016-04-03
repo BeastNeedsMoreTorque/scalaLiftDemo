@@ -12,8 +12,8 @@ import org.squeryl.Query
 /**
   * Created by philippederome on 2016-03-17.
   */
-trait Persistable[T <: Persistable[T, I], I] extends Loader[T] with ItemStateGrouper[T, I] with KeyedRecord[Long] with Loggable {
-  self: T =>
+trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper with KeyedRecord[Long] with Loggable {
+  self: T=>
 
   val fullContextErr: (String) => ( String, String) => String = { collName => (m, err) =>
     s"Problem loading $collName into cache for '$lcboId' with message $m and exception error $err"
@@ -22,8 +22,9 @@ trait Persistable[T <: Persistable[T, I], I] extends Loader[T] with ItemStateGro
     s"Problem loading $collName into cache for '$lcboId'"
   }
 
-  def synchDirtyAndNewItems(items: IndexedSeq[T], getCachedItem: (T) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
-    val (dirtyItems, newItems) = itemsByState(items, getCachedItem, dirtyPred)
+  // I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class, and it should not return just anything.
+  def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], getCachedItem: (T) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
+    val (dirtyItems, newItems) = itemsByState[I, T](items, getCachedItem, dirtyPred)
     updateAndInsert(dirtyItems, newItems) // updates DB AND cache.
   }
   // Always call update before insert just to be consistent and safe. Enforce it.

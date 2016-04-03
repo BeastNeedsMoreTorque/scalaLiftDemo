@@ -19,7 +19,7 @@ import org.squeryl.annotations._
 import code.model.Product.{fetchByStoreCategory, fetchByStore}
 import code.model.Inventory.fetchInventoriesByStore
 
-class Store  private() extends IStore with ErrorReporter with Persistable[Store, IStore]
+class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
@@ -186,7 +186,7 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
-  private val getCachedItem: (Store) => Option[IStore] = {s => getItemByLcboId(s.lcboId)}
+  private val getCachedItem: (Store) => Option[IStore] =  s => getItemByLcboId(s.lcboId)
   def availableStores: Set[Long] = storesCache.toMap.keySet
   def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
   def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)

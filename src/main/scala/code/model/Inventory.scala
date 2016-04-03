@@ -36,7 +36,7 @@ class Inventory private(val storeid: Long, val productid: Long, var quantity: Lo
   }
 }
 
-object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper[Inventory, Inventory] with Loggable {
+object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with Loggable {
   override def MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   private val dirtyPredicate: (Inventory, Inventory) => Boolean = {(x, y)=> x.isDirty(y)}
 
@@ -84,7 +84,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper[Invent
 
     // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
     val items = collectItemsOnPages(uri, Seq("store_id" -> LcboStoreId))
-    val (dirtyItems, newItems) = itemsByState(items, getCachedItem, dirtyPredicate)
+    val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
     // identify the dirty ones for update and new ones for insert, clean up duplicate keys, store to DB and catch errors
     // update in memory COPIES of our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
     val updatedInventories =
