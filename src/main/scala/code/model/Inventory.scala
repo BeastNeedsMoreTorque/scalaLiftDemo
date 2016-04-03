@@ -81,36 +81,36 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with L
   def fetchInventoriesByStore(uri: String, LcboStoreId: Long,
                               getCachedItem: (Inventory) => Option[Inventory],
                               mapByProductId: Map[Long, Inventory]): Unit = {
-
     // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
+
+    // set up some functional transformers first, then get ready for real work.
+    // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
+    def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
+      invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (k, v) => v.last }
+    def getUpdatedInvs(items: Iterable[Inventory]): Iterable[Inventory] = {
+      { for (freshInv <- items;
+             cachedInv <- mapByProductId.get(freshInv.productid);
+             dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
+    }
+    val getDBReadyUpdatedInvs = (getUpdatedInvs _).compose(removeCompositeKeyDupes) // more of a toy here than anything; interesting to know we can compose.
     val items = collectItemsOnPages(uri, Seq("store_id" -> LcboStoreId))
     val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
     // identify the dirty ones for update and new ones for insert, clean up duplicate keys, store to DB and catch errors
     // update in memory COPIES of our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
-    val updatedInventories =
-    { for (freshInv <- dirtyItems;
-         cachedInv <- mapByProductId.get(freshInv.productid);
-         dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv } // synch it up with copyDiffs
-
-    // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
-    def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
-      invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (k, v) => v.last }
-
-    // filter the inventories that go to DB to remove dupes and keep a handle of them to help diagnose exceptions should we encounter them.
-    val CompKeyFilterNewInventories = removeCompositeKeyDupes(newItems)
-    val CompKeyFilterUpdatedInventories = removeCompositeKeyDupes(updatedInventories)
+    val updatedInventories = getDBReadyUpdatedInvs(dirtyItems)
+    val newInventories = removeCompositeKeyDupes(newItems)
 
     try {
       // getNextException in catch is what is useful to log (along with the data that led to the exception)
       inTransaction {
         // we refresh just before splitting the inventories into a clean, dirty, new classes.
-        MainSchema.inventories.update(CompKeyFilterUpdatedInventories)
-        MainSchema.inventories.insert(CompKeyFilterNewInventories)
+        MainSchema.inventories.update(updatedInventories)
+        MainSchema.inventories.insert(newInventories)
       }
     } catch {
       case se: SQLException =>
         // show me the data that caused the problem!
-        logger.error(s"SQLException New Invs $CompKeyFilterNewInventories Dirty Invs $CompKeyFilterUpdatedInventories")
+        logger.error(s"SQLException New Invs $newInventories Dirty Invs $updatedInventories")
         logger.error("Code: " + se.getErrorCode)
         logger.error("SqlState: " + se.getSQLState)
         logger.error("Error Message: " + se.getMessage)
