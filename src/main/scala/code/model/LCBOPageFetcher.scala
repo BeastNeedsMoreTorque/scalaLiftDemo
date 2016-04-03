@@ -40,8 +40,8 @@ trait LCBOPageFetcher[T] extends RestClient {
     val encoding = "UTF-8"
     val paramsAsSuffix = params.map(v =>
       URLEncoder.encode(v._1, encoding) +
-        "=" +
-        URLEncoder.encode(v._2.toString, encoding)
+      "=" +
+      URLEncoder.encode(v._2.toString, encoding)
     ).mkString("&")
     if (paramsAsSuffix.nonEmpty) urlRoot + "?" + paramsAsSuffix
     else urlRoot

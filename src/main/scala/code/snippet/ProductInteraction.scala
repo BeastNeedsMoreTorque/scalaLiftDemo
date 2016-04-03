@@ -142,7 +142,7 @@ class ProductInteraction extends JSUtilities with Loggable {
           Noop
         }{ s =>
           // validate expected numeric input storeId then access LCBO data
-          val quantityProdSeq = s.recommend(theCategory.is, theRecommendCount.is) match {
+          val prodQtySeq = s.recommend(theCategory.is, theRecommendCount.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
             case Full(pairs) if pairs.nonEmpty => Full(pairs) // returns prod and quantity in inventory normally
             case Full(pairs) =>
@@ -154,10 +154,10 @@ class ProductInteraction extends JSUtilities with Loggable {
               S.error(s"Unable to choose product of category ${theCategory.is}")
               Empty
           }
-          quantityProdSeq.dmap { Noop } // we gave notice of error already via JS, nothing else to do
+          prodQtySeq.dmap { Noop } // we gave notice of error already via JS, nothing else to do
           { pairs => // normal case
             S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-            prodDisplayJS( pairs.map{case (quantity, p) => QuantityOfProduct(quantity, p)})
+            prodDisplayJS( pairs.map{case ( p, q) => QuantityOfProduct(q, p)})
           }
         }
 
