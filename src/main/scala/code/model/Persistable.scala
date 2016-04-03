@@ -23,7 +23,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper w
   }
 
   // I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class, and it should not return just anything.
-  def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], getCachedItem: (T) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
+  def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], getCachedItem: (I) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
     val (dirtyItems, newItems) = itemsByState[I, T](items, getCachedItem, dirtyPred)
     updateAndInsert(dirtyItems, newItems) // updates DB AND cache.
   }

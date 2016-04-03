@@ -28,6 +28,7 @@ trait IProduct  {
   val dirtyPredicate: (IProduct, IProduct) => Boolean = {(x, y)=> !x.equals(y)}
 
   def streamAttributes: IndexedSeq[Attribute]
+  def getCachedItem: (IProduct) => Option[IProduct]
 
 }
 

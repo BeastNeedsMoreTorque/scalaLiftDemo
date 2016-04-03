@@ -7,6 +7,8 @@ import net.liftweb.common.Box
   * Created by philippederome on 2016-03-25.
   */
 trait IStore  {
+  def lcboId: Long
+
   def recommend(category: String, requestSize: Int): Box[Iterable[(Long, IProduct)]]
   def isDead: Boolean
   def addressLine1: String
@@ -17,5 +19,6 @@ trait IStore  {
     case _ => false
   }
   val dirtyPredicate: (IStore, IStore) => Boolean = {(x, y)=> !x.equals(y)}
+  def getCachedItem: (IStore) => Option[IStore]
 
 }
