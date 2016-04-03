@@ -12,7 +12,6 @@ import net.liftweb.common._
 import net.liftweb.util.Props
 import net.liftweb.json._
 import org.squeryl.annotations._
-import net.liftweb.squerylrecord.RecordTypeMode._
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -119,6 +118,13 @@ class Product private() extends IProduct with Persistable[Product] with Loader[P
 object Product extends Product with MetaRecord[Product] with ItemStateGrouper[Product, IProduct] with Loggable {
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
+  def getProduct(id: Long): Option[IProduct] = productsCache.get(id)
+  def getItemByLcboId(id: Long): Option[IProduct] =
+    for (dbId <- LcboIdsToDBIds.get(id);
+         p <- productsCache.get(dbId)) yield p
+
+  def lcboIdToDBId(id: Long): Option[Long] = LcboIdsToDBIds.get(id)
+
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
   override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
@@ -146,7 +152,7 @@ object Product extends Product with MetaRecord[Product] with ItemStateGrouper[Pr
    * for pattern match LCBO uses lower case but for actual product category it's upper case, so to make comparisons, we will need to account for that
    * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
    */
-  def collectProducts(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
+  def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
     collectItemsOnPages(
       s"$LcboDomainURL/products",
       Seq("store_id" -> lcboStoreId, "q" -> category),
@@ -157,7 +163,7 @@ object Product extends Product with MetaRecord[Product] with ItemStateGrouper[Pr
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
     // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
-    // and gives us opportunity to bring our cache up to date about firmwide products.
+    // and gives us opportunity to bring our cache up to date about firm wide products.
     val items = collectItemsOnPages(
       s"$LcboDomainURL/products",
       Seq("store_id" -> lcboStoreId),
@@ -167,14 +173,7 @@ object Product extends Product with MetaRecord[Product] with ItemStateGrouper[Pr
     val productsByState = itemsByState(items, getCachedItem, dirtyPredicate)
     val dirtyItems = productsByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Product]()) // unusable for cache
     val newItems = productsByState.getOrElse(EntityRecordState.New, IndexedSeq[Product]()) // unusable for cache
-    updateAndInsert(dirtyItems, newItems)
-    val cleanItems = productsByState.getOrElse(EntityRecordState.Clean, IndexedSeq[Product]()) // unusable for cache
-    (cleanItems ++ dirtyItems ++ newItems).map{ p => p.lcboId}.flatMap{  getItemByLcboId } // usable for cache, now that we refreshed them all
+    updateAndInsert(dirtyItems, newItems) // updates DB AND cache.
+    items.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
   }
-
-  def lcboIdToDBId(l: Long): Option[Long] = LcboIdsToDBIds.get(l)
-  def getItemByLcboId(id: Long): Option[IProduct] =
-    for (dbId <- LcboIdsToDBIds.get(id);
-         p <- productsCache.get(dbId)) yield p
-
 }
