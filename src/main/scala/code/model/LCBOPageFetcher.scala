@@ -37,8 +37,13 @@ trait LCBOPageFetcher[T] extends RestClient {
 
   final def buildUrl(urlRoot: String, params: Seq[(String, Any)] ): String = {
     val encoding = "UTF-8"
-    urlRoot + (params.map(v => URLEncoder.encode(v._1, encoding) + "=" + URLEncoder.encode(v._2.toString, encoding)).mkString("&")
-    match {case s if s.length == 0 => ""; case s => "?" + s})  // if there are parameters, prepend with ?
+    val paramsAsSuffix = params.map(v =>
+      URLEncoder.encode(v._1, encoding) +
+        "=" +
+        URLEncoder.encode(v._2.toString, encoding)
+    ).mkString("&")
+    if (paramsAsSuffix.nonEmpty) urlRoot + "?" + paramsAsSuffix
+    else urlRoot
   }
   /**
     * LCBO client JSON query handler.

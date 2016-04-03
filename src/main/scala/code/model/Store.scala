@@ -142,7 +142,7 @@ class Store  private() extends IStore with Persistable[Store, IStore]
     @throws(classOf[TruncatedChunkException])  // that's a brutal one. Advertize the throws at a higher level of abstraction now everywhere down below.
     def fetchProducts() =
       tryo {
-        addToCaches(fetchByStore( lcboId))
+        addToCaches(fetchByStore(lcboId))
       } match {
         case net.liftweb.common.Failure(m, ex, _) =>
           logger.error(s"Problem loading products into cache for '$lcboId' with message $m and exception error $ex")
@@ -235,19 +235,17 @@ object Store extends Store with MetaRecord[Store] {
     <store>{Xml.toXml(st.asJValue)}</store>
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
-    def collectAllStoresIntoCache() =
-      tryo {
-        val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
-        synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
-        logger.debug(s"done loading stores from LCBO")
-      }
-
-    collectAllStoresIntoCache() match {
-      case Full(m) => ;
-      case net.liftweb.common.Failure(m, ex, _) =>
-        logger.error(s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'")
-      case Empty =>
-        logger.error(s"Problem loading LCBO stores into cache, none found")
+    tryo {
+      val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
+      synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
+      logger.debug(s"done loading stores from LCBO")
+    }
+    match {
+    case net.liftweb.common.Failure(m, ex, _) =>
+      logger.error(s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'")
+    case Empty =>
+      logger.error(s"Problem loading LCBO stores into cache, none found")
+    case Full(_) =>  // normal
     }
   }
 
