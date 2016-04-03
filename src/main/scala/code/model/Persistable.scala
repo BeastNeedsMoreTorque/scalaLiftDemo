@@ -15,6 +15,13 @@ import org.squeryl.Query
 trait Persistable[T <: Persistable[T, I], I] extends Loader[T] with ItemStateGrouper[T, I] with KeyedRecord[Long] with Loggable {
   self: T =>
 
+  val fullContextErr: (String) => ( String, String) => String = { collName => (m, err) =>
+    s"Problem loading $collName into cache for '$lcboId' with message $m and exception error $err"
+  }
+  val briefContextErr: (String) => () => String = { collName => () =>
+    s"Problem loading $collName into cache for '$lcboId'"
+  }
+
   def synchDirtyAndNewItems(items: IndexedSeq[T], getCachedItem: (T) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
     val (dirtyItems, newItems) = itemsByState(items, getCachedItem, dirtyPred)
     updateAndInsert(dirtyItems, newItems) // updates DB AND cache.
