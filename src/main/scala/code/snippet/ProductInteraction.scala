@@ -66,7 +66,7 @@ class ProductInteraction extends JSUtilities with Loggable {
           // selectionMarkup is top to bottom: image, then checkbox, quantity and cost input text fields right justified (CSS class prodSelectInput).
           // We also add a hiddenCost, so that the cost per item is always available for our calculation (visible to user in attributes in any event, but harder for us to get at for computation)
           def attributesMarkup(prod: IProduct, quantityAttr: Attribute, attrs: IndexedSeq[Attribute]): NodeSeq = {
-            def setProdIdName( attr: Attribute): String =
+            def setProdIdName( attr: Attribute) =
               if (attr == quantityAttr) prod.lcboId.toString else ""
 
             val tbody = {
