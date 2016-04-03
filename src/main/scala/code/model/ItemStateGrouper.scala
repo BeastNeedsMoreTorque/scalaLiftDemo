@@ -5,16 +5,15 @@ import scala.collection.IndexedSeq
 /**
   * Created by philippederome on 2016-04-01.
   */
-
-trait ItemStateGrouper[T, I] {
+trait ItemStateGrouper[T, I] { // I could be an interface of T but does not have to be.
 
   type EnumerationValueType = Enumeration#Value
-  // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy.
+  // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy, predicated on inputs being indexedseq for efficiency of groupby.
   def itemsByState(items: IndexedSeq[T], getCachedItem: (T) => Option[I], dirtyPred: (I, T) => Boolean): Map[EnumerationValueType, IndexedSeq[T]] = {
     items.groupBy {
-      src => (getCachedItem(src), src) match {
+      latest => (getCachedItem(latest), latest) match {
         case (None, _) => EntityRecordState.New
-        case (Some(item), srcItem) if dirtyPred(item, srcItem) => EntityRecordState.Dirty
+        case (Some(cached), latest) if dirtyPred(cached, latest) => EntityRecordState.Dirty
         case (_, _) => EntityRecordState.Clean
       }
     }

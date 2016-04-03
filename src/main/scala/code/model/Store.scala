@@ -20,7 +20,7 @@ import net.liftweb.util.Props
 import org.squeryl.annotations._
 import org.apache.http.TruncatedChunkException
 
-import code.model.Product.{collectProducts, fetchByStore}
+import code.model.Product.{fetchByStoreCategory, fetchByStore}
 import code.model.Inventory.fetchInventoriesByStore
 
 class Store  private() extends IStore with Persistable[Store] with Loader[Store]
@@ -112,7 +112,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       * @return
       */
     def getSerialResult(lcboProdCategory: String) = {
-      val prods = collectProducts(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
+      val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
                      p = prods(id)) yield (0.toLong, p)
@@ -155,8 +155,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
       tryo {
         fetchInventoriesByStore(
           uri = s"$LcboDomainURL/inventories",
-          storeLcboId= lcboId,
-          storeKey = pKey,
+          LcboStoreId = lcboId,
           getCachedInventoryItem,
           inventoryByProductId.toMap)
       } match {
@@ -175,16 +174,15 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
     fetches foreach {
       case m =>
         //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
-        logger.debug(s"loadCache succeeded for $lcboId")
+        logger.debug(s"loadCache async work succeeded for $lcboId")
         if (emptyInventory) {
           logger.warn(s"got NO product inventory for storeId $lcboId !") // No provision for retrying.
         }
     }
-    fetches.failed foreach {
-      case f =>
-        logger.info(s"loadCache explicitly failed for $lcboId cause $f")
+    for ( f <- fetches.failed)  {
+      logger.info(s"loadCache explicitly failed for $lcboId cause $f")
     }
-    logger.info(s"loadCache ended $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
+    logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
   }
 
   private def asyncLoadCache() =
