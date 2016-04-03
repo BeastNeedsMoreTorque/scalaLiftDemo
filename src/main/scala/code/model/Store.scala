@@ -133,9 +133,9 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
       val box = tryo {
         fetchInventoriesByStore(
           uri = s"$LcboDomainURL/inventories",
-          LcboStoreId = lcboId,
           getCachedInventoryItem,
-          inventoryByProductId.toMap)
+          inventoryByProductId.toMap,
+          Seq("store_id" -> lcboId, "where_not" -> "is_dead"))
       }
       if (checkUnitErrors(box, fullContextErr("inventories") )) refreshInventories()
     }
