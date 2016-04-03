@@ -112,7 +112,7 @@ class Store  private() extends IStore with Persistable[Store, IStore]
     tryo {
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results (more or less upper case such as Beer)
       val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
-      val inStockMatchingKeys =
+      val inStockItems =
       for (id <- matchingKeys;
            p <- productsCache.get(id);
            inv <- inventoryByProductId.get(p.pKey);
@@ -120,7 +120,7 @@ class Store  private() extends IStore with Persistable[Store, IStore]
 
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val cached = Random.shuffle(inStockMatchingKeys).take(requestSize).toIndexedSeq //getRequestFromCache(inStockMatchingKeys)
+      val cached = Random.shuffle(inStockItems).take(requestSize).toIndexedSeq
       if (cached.nonEmpty) cached
       else getSerialResult(lcboProdCategory)
     }
