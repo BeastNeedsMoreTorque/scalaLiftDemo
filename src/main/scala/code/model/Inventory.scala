@@ -77,7 +77,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper[Invent
   @throws(classOf[net.liftweb.json.JsonParser.ParseException])
   @throws(classOf[MappingException])
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-  @throws(classOf[TruncatedChunkException])  // that's a brutal one.
+  @throws(classOf[TruncatedChunkException])  // that's a brutal one. Caller must be ready to process these thrown exceptions.
   def fetchInventoriesByStore(uri: String, LcboStoreId: Long,
                               getCachedItem: (Inventory) => Option[Inventory],
                               mapByProductId: Map[Long, Inventory]): Unit = {
@@ -103,7 +103,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper[Invent
     try {
       // getNextException in catch is what is useful to log (along with the data that led to the exception)
       inTransaction {
-        // we refresh just before splitting the inventories intoå clean, dirty, new classes.
+        // we refresh just before splitting the inventories into a clean, dirty, new classes.
         MainSchema.inventories.update(CompKeyFilterUpdatedInventories)
         MainSchema.inventories.insert(CompKeyFilterNewInventories)
       }
