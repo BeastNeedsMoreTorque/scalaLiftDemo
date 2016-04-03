@@ -1,8 +1,5 @@
 package code.model
 
-import java.io.IOException
-import java.net.SocketTimeoutException
-
 import scala.collection._
 import scala.language.implicitConversions
 import scala.util.Random
@@ -10,7 +7,7 @@ import scala.xml.Node
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
-import net.liftweb.common.{Box, Empty, Full, Loggable}
+import net.liftweb.common.{Box, Loggable}
 import net.liftweb.json._
 import net.liftweb.util.Helpers.tryo
 import net.liftweb.record.MetaRecord
@@ -18,12 +15,11 @@ import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
 import org.squeryl.annotations._
-import org.apache.http.TruncatedChunkException
 
 import code.model.Product.{fetchByStoreCategory, fetchByStore}
 import code.model.Inventory.fetchInventoriesByStore
 
-class Store  private() extends IStore with Persistable[Store, IStore]
+class Store  private() extends IStore with ErrorReporter with Persistable[Store, IStore]
   with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
@@ -97,14 +93,13 @@ class Store  private() extends IStore with Persistable[Store, IStore]
     /**
       *
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO. It's been known that they would send a Wiser's Whiskey on a wine request.
-      * @return
+      * @return 0 quantity found in inventory for product (unknown to be resolved in JS) and the product
       */
     def getSerialResult(lcboProdCategory: String) = {
       val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       val seq = for (id <- permutedIndices;
                      p = prods(id)) yield (0.toLong, p)
-      // we may have 0 inventory, browser should try to finish off that work not web server.
       seq.filter {pair => pair._2.primaryCategory == lcboProdCategory}.take(requestSize)
     }
 
@@ -120,7 +115,7 @@ class Store  private() extends IStore with Persistable[Store, IStore]
 
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val cached = Random.shuffle(inStockItems).take(requestSize).toIndexedSeq
+      val cached = Random.shuffle(inStockItems).take(requestSize)
       if (cached.nonEmpty) cached
       else getSerialResult(lcboProdCategory)
     }
@@ -128,38 +123,18 @@ class Store  private() extends IStore with Persistable[Store, IStore]
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
-    @throws(classOf[SocketTimeoutException])
-    @throws(classOf[IOException])
-    @throws(classOf[net.liftweb.json.JsonParser.ParseException])
-    @throws(classOf[MappingException])
-    @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-    @throws(classOf[TruncatedChunkException])  // that's a brutal one. Advertize the throws at a higher level of abstraction now everywhere down below.
-    def fetchProducts() =
-      tryo {
-        addToCaches(fetchByStore(lcboId))
-      } match {
-        case net.liftweb.common.Failure(m, ex, _) =>
-          logger.error(s"Problem loading products into cache for '$lcboId' with message $m and exception error $ex")
-        case Empty =>
-          logger.error(s"Problem loading products into cache for '$lcboId'")
-        case _ => ;
-      }
+    def fetchProducts() = addToCaches( fetchByStore(lcboId) )
 
-    def fetchInventories() =
-      tryo {
+    def fetchInventories() = {
+      val box = tryo {
         fetchInventoriesByStore(
           uri = s"$LcboDomainURL/inventories",
           LcboStoreId = lcboId,
           getCachedInventoryItem,
           inventoryByProductId.toMap)
-      } match {
-        case net.liftweb.common.Failure(m, ex, _) =>
-          logger.error(s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $ex")
-        case Empty =>
-          logger.error(s"Problem loading inventories into cache for '$lcboId'")
-        case _ => refreshInventories() // always update cache after updating DB
       }
-
+      if (checkUnitErrors(box, fullContextErr("inventories") )) refreshInventories()
+    }
     val fetches = Future {
       fetchProducts() // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
     } andThen {
@@ -170,7 +145,7 @@ class Store  private() extends IStore with Persistable[Store, IStore]
         //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
         logger.debug(s"loadCache async work succeeded for $lcboId")
         if (emptyInventory) {
-          logger.warn(s"got NO product inventory for storeId $lcboId !") // No provision for retrying.
+          logger.warn(s"got no product inventory for storeId $lcboId !") // No provision for retrying.
         }
     }
     for ( f <- fetches.failed)  {
@@ -183,14 +158,12 @@ class Store  private() extends IStore with Persistable[Store, IStore]
     // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
-  def refreshInventories(): Unit =
-    inTransaction {
+  def refreshInventories(): Unit = inTransaction {
       storeProducts.refresh // key for whole inventory caching to work!
       inventoryByProductId ++= getInventories
     }
 
-  def refreshProducts(): Unit =
-    inTransaction {
+  def refreshProducts(): Unit = inTransaction {
       storeProducts.refresh // key for whole inventory caching and products caching to work!
       productsCache ++= productsByLcboId
       productsCacheByCategory ++= productsByCategory
@@ -229,18 +202,17 @@ object Store extends Store with MetaRecord[Store] {
     <store>{Xml.toXml(st.asJValue)}</store>
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
-    tryo {
+    def fullContextErr( m: String,  ex: String): String =
+      s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'"
+    def briefContextErr(): String =
+      "Problem loading LCBO stores into cache, none found"
+    val box = tryo {
       val items =  collectItemsOnPages(s"$LcboDomainURL/stores", Seq("where_not" -> "is_dead"))
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
       logger.debug(s"done loading stores from LCBO")
+      items // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
-    match {
-    case net.liftweb.common.Failure(m, ex, _) =>
-      logger.error(s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'")
-    case Empty =>
-      logger.error(s"Problem loading LCBO stores into cache, none found")
-    case Full(_) =>  // normal
-    }
+    checkErrors(box, fullContextErr, briefContextErr)
   }
 
   def init(): Unit = {
