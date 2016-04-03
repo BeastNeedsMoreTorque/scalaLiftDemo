@@ -127,11 +127,8 @@ object Product extends Product with MetaRecord[Product] {
   override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
   override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
-  private val isNotDiscontinued: (Product) => Boolean = { !_.isDiscontinued }
-  private val DBBatchSize = Props.getInt("product.DBBatchSize", 1)
   private val sizeFulfilled: (Int) => SizeChecker =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
-  private val sizeNeverFulfilled: SizeChecker = {(totalSize: Int) => false}
   private val getCachedItem: (Product) => Option[IProduct] = {s => getItemByLcboId(s.lcboId)}
 
   /* Convert a store to XML @see progscala2 chapter on implicits */
@@ -139,7 +136,7 @@ object Product extends Product with MetaRecord[Product] {
     <product>{Xml.toXml(p.asJValue)}</product>
 
   def init(): Unit = {
-    logger.info("Product.init start")
+    logger.info("Product.init start")  // don't query all products as we don't see the need to query them in isolation of stores (i.e don't care about products not available in stores)
     load()
     logger.info("Product.init end")
   }
@@ -154,10 +151,8 @@ object Product extends Product with MetaRecord[Product] {
   def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
     collectItemsOnPages(
       s"$LcboDomainURL/products",
-      Seq("store_id" -> lcboStoreId, "q" -> category),
-      sizeFulfilled(requiredSize),
-      isNotDiscontinued
-    )
+      Seq("store_id" -> lcboStoreId, "q" -> category, "where_not" -> "is_discontinued,is_dead", "order"-> "inventory_count.desc"),
+      sizeFulfilled(requiredSize))
 
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
@@ -165,10 +160,8 @@ object Product extends Product with MetaRecord[Product] {
     // and gives us opportunity to bring our cache up to date about firm wide products.
     val items = collectItemsOnPages(
       s"$LcboDomainURL/products",
-      Seq("store_id" -> lcboStoreId),
-      sizeNeverFulfilled,
-      isNotDiscontinued
-    )
+      Seq("store_id" -> lcboStoreId, "where_not" -> "is_discontinued,is_dead"),
+      exhaustThemAll)
     synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
     items.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
   }

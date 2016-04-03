@@ -18,6 +18,7 @@ trait LCBOPageFetcher[T] extends RestClient {
   def extractItems(uri: String): (IndexedSeq[T], JValue)
 
   type SizeChecker = (Int) => Boolean
+  val exhaustThemAll: SizeChecker = { x => false }
 
   final def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
 
@@ -74,12 +75,10 @@ trait LCBOPageFetcher[T] extends RestClient {
                                 urlRoot: String,
                                 pageNo: Int,
                                 params: Seq[(String, Any)],
-                                sizeFulfilled: (Int) => Boolean = {(totalSize: Int) => false},
-                                f: (T) => Boolean = { item: T => true }): IndexedSeq[T] = {
+                                sizeFulfilled: SizeChecker = exhaustThemAll): IndexedSeq[T] = {
 
     val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage, params:_*)
-    val (rawItems, jsonRoot) = extractItems(uri)
-    val items = rawItems.filter(f)
+    val (items, jsonRoot) = extractItems(uri)
     val revisedAccumItems = accumItems ++ items
 
     if (isFinalPage(jsonRoot, pageNo) || sizeFulfilled(items.size + accumItems.size)) {
@@ -91,22 +90,19 @@ trait LCBOPageFetcher[T] extends RestClient {
       urlRoot,
       pageNo + 1,
       params,
-      sizeFulfilled,
-      f)
+      sizeFulfilled)
   }
 
   // tp present a cleaner interface than the tail recursive method
   final def collectItemsOnPages(urlRoot: String,
                                 params: Seq[(String, Any)] = Seq(),
-                                sizeFulfilled: SizeChecker = {(totalSize: Int) => false},
-                                f: (T) => Boolean = { item: T => true }): IndexedSeq[T] = {
+                                sizeFulfilled: SizeChecker = exhaustThemAll): IndexedSeq[T] = {
     collectItemsOnAPage(
       IndexedSeq[T](), // union of this page with next page when we are asked for a full sample
       urlRoot,
       1,
       params,
-      sizeFulfilled,
-      f)
+      sizeFulfilled)
   }
 }
 
