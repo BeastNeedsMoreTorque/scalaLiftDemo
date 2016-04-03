@@ -12,13 +12,17 @@ import org.squeryl.Query
 /**
   * Created by philippederome on 2016-03-17.
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with Loggable {
+trait Persistable[T <: Persistable[T, I], I] extends Loader[T] with ItemStateGrouper[T, I] with KeyedRecord[Long] with Loggable {
   self: T =>
 
   def batchSize: Int = Props.getInt("DBWrite.BatchSize", 1024)
 
+  def synchDirtyAndNewItems(items: IndexedSeq[T], getCachedItem: (T) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
+    val (dirtyItems, newItems) = itemsByState(items, getCachedItem, dirtyPred)
+    updateAndInsert(dirtyItems, newItems) // updates DB AND cache.
+  }
   // Always call update before insert just to be consistent and safe. Enforce it.
-  final def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = inTransaction {
+  private def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = inTransaction {
     update(updateItems)
     insert(insertItems)
   }

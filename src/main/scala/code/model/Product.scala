@@ -17,7 +17,7 @@ import org.squeryl.annotations._
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends IProduct with Persistable[Product] with Loader[Product]
+class Product private() extends IProduct with Persistable[Product, IProduct] with Loader[Product]
   with LcboJSONExtractor[Product] with CreatedUpdated[Product] {
   def meta = Product
 
@@ -115,7 +115,7 @@ class Product private() extends IProduct with Persistable[Product] with Loader[P
 /**
   *
   */
-object Product extends Product with MetaRecord[Product] with ItemStateGrouper[Product, IProduct] with Loggable {
+object Product extends Product with MetaRecord[Product] with Loggable {
   // thread-safe lock free objects
   private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   def getProduct(id: Long): Option[IProduct] = productsCache.get(id)
@@ -170,10 +170,7 @@ object Product extends Product with MetaRecord[Product] with ItemStateGrouper[Pr
       sizeNeverFulfilled,
       isNotDiscontinued
     )
-    val productsByState = itemsByState(items, getCachedItem, dirtyPredicate)
-    val dirtyItems = productsByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Product]()) // unusable for cache
-    val newItems = productsByState.getOrElse(EntityRecordState.New, IndexedSeq[Product]()) // unusable for cache
-    updateAndInsert(dirtyItems, newItems) // updates DB AND cache.
+    synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
     items.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
   }
 }

@@ -23,7 +23,7 @@ import org.apache.http.TruncatedChunkException
 import code.model.Product.{fetchByStoreCategory, fetchByStore}
 import code.model.Inventory.fetchInventoriesByStore
 
-class Store  private() extends IStore with Persistable[Store] with Loader[Store]
+class Store  private() extends IStore with Persistable[Store, IStore] with Loader[Store]
   with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
@@ -204,7 +204,7 @@ class Store  private() extends IStore with Persistable[Store] with Loader[Store]
     }
 }
 
-object Store extends Store with MetaRecord[Store] with ItemStateGrouper[Store, IStore] with Loggable {
+object Store extends Store with MetaRecord[Store] with Loggable {
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
 
   private val storesCache: concurrent.Map[Long, Store] = TrieMap()  // primary cache
@@ -235,18 +235,12 @@ object Store extends Store with MetaRecord[Store] with ItemStateGrouper[Store, I
     <store>{Xml.toXml(st.asJValue)}</store>
 
   private def getStores(dbStores: Map[Long, Store]): Unit = {
-    def collectAllStoresIntoCache() = {
+    def collectAllStoresIntoCache() =
       tryo {
-          val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
-          val storesByState  = itemsByState(items, getCachedItem, dirtyPredicate)
-          // identify the dirty and new stores for batch update and cache them as side effect (automatically)
-          val dirtyStores =  storesByState.getOrElse(EntityRecordState.Dirty, IndexedSeq[Store]())
-          val newStores = storesByState.getOrElse(EntityRecordState.New, IndexedSeq[Store]()).toIndexedSeq
-          updateAndInsert(dirtyStores, newStores)
-
+        val items =  collectItemsOnPages(s"$LcboDomainURL/stores")
+        synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
         logger.debug(s"done loading stores from LCBO")
       }
-    }
 
     collectAllStoresIntoCache() match {
       case Full(m) => ;
@@ -263,12 +257,10 @@ object Store extends Store with MetaRecord[Store] with ItemStateGrouper[Store, I
     logger.info("Store.init end")
   }
 
-  override def load(): Unit = {
-    inTransaction {
-      val items = from(table())(s => select(s))
-      cacheNewItems(items)
-      asyncGetStores(items.map { s => s.pKey -> s }(breakOut)) // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
-    }
+  override def load(): Unit = inTransaction {
+    val items = from(table())(s => select(s))
+    cacheNewItems(items)
+    asyncGetStores(items.map { s => s.pKey -> s }(breakOut)) // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
   }
 
   private def asyncGetStores(x: Map[Long, Store]) = {
