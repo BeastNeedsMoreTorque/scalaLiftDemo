@@ -2,10 +2,9 @@ package code.model
 
 import java.io.IOException
 import java.net.SocketTimeoutException
-import java.sql.SQLException
-import scala.collection.IndexedSeq
-import net.liftweb.common.Loggable
 
+import scala.collection.{IndexedSeq, Iterable}
+import net.liftweb.common.Loggable
 import net.liftweb.json._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
@@ -36,7 +35,7 @@ class Inventory private(val storeid: Long, val productid: Long, var quantity: Lo
   }
 }
 
-object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with Loggable {
+object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with ORMBatchExecutor with Loggable {
   override def MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   private val dirtyPredicate: (Inventory, Inventory) => Boolean = {(x, y)=> x.isDirty(y)}
 
@@ -92,6 +91,9 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with L
              cachedInv <- mapByProductId.get(freshInv.productid);
              dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
     }
+    def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update _
+    def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
+
     val getDBReadyUpdatedInvs = (getUpdatedInvs _).compose(removeCompositeKeyDupes) // more of a toy here than anything; interesting to know we can compose.
     val items = collectItemsOnPages(uri, Seq("store_id" -> LcboStoreId))
     val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
@@ -99,23 +101,9 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with L
     // update in memory COPIES of our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
     val updatedInventories = getDBReadyUpdatedInvs(dirtyItems)
     val newInventories = removeCompositeKeyDupes(newItems)
-
-    try {
-      // getNextException in catch is what is useful to log (along with the data that led to the exception)
-      inTransaction {
-        // we refresh just before splitting the inventories into a clean, dirty, new classes.
-        MainSchema.inventories.update(updatedInventories)
-        MainSchema.inventories.insert(newInventories)
-      }
-    } catch {
-      case se: SQLException =>
-        // show me the data that caused the problem!
-        logger.error(s"SQLException New Invs $newInventories Dirty Invs $updatedInventories")
-        logger.error("Code: " + se.getErrorCode)
-        logger.error("SqlState: " + se.getSQLState)
-        logger.error("Error Message: " + se.getMessage)
-        logger.error("NextException:" + se.getNextException) // Show me why.
-      // intentionally let propagate other errors, some of which could be fatal
+    inTransaction {
+      execute[Inventory](updatedInventories, inventoryTableUpdater)
+      execute[Inventory](newInventories, inventoryTableInserter)
     }
   }
 }

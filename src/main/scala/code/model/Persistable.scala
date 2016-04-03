@@ -1,7 +1,5 @@
 package code.model
 
-import java.sql.SQLException
-
 import scala.collection.{IndexedSeq, Iterable}
 import net.liftweb.util.Props
 import net.liftweb.common.Loggable
@@ -11,7 +9,7 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 /**
   * Created by philippederome on 2016-03-17.
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper with KeyedRecord[Long] with Loggable {
+trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper with KeyedRecord[Long] with ORMBatchExecutor with Loggable {
   self: T=>
 
   val fullContextErr: (String) => ( String, String) => String = { collName => (m, err) =>
@@ -37,24 +35,14 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper w
   private def forceUpdater: (Iterable[T]) => Unit = table().forceUpdate _  // @see http://squeryl.org/occ.html. Regular call as update throws because of possibility of multiple updates on same record.
   private def insertBatch: (Iterable[T]) => Unit = table().insert _
 
-  private def batchTransactor(items: Iterable[T], transactor: (Iterable[T]) => Unit) = {
-    def loadToCacheLastTransaction(items: Iterable[T]) = {
-      val itemsWithPK = from(table())(item => where( item.idField in items.map(_.pKey)) select(item))
-      cache() ++= itemsWithPK.map{x => x.pKey -> x } (collection.breakOut)
-    }
+  def loadToCacheLastTransaction(items: Iterable[T]) = {
+    val itemsWithPK = from(table())(item => where( item.idField in items.map(_.pKey)) select(item))
+    cache() ++= itemsWithPK.map{x => x.pKey -> x } (collection.breakOut)
+  }
 
-    try {
-      transactor(items)
-      loadToCacheLastTransaction(items)
-    } catch {
-      case se: SQLException =>
-        logger.error(s"SQLException $items")
-        logger.error("Code: " + se.getErrorCode)
-        logger.error("SqlState: " + se.getSQLState)
-        logger.error("Error Message: " + se.getMessage)
-        logger.error("NextException:" + se.getNextException)
-      // intentionally skip other errors and let it go higher up.
-    }
+  def batchTransactor(items: Iterable[T], transactor: (Iterable[T]) => Unit) = {
+    execute[T](items, transactor)
+    loadToCacheLastTransaction(items)
   }
 
   // We can afford to be less strict in our data preparation/validation than for the insert.
