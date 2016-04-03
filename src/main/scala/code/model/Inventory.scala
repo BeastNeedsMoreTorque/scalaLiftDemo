@@ -84,24 +84,20 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper[Invent
 
     // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
     val items = collectItemsOnPages(uri, Seq("store_id" -> LcboStoreId))
-    // partition items into 4 lists, clean (no change), new (to insert) and dirty (to update) and undefined (invalid/unknown product, ref.Integ risk), using neat groupBy
-    val inventoriesByState = itemsByState(items, getCachedItem, dirtyPredicate)
+    val (dirtyItems, newItems) = itemsByState(items, getCachedItem, dirtyPredicate)
     // identify the dirty ones for update and new ones for insert, clean up duplicate keys, store to DB and catch errors
     // update in memory COPIES of our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
     val updatedInventories =
-    { for (freshInvs <- inventoriesByState.get(EntityRecordState.Dirty).toIndexedSeq;
-         freshInv <- freshInvs;
+    { for (freshInv <- dirtyItems;
          cachedInv <- mapByProductId.get(freshInv.productid);
          dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv } // synch it up with copyDiffs
-    // create new inventories we didn't know about
-    val newInventories = inventoriesByState.get(EntityRecordState.New).map( identity).getOrElse(IndexedSeq())
 
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
     def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
       invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (k, v) => v.last }
 
     // filter the inventories that go to DB to remove dupes and keep a handle of them to help diagnose exceptions should we encounter them.
-    val CompKeyFilterNewInventories = removeCompositeKeyDupes(newInventories)
+    val CompKeyFilterNewInventories = removeCompositeKeyDupes(newItems)
     val CompKeyFilterUpdatedInventories = removeCompositeKeyDupes(updatedInventories)
 
     try {
