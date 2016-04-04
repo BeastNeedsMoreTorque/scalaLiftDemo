@@ -108,12 +108,11 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
     // we could get errors going to LCBO, this tryo captures those.
     tryo {
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results (more or less upper case such as Beer)
-      val matchingKeys = productsCacheByCategory.getOrElse(lcboProdCategory, IndexedSeq[Product]()).map(_.lcboId)
+      val matchingProds = productsCacheByCategory.get(lcboProdCategory).fold(IndexedSeq[IProduct]()){ identity }
       val inStockItems =
-      { for (id <- matchingKeys;
-           p <- productsCache.get(id);
-           inv <- inventoryByProductId.get(p.pKey);
-           q = inv.quantity if q > 0) yield (p, q)}.toStream
+      { for ( p <- matchingProds;
+              inv <- inventoryByProductId.get(p.pKey);
+              q = inv.quantity if q > 0) yield (p, q)}.toStream
 
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
