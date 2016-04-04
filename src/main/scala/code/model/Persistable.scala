@@ -52,9 +52,10 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper w
 
   private def insert( items: IndexedSeq[T]) = {
     // Do special handling to filter out duplicate keys, which would throw.
-    // first evaluate against cache (assumed in synch with DB) what's genuinely new.
-    val LcboIDs = cache().map{ case (_, p) => p.lcboId}.toSet // evaluate once
-    // you never know... Our input could have the same product twice in the collection with the same lcbo_id and we have unique index in DB against that.
+    val LcboIDs = from(table())(elt => select(elt.lcboId)).toSet // alas trust the database and not the cache, some other client could insert in database
+    // (in fact, a surprising error occurred when trusting cache! Possibly a very subtle bug)
+
+    // you never know... Our input could have the same item twice in the collection with the same lcbo_id and we have unique index in DB against that.
     items.
         filterNot { p => LcboIDs.contains(p.lcboId) }.  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
         groupBy {_.lcboId}.map { case (_, iseq) => iseq(0) }.  // remove duplicate lcboid keys from within our own input, selecting first representative among dupes!
