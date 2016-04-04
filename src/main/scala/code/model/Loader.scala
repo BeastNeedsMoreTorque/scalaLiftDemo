@@ -22,7 +22,7 @@ trait Loader[T <: Loader[T]] extends Record[T]
 
   protected def cacheNewItems(items: Iterable[T]): Unit = {
     cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)
-    LcboIdsToDBIds() ++= cache().map { case(k, v) => v.lcboId -> k }
+    LcboIdsToDBIds() ++= cache().map { case(pk, item) => item.lcboId -> pk }
   }
 
   protected def load(): Unit = {

@@ -144,11 +144,10 @@ class ProductInteraction extends JSUtilities with Loggable {
           // validate expected numeric input storeId then access LCBO data
           val prodQtySeq = s.recommend(theCategory.is, theRecommendCount.is) match {
             // we want to distinguish error messages to user to provide better diagnostics.
-            case Full(pairs) if pairs.nonEmpty => Full(pairs) // returns prod and quantity in inventory normally
             case Full(pairs) =>
-              S.error(s"Unable to choose find a product of category ${theCategory.is} that is not out of stock! Looking into it, please try again a little later")
+              if (pairs.isEmpty) S.error(s"Unable to choose find a product of category ${theCategory.is} that is not out of stock! Looking into it, please try again a little later")
               // we're reloading into cache to make up for that issue!
-              Full(pairs) // returns prod and quantity in inventory normally
+              Full(pairs) // returns prod and quantity in inventory normally, regardless of emptyness)
             case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
             case Empty =>
               S.error(s"Unable to choose product of category ${theCategory.is}")

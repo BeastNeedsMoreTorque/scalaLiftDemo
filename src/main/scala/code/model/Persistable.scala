@@ -36,7 +36,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper w
   private def insertBatch: (Iterable[T]) => Unit = table().insert _
 
   def loadToCacheLastTransaction(items: Iterable[T]) = {
-    val itemsWithPK = from(table())(item => where( item.idField in items.map(_.pKey)) select(item))
+    val itemsWithPK = from(table())(item => where( item.idField in items.map( _.pKey)) select(item))
     cache() ++= itemsWithPK.map{x => x.pKey -> x } (collection.breakOut)
   }
 
@@ -53,11 +53,11 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper w
   private def insert( items: IndexedSeq[T]) = {
     // Do special handling to filter out duplicate keys, which would throw.
     // first evaluate against cache (assumed in synch with DB) what's genuinely new.
-    val LcboIDs = cache().map{ case (id, p) => p.lcboId}.toSet // evaluate once
+    val LcboIDs = cache().map{ case (_, p) => p.lcboId}.toSet // evaluate once
     // you never know... Our input could have the same product twice in the collection with the same lcbo_id and we have unique index in DB against that.
     items.
         filterNot { p => LcboIDs.contains(p.lcboId) }.  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
-        groupBy {_.lcboId}.map { case (k,item) => item.last }.  // remove duplicates from within our own input, selecting last representative among dupes!
+        groupBy {_.lcboId}.map { case (_, item) => item.last }.  // remove duplicates from within our own input, selecting last representative among dupes!
         grouped(batchSize).foreach { batchTransactor( _ , insertBatch) } // break it down in reasonable size transactions, and then serialize the work.
   }
 }

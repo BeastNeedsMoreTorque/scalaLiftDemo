@@ -141,10 +141,10 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
     val fetches = Future {
       fetchProducts() // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
     } andThen {
-      case x => fetchInventories() // similarly for inventories and serialize intentionally because of Ref.  if no exception was thrown
+      case _ => fetchInventories() // similarly for inventories and serialize intentionally because of Ref.  if no exception was thrown
     }
     fetches foreach {
-      case m =>
+      case _ =>
         //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
         logger.debug(s"loadCache async work succeeded for $lcboId")
         if (emptyInventory) {
@@ -183,7 +183,7 @@ object Store extends Store with MetaRecord[Store] {
 
   override def cacheNewItems(items: Iterable[Store]): Unit = {
     super.cacheNewItems(items)
-    storesCache.foreach { case (id, s)  => s.refreshProducts() }  // ensure inventories are refreshed INCLUDING on start up.
+    storesCache.foreach { case (_, s)  => s.refreshProducts() }  // ensure inventories are refreshed INCLUDING on start up.
   }
 
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
@@ -233,7 +233,7 @@ object Store extends Store with MetaRecord[Store] {
   private def asyncGetStores(x: Map[Long, Store]) = {
     val fut = Future { getStores(x) }
     fut foreach {
-      case m =>
+      case _ =>
         logger.info(s"asyncGetStores (asynch for Store.init) completed")
     }
     fut.failed foreach {
