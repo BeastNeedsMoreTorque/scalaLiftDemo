@@ -87,18 +87,17 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
     def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
       invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (_, idxSeq) => idxSeq(0) }
-    def getUpdatedInvs(items: Iterable[Inventory]): Iterable[Inventory] = {
+    def getUpdatedInvs(items: IndexedSeq[Inventory]) = {
       { for (freshInv <- items;
              cachedInv <- mapByProductId.get(freshInv.productid);
              dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
     }
     def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update _
     def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
+    val getDBReadyUpdatedInvs: (IndexedSeq[Inventory] => Iterable[Inventory]) = removeCompositeKeyDupes _ compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose.
 
-    val getDBReadyUpdatedInvs = (getUpdatedInvs _).compose(removeCompositeKeyDupes) // more of a toy here than anything; interesting to know we can compose.
     val items = collectItemsOnPages(uri, params)
     val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
-
     val updatedInventories = getDBReadyUpdatedInvs(dirtyItems)
     val newInventories = removeCompositeKeyDupes(newItems)
     inTransaction {
