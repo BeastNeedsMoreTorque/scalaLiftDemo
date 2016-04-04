@@ -2,7 +2,7 @@ package code.model
 
 import scala.collection._
 import scala.language.implicitConversions
-import scala.util.Random
+import scala.util.{Failure, Random, Success}
 import scala.xml.Node
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
@@ -15,8 +15,7 @@ import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
 import org.squeryl.annotations._
-
-import code.model.Product.{fetchByStoreCategory, fetchByStore}
+import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 
 class Store  private() extends IStore with ErrorReporter with Persistable[Store]
@@ -137,21 +136,17 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
       }
       if (checkUnitErrors(box, fullContextErr("inventories") )) refreshInventories()
     }
-    val fetches = Future {
-      fetchProducts() // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
-    } andThen {
-      case _ => fetchInventories() // similarly for inventories and serialize intentionally because of Ref.  if no exception was thrown
-    }
-    fetches foreach {
-      case _ =>
-        //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
+    val fetches =
+      for (p <- Future(fetchProducts); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
+           i <- Future(fetchInventories)) yield i // similarly for inventories and serialize intentionally because of Ref.Integrity  if no exception was thrown
+
+    fetches onComplete {
+      case Success(_) => //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
         logger.debug(s"loadCache async work succeeded for $lcboId")
         if (emptyInventory) {
           logger.warn(s"got no product inventory for storeId $lcboId !") // No provision for retrying.
         }
-    }
-    for ( f <- fetches.failed)  {
-      logger.info(s"loadCache explicitly failed for $lcboId cause $f")
+      case Failure(f) => logger.info(s"loadCache explicitly failed for $lcboId cause $f")
     }
     logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
   }
@@ -230,13 +225,10 @@ object Store extends Store with MetaRecord[Store] {
   }
 
   private def asyncGetStores(x: Map[Long, Store]) = {
-    val fut = Future { getStores(x) }
-    fut foreach {
-      case _ =>
+    Future { getStores(x) } onComplete {
+      case Success(_) =>
         logger.info(s"asyncGetStores (asynch for Store.init) completed")
-    }
-    fut.failed foreach {
-      case f =>
+      case Failure(f) =>
         logger.error(s"asyncGetStores explicitly failed with cause $f") // pretty fatal at this point.
     }
   }
