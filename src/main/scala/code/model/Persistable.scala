@@ -57,7 +57,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper w
     // you never know... Our input could have the same product twice in the collection with the same lcbo_id and we have unique index in DB against that.
     items.
         filterNot { p => LcboIDs.contains(p.lcboId) }.  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
-        groupBy {_.lcboId}.map { case (_, item) => item.last }.  // remove duplicates from within our own input, selecting last representative among dupes!
+        groupBy {_.lcboId}.map { case (_, seq) => seq.head }.  // remove duplicate lcboid keys from within our own input, selecting first representative among dupes!
         grouped(batchSize).foreach { batchTransactor( _ , insertBatch) } // break it down in reasonable size transactions, and then serialize the work.
   }
 }

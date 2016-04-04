@@ -86,7 +86,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     // set up some functional transformers first, then get ready for real work.
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
     def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
-      invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (_, inv) => inv.last }
+      invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (_, inv) => inv.head }
     def getUpdatedInvs(items: Iterable[Inventory]): Iterable[Inventory] = {
       { for (freshInv <- items;
              cachedInv <- mapByProductId.get(freshInv.productid);
@@ -98,13 +98,12 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     val getDBReadyUpdatedInvs = (getUpdatedInvs _).compose(removeCompositeKeyDupes) // more of a toy here than anything; interesting to know we can compose.
     val items = collectItemsOnPages(uri, params)
     val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
-    // identify the dirty ones for update and new ones for insert, clean up duplicate keys, store to DB and catch errors
-    // update in memory COPIES of our inventories that have proven stale quantity to reflect the trusted LCBO up to date source
+
     val updatedInventories = getDBReadyUpdatedInvs(dirtyItems)
     val newInventories = removeCompositeKeyDupes(newItems)
     inTransaction {
-      execute[Inventory](updatedInventories, inventoryTableUpdater)
-      execute[Inventory](newInventories, inventoryTableInserter)
+      execute[Inventory](updatedInventories, inventoryTableUpdater)  // bulk update the ones needing an update, having made the change from LCBO input
+      execute[Inventory](newInventories, inventoryTableInserter) // bulk insert the ones needing an insert having filtered out duped composite keys
     }
   }
 }
