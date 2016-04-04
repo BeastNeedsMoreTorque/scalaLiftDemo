@@ -5,6 +5,7 @@ import net.liftweb.http.LiftRules
 import net.liftweb.http.rest.RestHelper
 import net.liftweb.json._
 import scala.xml.Node
+import net.liftweb.common.Loggable
 
 /**
   * Created by philippederome on 2015-12-19.
@@ -13,7 +14,7 @@ import scala.xml.Node
   *
   * @see http://simply.liftweb.net/index-5.3.html#prev
   */
-object AppRest extends RestHelper {
+object AppRest extends RestHelper with Loggable {
   def init(): Unit =
     LiftRules.dispatch.append(AppRest)
 
@@ -27,6 +28,7 @@ object AppRest extends RestHelper {
   serve {
     case "stores" :: Nil JsonGet _ =>
       val stores = Store.findAll().map{_.asJValue}
+      logger.info(s"stores request size is ${stores.size}")
       Extraction.decompose(stores) // a JValue, allowing servlet to return some JSon, this is a collection.
 
     case "stores" :: Nil XmlGet _ =>

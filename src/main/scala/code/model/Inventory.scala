@@ -86,7 +86,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     // set up some functional transformers first, then get ready for real work.
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
     def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
-      invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (_, inv) => inv.head }
+      invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (_, idxSeq) => idxSeq(0) }
     def getUpdatedInvs(items: Iterable[Inventory]): Iterable[Inventory] = {
       { for (freshInv <- items;
              cachedInv <- mapByProductId.get(freshInv.productid);
