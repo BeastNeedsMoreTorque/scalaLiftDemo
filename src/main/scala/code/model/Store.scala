@@ -146,7 +146,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
         if (emptyInventory) {
           logger.warn(s"got no product inventory for storeId $lcboId !") // No provision for retrying.
         }
-      case Failure(f) => logger.info(s"loadCache explicitly failed for $lcboId cause $f")
+      case Failure(f) => logger.info(s"loadCache explicitly failed for $lcboId cause ${f.getMessage}")
     }
     logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
   }
@@ -218,19 +218,15 @@ object Store extends Store with MetaRecord[Store] {
     logger.info("Store.init end")
   }
 
+  /**
+    *  synchronous because once the webapp accepts requests, this load must have completed so that the store collection is not empty.
+    */
   override def load(): Unit = inTransaction {
     val items = from(table())(s => select(s))
     cacheNewItems(items)
-    asyncGetStores(items.map { s => s.pKey -> s }(breakOut)) // the initial db init is long and synchronous, long because of loading Many-to-Many stateful state, depending on storage data
-  }
-
-  private def asyncGetStores(x: Map[Long, Store]) = {
-    Future { getStores(x) } onComplete {
-      case Success(_) =>
-        logger.info(s"asyncGetStores (asynch for Store.init) completed")
-      case Failure(f) =>
-        logger.error(s"asyncGetStores explicitly failed with cause $f") // pretty fatal at this point.
-    }
+    val m: Map[Long, Store] = items.map { s => s.pKey -> s }(breakOut)
+    // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
+    getStores(m)
   }
 
  def findAll(): Iterable[Store] = storesCache.values
