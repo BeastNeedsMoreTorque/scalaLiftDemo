@@ -7,7 +7,7 @@ import net.liftweb.common.Box
   * Created by philippederome on 2016-03-25.
   */
 trait IStore  {
-  def lcboId: Long
+  def lcboId: LCBO_ID
 
   def recommend(category: String, requestSize: Int): Box[Iterable[(IProduct, Long)]]
   def isDead: Boolean

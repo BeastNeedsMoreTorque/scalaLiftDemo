@@ -29,9 +29,9 @@ class Product private() extends IProduct with ErrorReporter with Persistable[Pro
   override def table(): org.squeryl.Table[Product] = Product.table()
   override def cache() = Product.productsCache
   override def LcboIdsToDBIds() = Product.LcboIdsToDBIds
-  override def pKey: Long = idField.get
-  override def lcboId: Long = lcbo_id.get
-  override def setLcboId(id: Long): Unit = lcbo_id.set(id)
+  override def pKey: P_KEY = P_KEY(idField.get)
+  override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
+  override def setLcboId(id: LCBO_ID): Unit = lcbo_id.set(id.x)
 
   override def MaxPerPage = Product.MaxPerPage
   override def getCachedItem: (IProduct) => Option[IProduct] = s => Product.getItemByLcboId(s.lcboId)
@@ -118,15 +118,15 @@ class Product private() extends IProduct with ErrorReporter with Persistable[Pro
   */
 object Product extends Product with MetaRecord[Product] {
   // thread-safe lock free objects
-  private val productsCache: concurrent.Map[Long, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
-  def getProduct(id: Long): Option[IProduct] = productsCache.get(id)
-  def getItemByLcboId(id: Long): Option[IProduct] =
+  private val productsCache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
+  def getProduct(id: P_KEY): Option[IProduct] = productsCache.get(id)
+  def getItemByLcboId(id: LCBO_ID): Option[IProduct] =
     for (dbId <- LcboIdsToDBIds.get(id);
          p <- productsCache.get(dbId)) yield p
 
-  def lcboIdToDBId(id: Long): Option[Long] = LcboIdsToDBIds.get(id)
+  def lcboIdToDBId(id: LCBO_ID): Option[P_KEY] = LcboIdsToDBIds.get(id)
 
-  override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap()
+  override val LcboIdsToDBIds: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
   override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   private val sizeFulfilled: (Int) => SizeChecker =
@@ -168,7 +168,11 @@ object Product extends Product with MetaRecord[Product] {
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
       items.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
     }
-    checkErrors(box, fullContextErr("products"), briefContextErr("products") )
+    val fullContextErr = { (m: String, err: String) =>
+      s"Problem loading products into cache with message $m and exception error $err"
+    }
+    val simpleMsgErr = "Problem loading products into cache"
+    checkErrors(box, fullContextErr, simpleMsgErr )
     box.toOption.fold(IndexedSeq[IProduct]()){ identity }
   }
 }

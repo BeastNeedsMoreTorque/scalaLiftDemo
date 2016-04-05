@@ -17,7 +17,7 @@ import org.squeryl.dsl.CompositeKey2
   * storeid and productid are our composite PK whereas store_id and product_id is the same from LCBO's point of view with their PK.
   * We keep it in for referencing. See also case class InventoryAsLCBOJson further down.
   */
-class Inventory private(val storeid: Long, val productid: Long, var quantity: Long, var updated_on: String, var is_dead: Boolean, var store_id: Int=0, var product_id: Int=0)
+class Inventory private(val storeid: Long, val productid: Long, var quantity: Long, var updated_on: String, var is_dead: Boolean, var store_id: Long=0, var product_id: Long=0)
   extends KeyedEntity[CompositeKey2[Long,Long]] {
 
   def id = compositeKey(storeid, productid)
@@ -39,8 +39,8 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
   override def MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   private val dirtyPredicate: (Inventory, Inventory) => Boolean = {(x, y)=> x.isDirty(y)}
 
-  case class InventoryAsLCBOJson(product_id: Int,
-                                 store_id: Int,
+  case class InventoryAsLCBOJson(product_id: Long,
+                                 store_id: Long,
                                  is_dead: Boolean,
                                  updated_on: String,
                                  quantity: Long) {}
@@ -64,9 +64,9 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     val nodes = (jsonRoot \ "result").children.toIndexedSeq // Uses XPath-like querying to extract data from parsed object jsObj.
     val items = for (p <- nodes;
          inv = p.extract[InventoryAsLCBOJson];
-         sKey <- Store.lcboIdToDBId(inv.store_id);
-         pKey <- Product.lcboIdToDBId(inv.product_id);
-         newInv = Inventory.apply(sKey, pKey, inv)
+         sKey <- Store.lcboIdToDBId(LCBO_ID(inv.store_id));
+         pKey <- Product.lcboIdToDBId(LCBO_ID(inv.product_id));
+         newInv = Inventory.apply(sKey.x, pKey.x, inv)
     ) yield newInv
     (items, jsonRoot)
   }
@@ -79,7 +79,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
   @throws(classOf[TruncatedChunkException])  // that's a brutal one. Caller must be ready to process these thrown exceptions.
   def fetchInventoriesByStore(uri: String,
                               getCachedItem: (Inventory) => Option[Inventory],
-                              mapByProductId: Map[Long, Inventory],
+                              mapByProductId: Map[P_KEY, Inventory],
                               params: Seq[(String, Any)]): Unit = {
     // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
 
@@ -89,7 +89,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
       invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (_, idxSeq) => idxSeq(0) }
     def getUpdatedInvs(items: IndexedSeq[Inventory]) = {
       { for (freshInv <- items;
-             cachedInv <- mapByProductId.get(freshInv.productid);
+             cachedInv <- mapByProductId.get(P_KEY(freshInv.productid));
              dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
     }
     def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update _

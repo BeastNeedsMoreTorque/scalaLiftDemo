@@ -21,14 +21,14 @@ trait ErrorReporter extends Loggable {
   // returns true on success, false on failure
   def checkErrors(box: Box[Iterable[Any]],
                   fullContextErr: (String, String) => String,
-                  briefContextErr: () => String) : Boolean =
+                  simpleErr: String) : Boolean =
     box match {
       case net.liftweb.common.Failure(m, ex, _) =>
         val s: String = fullContextErr(m, ex.toString)
         logger.error(s)
         false
       case Empty =>
-        logger.error(briefContextErr)
+        logger.error(simpleErr)
         false
       case _ => true
     }

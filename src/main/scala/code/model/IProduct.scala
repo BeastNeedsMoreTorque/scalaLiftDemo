@@ -6,9 +6,9 @@ import scala.collection.IndexedSeq
   * Created by philippederome on 2016-03-25.
   */
 trait IProduct  {
-  def lcboId: Long
+  def lcboId: LCBO_ID
 
-  def pKey: Long
+  def pKey: P_KEY
 
   def Name: String
   def primaryCategory: String
