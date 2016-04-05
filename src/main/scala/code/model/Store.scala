@@ -31,7 +31,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   override def LcboIdsToDBIds() = Store.LcboIdsToDBIds
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
-  override def setLcboId(id: LCBO_ID): Unit = lcbo_id.set(id.x)
+  override def setLcboId(id: LCBO_ID): Unit = lcbo_id.set(id)
   override def meta = Store
 
   override def MaxPerPage = Store.MaxPerPage
@@ -124,7 +124,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
-    def fetchProducts() = addToCaches( fetchByStore(lcboId.x) )
+    def fetchProducts() = addToCaches( fetchByStore(lcboId) )
 
     def fetchInventories() = {
       val box = tryo {

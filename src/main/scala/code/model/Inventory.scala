@@ -66,7 +66,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
          inv = p.extract[InventoryAsLCBOJson];
          sKey <- Store.lcboIdToDBId(LCBO_ID(inv.store_id));
          pKey <- Product.lcboIdToDBId(LCBO_ID(inv.product_id));
-         newInv = Inventory.apply(sKey.x, pKey.x, inv)
+         newInv = Inventory.apply(sKey, pKey, inv)
     ) yield newInv
     (items, jsonRoot)
   }

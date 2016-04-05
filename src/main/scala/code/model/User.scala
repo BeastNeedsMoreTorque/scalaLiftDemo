@@ -49,7 +49,7 @@ class User extends MegaProtoUser[User] with Loggable {
           val userProd = userProducts.where(u => u.userid === id.get and u.productid === q.pKey.x).forUpdate.headOption
           userProd.fold {
             // (Product would be stored in DB with no previous user interest)
-            UserProduct.createRecord.userid(id.get).productid(q.pKey.x).selectionscount(quantity).save // cascade save dependency using Active Record pattern.
+            UserProduct.createRecord.userid(id.get).productid(q.pKey).selectionscount(quantity).save // cascade save dependency using Active Record pattern.
             quantity.toLong
           } { up =>
               val updatedQuantity = up.selectionscount.get + quantity
