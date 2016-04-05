@@ -21,8 +21,6 @@ import code.model.Inventory.fetchInventoriesByStore
 class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
-  implicit val x = GlobalIds.LCBO_ID_to_Long _
-
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
@@ -33,7 +31,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   override def LcboIdsToDBIds() = Store.LcboIdsToDBIds
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
-  override def setLcboId(id: LCBO_ID): Unit = lcbo_id.set(id)
+  override def setLcboId(id: LCBO_ID): Unit = lcbo_id.set(id.x)
   override def meta = Store
 
   override def MaxPerPage = Store.MaxPerPage
@@ -98,7 +96,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
       * @return 0 quantity found in inventory for product (unknown to be resolved in JS) and the product
       */
     def getSerialResult(lcboProdCategory: String) = {
-      val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
+      val prods = fetchByStoreCategory(lcboId.x, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices).toStream  // stream avoids checking primary category on full collection (the permutation is done though).
       val stream = for (id <- permutedIndices;
                         p = prods(id) if p.primaryCategory == lcboProdCategory) yield p
@@ -126,7 +124,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
-    def fetchProducts() = addToCaches( fetchByStore(lcboId) )
+    def fetchProducts() = addToCaches( fetchByStore(lcboId.x) )
 
     def fetchInventories() = {
       val box = tryo {
