@@ -21,6 +21,8 @@ import code.model.Inventory.fetchInventoriesByStore
 class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
 
+  implicit val x = GlobalIds.LCBO_ID_to_Long _
+
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
@@ -29,9 +31,9 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   override def table(): org.squeryl.Table[Store] = Store.table()
   override def cache() = Store.storesCache
   override def LcboIdsToDBIds() = Store.LcboIdsToDBIds
-  override def pKey: Long = idField.get
-  override def lcboId: Long = lcbo_id.get
-  override def setLcboId(id: Long): Unit = lcbo_id.set(id)
+  override def pKey: P_KEY = P_KEY(idField.get)
+  override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
+  override def setLcboId(id: LCBO_ID): Unit = lcbo_id.set(id)
   override def meta = Store
 
   override def MaxPerPage = Store.MaxPerPage
@@ -59,19 +61,19 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   // following three caches leverage ORM's stateful cache of storeProducts and inventories above (which are not presented as map but as slower sequence;
   // we organize as map for faster access).
   // They're recomputed when needed by the three helper functions that follow.
-  private val productsCache = TrieMap[Long, IProduct]()  // keyed by lcboId
+  private val productsCache = TrieMap[LCBO_ID, IProduct]()  // keyed by lcboId (comment is obsolete as now enforced by type system, woo-hoo!)
   private val productsCacheByCategory = TrieMap[String, IndexedSeq[IProduct]]()
-  private val inventoryByProductId = TrieMap[Long, Inventory]()
-  private val getCachedInventoryItem: (Inventory) => Option[Inventory] = { (inv: Inventory) => inventoryByProductId.get(inv.productid) }
+  private val inventoryByProductId = TrieMap[P_KEY, Inventory]()
+  private val getCachedInventoryItem: (Inventory) => Option[Inventory] = { (inv: Inventory) => inventoryByProductId.get(P_KEY(inv.productid)) }
 
-  private def productsByLcboId: Map[Long, Product] =
+  private def productsByLcboId: Map[LCBO_ID, Product] =
     storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
 
   private def productsByCategory: Map[String, IndexedSeq[Product]] =
     storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
 
-  private def getInventories: Map[Long, Inventory] =
-    inventories.toIndexedSeq.map { inv => inv.productid -> inv } (breakOut)  // moderately slow because of iteration
+  private def getInventories: Map[P_KEY, Inventory] =
+    inventories.toIndexedSeq.map { inv => P_KEY(inv.productid) -> inv } (breakOut)  // moderately slow because of iteration
 
   private def addToCaches(items: IndexedSeq[IProduct]) = {
     productsCache ++= items.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
@@ -134,7 +136,10 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
           inventoryByProductId.toMap,
           Seq("store_id" -> lcboId, "where_not" -> "is_dead"))
       }
-      if (checkUnitErrors(box, fullContextErr("inventories") )) refreshInventories()
+      val fullContextErr = (m: String, err: String) =>
+        s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
+
+      if (checkUnitErrors(box, fullContextErr )) refreshInventories()
     }
     val fetches =
       for (p <- Future(fetchProducts); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
@@ -171,8 +176,8 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
 object Store extends Store with MetaRecord[Store] {
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
 
-  private val storesCache: concurrent.Map[Long, Store] = TrieMap()  // primary cache
-  override val LcboIdsToDBIds: concurrent.Map[Long, Long] = TrieMap() //secondary dependent cache
+  private val storesCache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
+  override val LcboIdsToDBIds: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache
   override def table(): org.squeryl.Table[Store] = MainSchema.stores
 
   override def cacheNewItems(items: Iterable[Store]): Unit = {
@@ -184,11 +189,11 @@ object Store extends Store with MetaRecord[Store] {
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
   override def getCachedItem: (IStore) => Option[IStore] =  s => getItemByLcboId(s.lcboId)
-  def availableStores: Set[Long] = storesCache.toMap.keySet
-  def lcboIdToDBId(l: Int): Option[Long] = LcboIdsToDBIds.get(l)
-  def storeIdToLcboId(s: Long): Option[Long] = storesCache.get(s).map(_.lcboId)
-  def getStore(s: Long): Option[IStore] = storesCache.get(s)
-  def getItemByLcboId(id: Long): Option[IStore] =
+  def availableStores: Set[P_KEY] = storesCache.keySet
+  def lcboIdToDBId(id: LCBO_ID): Option[P_KEY] = LcboIdsToDBIds.get(id)
+  def storeIdToLcboId(s: P_KEY): Option[LCBO_ID] = storesCache.get(s).map(_.lcboId)
+  def getStore(id: P_KEY): Option[IStore] = storesCache.get(id)
+  def getItemByLcboId(id: LCBO_ID): Option[IStore] =
     for (dbId <- LcboIdsToDBIds.get(id);
          s <- storesCache.get(dbId)) yield s
 
@@ -198,7 +203,7 @@ object Store extends Store with MetaRecord[Store] {
   implicit def toXml(st: Store): Node =
     <store>{Xml.toXml(st.asJValue)}</store>
 
-  private def getStores(dbStores: Map[Long, Store]): Unit = {
+  private def getStores(): Unit = {
     def fullContextErr( m: String,  ex: String): String =
       s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'"
     def briefContextErr(): String =
@@ -224,9 +229,8 @@ object Store extends Store with MetaRecord[Store] {
   override def load(): Unit = inTransaction {
     val items = from(table())(s => select(s))
     cacheNewItems(items)
-    val m: Map[Long, Store] = items.map { s => s.pKey -> s }(breakOut)
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
-    getStores(m)
+    getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
   }
 
  def findAll(): Iterable[Store] = storesCache.values

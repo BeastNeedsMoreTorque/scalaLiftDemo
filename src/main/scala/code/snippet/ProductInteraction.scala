@@ -13,10 +13,7 @@ import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
 import net.liftweb.http.SHtml._
 
-import code.model.IProduct
-import code.model.Product
-import code.model.Store
-import code.model.User
+import code.model.{IProduct,Product,Store,User,LCBO_ID,P_KEY}
 import code.snippet.SessionCache._
 
 /**
@@ -29,7 +26,7 @@ import code.snippet.SessionCache._
 class ProductInteraction extends JSUtilities with Loggable {
   case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
   case class QuantityOfProduct(quantity: Long, product: IProduct)  // quantity available at the current store for a product (store is implied by context)
-  case class SelectedProduct(id: Int, quantity: Long, cost: Double) // to capture user input via JS and JSON
+  case class SelectedProduct(id: Long, quantity: Long, cost: Double) // to capture user input via JS and JSON (stick to Long to simplify interface with JS)
   case class SelectedProductFeedback(selectedProduct: SelectedProduct, feedback: Feedback)
   case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
 
@@ -136,7 +133,7 @@ class ProductInteraction extends JSUtilities with Loggable {
         SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
       }
 
-      def maySelect(storeId: Int): JsCmd =
+      def maySelect(storeId: P_KEY): JsCmd =
         Store.getStore(storeId).fold {
           S.error("We need to establish your local store first, please wait for local geo to become available")
           Noop
@@ -161,7 +158,7 @@ class ProductInteraction extends JSUtilities with Loggable {
         }
 
       val json = jsStore.extractOpt[String].map( parse)
-      val storeId = json.fold(-1){ json => json.extract[Int]}
+      val storeId = P_KEY(json.fold(-1.toLong){ json => json.extract[Long]})
       User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
       { user => maySelect(storeId)} // normal processing
     }
@@ -204,7 +201,7 @@ class ProductInteraction extends JSUtilities with Loggable {
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
         val feedback =
           for(sp <- selectedProds;
-              product <- Product.getItemByLcboId(sp.id);
+              product <- Product.getItemByLcboId(LCBO_ID(sp.id));
               f = mayConsumeItem(product, sp.quantity)) yield SelectedProductFeedback(sp, f)
         val goodAndBackFeedback = feedback.groupBy(_.feedback.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
         goodAndBackFeedback.getOrElse(false, Nil).map( _.feedback.message).foreach(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error

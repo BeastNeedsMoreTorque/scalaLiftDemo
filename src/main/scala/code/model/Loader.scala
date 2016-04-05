@@ -14,11 +14,11 @@ trait Loader[T <: Loader[T]] extends Record[T]
   self: T =>
 
   protected def table(): Table[T]
-  protected def cache(): concurrent.Map[Long, T]  // primary cache
-  protected def LcboIdsToDBIds(): concurrent.Map[Long, Long]  // secondary cache
+  protected def cache(): concurrent.Map[P_KEY, T]  // primary cache
+  protected def LcboIdsToDBIds(): concurrent.Map[LCBO_ID, P_KEY]  // secondary cache
 
-  protected def pKey: Long
-  protected def lcboId: Long
+  protected def pKey: P_KEY
+  protected def lcboId: LCBO_ID
 
   protected def cacheNewItems(items: Iterable[T]): Unit = {
     cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)

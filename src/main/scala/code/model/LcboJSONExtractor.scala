@@ -10,10 +10,10 @@ import org.apache.http.TruncatedChunkException
 /**
   * Created by philippederome on 2016-03-23.
   */
-trait LcboJSONExtractor[T <: LcboJSONExtractor[T]] extends Record[T] with LCBOPageFetcher[T] {
+trait LcboJSONExtractor[T <: LcboJSONExtractor[T]] extends Record[T] with LCBOPageFetcher[T] with Loader[T] {
   self: T =>
 
-  def setLcboId(id: Long): Unit
+  def setLcboId(id: LCBO_ID): Unit
 
   @throws(classOf[net.liftweb.json.MappingException])
   @throws(classOf[net.liftweb.json.JsonParser.ParseException])
@@ -31,7 +31,7 @@ trait LcboJSONExtractor[T <: LcboJSONExtractor[T]] extends Record[T] with LCBOPa
     for (p <- nodes;
          key <- (p \ "id").extractOpt[Long];
          rec <- meta.fromJValue(p)) {
-      rec.setLcboId(key) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl.
+      rec.setLcboId(LCBO_ID(key)) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl.
       items += rec
     }
     (items.toIndexedSeq, jsonRoot)

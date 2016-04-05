@@ -12,13 +12,6 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper with KeyedRecord[Long] with ORMBatchExecutor with Loggable {
   self: T=>
 
-  val fullContextErr: (String) => ( String, String) => String = { collName => (m, err) =>
-    s"Problem loading $collName into cache for '$lcboId' with message $m and exception error $err"
-  }
-  val briefContextErr: (String) => () => String = { collName => () =>
-    s"Problem loading $collName into cache for '$lcboId'"
-  }
-
   // I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class, and it should not return just anything.
   def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], getCachedItem: (I) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
     val (dirtyItems, newItems) = itemsByState[I, T](items, getCachedItem, dirtyPred)
@@ -36,7 +29,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper w
   private def insertBatch: (Iterable[T]) => Unit = table().insert _
 
   def loadToCacheLastTransaction(items: Iterable[T]) = {
-    val itemsWithPK = from(table())(item => where( item.idField in items.map( _.pKey)) select(item))
+    val itemsWithPK = from(table())(item => where( item.idField in items.map( _.pKey.x)) select(item))
     cache() ++= itemsWithPK.map{x => x.pKey -> x } (collection.breakOut)
   }
 
