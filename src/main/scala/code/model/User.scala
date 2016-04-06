@@ -46,7 +46,7 @@ class User extends MegaProtoUser[User] with Loggable {
           logger.error(s"User.consume on unsaved product $p")
           0.toLong  // this is an error, the product should have been in cache.
         } { q =>
-          val userProd = userProducts.where(u => u.userid === id.get and u.productid === q.pKey.x).forUpdate.headOption
+          val userProd = userProducts.where(u => u.userid === id.get and u.productid === q.pKey.underlying).forUpdate.headOption
           userProd.fold {
             // (Product would be stored in DB with no previous user interest)
             UserProduct.createRecord.userid(id.get).productid(q.pKey).selectionscount(quantity).save // cascade save dependency using Active Record pattern.

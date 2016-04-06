@@ -13,7 +13,8 @@ import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
 import net.liftweb.http.SHtml._
 
-import code.model.{IProduct,Product,Store,User,LCBO_ID,P_KEY}
+import code.model.{IProduct,Product,Store,User}
+import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.snippet.SessionCache._
 
 /**

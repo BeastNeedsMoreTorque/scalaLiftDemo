@@ -29,7 +29,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper w
   private def insertBatch: (Iterable[T]) => Unit = table().insert _
 
   def loadToCacheLastTransaction(items: Iterable[T]) = {
-    val itemsWithPK = from(table())(item => where( item.idField in items.map( _.pKey.x)) select(item))
+    val itemsWithPK = from(table())(item => where( item.idField in items.map( _.pKey.underlying)) select(item))
     cache() ++= itemsWithPK.map{item => item.pKey -> item } (collection.breakOut)
   }
 
