@@ -1,5 +1,7 @@
 package code.model
 
+import code.model.GlobalLCBO_IDs.LCBO_ID
+
 import scala.collection.Iterable
 import net.liftweb.common.Box
 

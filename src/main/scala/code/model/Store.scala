@@ -17,6 +17,7 @@ import net.liftweb.util.Props
 import org.squeryl.annotations._
 import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
+import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 
 class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
@@ -96,7 +97,7 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
       * @return 0 quantity found in inventory for product (unknown to be resolved in JS) and the product
       */
     def getSerialResult(lcboProdCategory: String) = {
-      val prods = fetchByStoreCategory(lcboId.x, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
+      val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices).toStream  // stream avoids checking primary category on full collection (the permutation is done though).
       val stream = for (id <- permutedIndices;
                         p = prods(id) if p.primaryCategory == lcboProdCategory) yield p

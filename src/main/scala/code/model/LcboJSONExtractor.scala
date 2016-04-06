@@ -6,6 +6,7 @@ import scala.collection.mutable.ArrayBuffer
 import net.liftweb.json._
 import net.liftweb.record.Record
 import org.apache.http.TruncatedChunkException
+import code.model.GlobalLCBO_IDs.LCBO_ID
 
 /**
   * Created by philippederome on 2016-03-23.

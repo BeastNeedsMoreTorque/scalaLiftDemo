@@ -4,6 +4,7 @@ import scala.collection.{Iterable, concurrent}
 import net.liftweb.record.Record
 import net.liftweb.squerylrecord.RecordTypeMode._
 import org.squeryl.Table
+import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 
 /**
   * Created by philippederome on 2016-03-23.
