@@ -88,7 +88,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
     val getDBReadyUpdatedInvs: (IndexedSeq[Inventory] => Iterable[Inventory]) = removeCompositeKeyDupes _ compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose.
 
-    val items = collectItemsOnPages(uri, extract, params)
+    val items = collectItemsAsWebClient(uri, extract, params)
     val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
     val updatedInventories = getDBReadyUpdatedInvs(dirtyItems)
     val newInventories = removeCompositeKeyDupes(newItems)
