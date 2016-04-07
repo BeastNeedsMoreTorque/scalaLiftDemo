@@ -143,38 +143,34 @@ object Product extends Product with MetaRecord[Product] {
     logger.info("Product.init end")
   }
 
+  val productWebQuery: (Long, Seq[(String, Any)], GotEnough_?) => IndexedSeq[Product] =
+   (lcboStoreId, seq, isEnough ) =>
+     collectItemsAsWebClient(s"$LcboDomainURL/products",
+       LcboExtract,
+       ("store_id" -> lcboStoreId) +: seq,
+       isEnough)
   /*
    * Queries LCBO matching category
    * URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage> (+ details on where_not and order)
    * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
-   * for pattern match LCBO uses lower case but for actual product category it's upper case, so to make comparisons, we will need to account for that
-   * primary_category in catalog or p.primary_category so we need a conversion function to adjust)
    */
   def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
-    collectItemsOnPages(
-      s"$LcboDomainURL/products",
-      LcboExtract,
-      Seq("store_id" -> lcboStoreId, "q" -> category, "where_not" -> "is_discontinued,is_dead", "order"-> "inventory_count.desc"),
-      sizeFulfilled(requiredSize))
+    productWebQuery( lcboStoreId, Seq("q" -> category, "where_not" -> "is_discontinued,is_dead", "order"-> "inventory_count.desc"),
+                  sizeFulfilled(requiredSize) )
 
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
     val box = tryo {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
-      val items = collectItemsOnPages(
-        s"$LcboDomainURL/products",
-        LcboExtract,
-        Seq("store_id" -> lcboStoreId, "where_not" -> "is_discontinued,is_dead"),
-        neverEnough)
-      synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
-      items.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
+      val prods = productWebQuery( lcboStoreId, Seq("where_not" -> "is_discontinued,is_dead"), neverEnough)
+      synchDirtyAndNewItems(prods, getCachedItem, dirtyPredicate)
+      prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
     }
     val fullContextErr = { (m: String, err: String) =>
       s"Problem loading products into cache with message $m and exception error $err"
     }
-    val simpleMsgErr = "Problem loading products into cache"
-    checkErrors(box, fullContextErr, simpleMsgErr )
+    checkErrors(box, fullContextErr, simpleErr = "Problem loading products into cache" )
     box.toOption.fold(IndexedSeq[IProduct]()){ identity }
   }
 }

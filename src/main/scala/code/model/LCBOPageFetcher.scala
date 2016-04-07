@@ -97,10 +97,10 @@ trait LCBOPageFetcher[T] extends RestClient {
   }
 
   // tp present a cleaner interface than the tail recursive method
-  final def collectItemsOnPages(urlRoot: String,
-                                extractor:  JSitemsExtractor,
-                                params: Seq[(String, Any)] = Seq(),
-                                sizeFulfilled: GotEnough_? = neverEnough): IndexedSeq[T] = {
+  final def collectItemsAsWebClient(urlRoot: String,
+                                    extractor:  JSitemsExtractor,
+                                    params: Seq[(String, Any)] = Seq(),
+                                    sizeFulfilled: GotEnough_? = neverEnough): IndexedSeq[T] = {
     collectItemsOnAPage(
       IndexedSeq[T](), // union of this page with next page when we are asked for a full sample
       extractor,
