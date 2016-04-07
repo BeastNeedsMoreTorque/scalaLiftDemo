@@ -22,12 +22,13 @@ trait IProduct  {
   // Change unit of currency from cents to dollars and Int to String
   def price: String
 
-  override def equals(o: Any) = o match {
-    case that: IProduct => price == that.price &&
-      imageThumbUrl == that.imageThumbUrl
-    case _ => false
+  // doing a proper equals entails hashing too, so skip that, plus we want similar enough more than equals in reality
+  def dirty(o: Any) = o match {
+    case that: IProduct => price != that.price ||
+      imageThumbUrl != that.imageThumbUrl
+    case _ => true
   }
-  val dirtyPredicate: (IProduct, IProduct) => Boolean = {(x, y)=> !x.equals(y)}
+  val dirtyPredicate: (IProduct, IProduct) => Boolean = {(x, y)=> x.dirty(y)}
   def getCachedItem: (IProduct) => Option[IProduct]
   def streamAttributes: IndexedSeq[Attribute]
 

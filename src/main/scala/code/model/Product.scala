@@ -164,7 +164,7 @@ object Product extends Product with MetaRecord[Product] {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
       val prods = productWebQuery( lcboStoreId, Seq("where_not" -> "is_discontinued,is_dead"), neverEnough)
-      synchDirtyAndNewItems(prods, getCachedItem, dirtyPredicate)
+      synchDirtyAndNewItems(prods, getCachedItem, dirtyPredicate) // the side effect
       prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
     }
     val fullContextErr = { (m: String, err: String) =>
