@@ -60,25 +60,15 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     )
   }
 
-  final def extractItems(uri: String): (IndexedSeq[Inventory], JValue) = {
-    val pageContent = get(uri)
-    val jsonRoot = parse(pageContent)
-    val nodes = (jsonRoot \ "result").children.toIndexedSeq // Uses XPath-like querying to extract data from parsed object jsObj.
-    val items = for (p <- nodes;
+  val extract: JSitemsExtractor =  { nodes =>
+    for (p <- nodes;
          inv = p.extract[InventoryAsLCBOJson];
          sKey <- Store.lcboIdToDBId(LCBO_ID(inv.store_id));
          pKey <- Product.lcboIdToDBId(LCBO_ID(inv.product_id));
          newInv = Inventory.apply(sKey, pKey, inv)
     ) yield newInv
-    (items, jsonRoot)
   }
 
-  @throws(classOf[SocketTimeoutException])
-  @throws(classOf[IOException])
-  @throws(classOf[net.liftweb.json.JsonParser.ParseException])
-  @throws(classOf[MappingException])
-  @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-  @throws(classOf[TruncatedChunkException])  // that's a brutal one. Caller must be ready to process these thrown exceptions.
   def fetchInventoriesByStore(uri: String,
                               getCachedItem: (Inventory) => Option[Inventory],
                               mapByProductId: Map[P_KEY, Inventory],
@@ -98,7 +88,7 @@ object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with O
     def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
     val getDBReadyUpdatedInvs: (IndexedSeq[Inventory] => Iterable[Inventory]) = removeCompositeKeyDupes _ compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose.
 
-    val items = collectItemsOnPages(uri, params)
+    val items = collectItemsOnPages(uri, extract, params)
     val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
     val updatedInventories = getDBReadyUpdatedInvs(dirtyItems)
     val newInventories = removeCompositeKeyDupes(newItems)

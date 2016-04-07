@@ -18,8 +18,7 @@ import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends IProduct with ErrorReporter with Persistable[Product]
-  with LcboJSONExtractor[Product] with CreatedUpdated[Product] {
+class Product private() extends IProduct with ErrorReporter with Persistable[Product] with CreatedUpdated[Product] {
   def meta = Product
 
   @Column(name="pkid")
@@ -130,7 +129,7 @@ object Product extends Product with MetaRecord[Product] {
   override val LcboIdsToDBIds: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
   override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
-  private val sizeFulfilled: (Int) => SizeChecker =
+  private val sizeFulfilled: (Int) => GotEnough_? =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
   override def getCachedItem: (IProduct) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
@@ -154,6 +153,7 @@ object Product extends Product with MetaRecord[Product] {
   def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
     collectItemsOnPages(
       s"$LcboDomainURL/products",
+      LcboExtract,
       Seq("store_id" -> lcboStoreId, "q" -> category, "where_not" -> "is_discontinued,is_dead", "order"-> "inventory_count.desc"),
       sizeFulfilled(requiredSize))
 
@@ -164,8 +164,9 @@ object Product extends Product with MetaRecord[Product] {
       // and gives us opportunity to bring our cache up to date about firm wide products.
       val items = collectItemsOnPages(
         s"$LcboDomainURL/products",
+        LcboExtract,
         Seq("store_id" -> lcboStoreId, "where_not" -> "is_discontinued,is_dead"),
-        exhaustThemAll)
+        neverEnough)
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
       items.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
     }

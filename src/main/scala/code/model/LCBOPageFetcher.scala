@@ -15,10 +15,10 @@ import scala.collection.IndexedSeq
   */
 trait LCBOPageFetcher[T] extends RestClient {
   def MaxPerPage: Int
-  def extractItems(uri: String): (IndexedSeq[T], JValue)
 
-  type SizeChecker = (Int) => Boolean
-  val exhaustThemAll: SizeChecker = { x => false }
+  type JSitemsExtractor = Iterable[JValue] => Iterable[T]
+  type GotEnough_? = (Int) => Boolean
+  val neverEnough: GotEnough_? = { x => false }
 
   final def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
 
@@ -72,13 +72,15 @@ trait LCBOPageFetcher[T] extends RestClient {
   @throws(classOf[TruncatedChunkException])  // that's a brutal one.
   @tailrec
   final private def collectItemsOnAPage(accumItems: IndexedSeq[T],
-                                urlRoot: String,
-                                pageNo: Int,
-                                params: Seq[(String, Any)],
-                                sizeFulfilled: SizeChecker = exhaustThemAll): IndexedSeq[T] = {
+                                        extractor:  JSitemsExtractor,
+                                        urlRoot: String,
+                                        pageNo: Int,
+                                        params: Seq[(String, Any)],
+                                        sizeFulfilled: GotEnough_? = neverEnough): IndexedSeq[T] = {
 
     val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage, params:_*)
-    val (items, jsonRoot) = extractItems(uri)
+    val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
+    val items = extractor( (jsonRoot \ "result").children).toIndexedSeq // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
     val revisedAccumItems = accumItems ++ items
 
     if (isFinalPage(jsonRoot, pageNo) || sizeFulfilled(items.size + accumItems.size)) {
@@ -87,6 +89,7 @@ trait LCBOPageFetcher[T] extends RestClient {
     }
     collectItemsOnAPage(
       revisedAccumItems, // union of this page with next page when we are asked for a full sample
+      extractor,
       urlRoot,
       pageNo + 1,
       params,
@@ -95,10 +98,12 @@ trait LCBOPageFetcher[T] extends RestClient {
 
   // tp present a cleaner interface than the tail recursive method
   final def collectItemsOnPages(urlRoot: String,
+                                extractor:  JSitemsExtractor,
                                 params: Seq[(String, Any)] = Seq(),
-                                sizeFulfilled: SizeChecker = exhaustThemAll): IndexedSeq[T] = {
+                                sizeFulfilled: GotEnough_? = neverEnough): IndexedSeq[T] = {
     collectItemsOnAPage(
       IndexedSeq[T](), // union of this page with next page when we are asked for a full sample
+      extractor,
       urlRoot,
       1,
       params,

@@ -19,8 +19,7 @@ import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 
-class Store  private() extends IStore with ErrorReporter with Persistable[Store]
-  with LcboJSONExtractor[Store] with CreatedUpdated[Store] with Loggable  {
+class Store  private() extends IStore with ErrorReporter with Persistable[Store] with CreatedUpdated[Store] with Loggable  {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -208,7 +207,7 @@ object Store extends Store with MetaRecord[Store] {
     def briefContextErr(): String =
       "Problem loading LCBO stores into cache, none found"
     val box = tryo {
-      val items =  collectItemsOnPages(s"$LcboDomainURL/stores", Seq("where_not" -> "is_dead"))
+      val items =  collectItemsOnPages(s"$LcboDomainURL/stores", LcboExtract, Seq("where_not" -> "is_dead"))
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
       logger.debug(s"done loading stores from LCBO")
       items // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
