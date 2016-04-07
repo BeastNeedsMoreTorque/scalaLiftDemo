@@ -10,15 +10,12 @@ import scala.language.implicitConversions
 object GlobalLCBO_IDs {
   // distinguish two usages of Long types to avoid confusing our primary key with the LCBO's primary key.
   implicit class LCBO_ID(val underlying: Long) extends AnyVal {
-    // original toString won't do.
-    override def toString = underlying.toString // don't want to send into DOM some TYPE wrapper around the number
+    override def toString = underlying.toString
   }
   implicit def LCBO_IDtoLong(id: LCBO_ID): Long = id.underlying
 
   implicit class P_KEY(val underlying: Long) extends AnyVal {
-    override def toString = underlying.toString // don't want to send into DOM some TYPE wrapper around the number
+    override def toString = underlying.toString
   }
   implicit def P_KEYtoLong(id: P_KEY): Long = id.underlying
-
-
 }

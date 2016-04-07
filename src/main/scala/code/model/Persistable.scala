@@ -1,6 +1,9 @@
 package code.model
 
+import code.model.GlobalLCBO_IDs.LCBO_ID
+
 import scala.collection.{IndexedSeq, Iterable}
+import scala.collection.mutable.ArrayBuffer
 import net.liftweb.util.Props
 import net.liftweb.common.Loggable
 import net.liftweb.squerylrecord.KeyedRecord
@@ -9,8 +12,21 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 /**
   * Created by philippederome on 2016-03-17.
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with ItemStateGrouper with KeyedRecord[Long] with ORMBatchExecutor with Loggable {
+trait Persistable[T <: Persistable[T]] extends Loader[T] with LCBOPageFetcher[T] with ItemStateGrouper with KeyedRecord[Long] with ORMBatchExecutor with Loggable {
   self: T=>
+
+  def setLcboId(id: LCBO_ID): Unit
+
+  val LcboExtract: JSitemsExtractor =  { nodes =>
+    val items = ArrayBuffer[T]()
+    for (p <- nodes;
+         key <- (p \ "id").extractOpt[Long];
+         rec <- meta.fromJValue(p)) {
+      rec.setLcboId(LCBO_ID(key)) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl.
+      items += rec
+    }
+    items.toIndexedSeq
+  }
 
   // I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class, and it should not return just anything.
   def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], getCachedItem: (I) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
