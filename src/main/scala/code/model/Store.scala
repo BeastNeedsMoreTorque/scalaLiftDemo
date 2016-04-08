@@ -204,6 +204,8 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
+  val queryAllItemsArgs = getSeq("store.query.AllItemsArgs")
+
   override def getCachedItem: (IStore) => Option[IStore] =  s => getItemByLcboId(s.lcboId)
   def availableStores: Set[P_KEY] = storesCache.keySet
   def lcboIdToDBId(id: LCBO_ID): Option[P_KEY] = LcboIdsToDBIds.get(id)
@@ -225,7 +227,7 @@ object Store extends Store with MetaRecord[Store] {
     def briefContextErr(): String =
       "Problem loading LCBO stores into cache, none found"
     val box = tryo {
-      val items =  collectItemsAsWebClient(s"$LcboDomainURL/stores", LcboExtract, Seq("where_not" -> "is_dead"))
+      val items =  collectItemsAsWebClient(s"$LcboDomainURL/stores", LcboExtract, queryAllItemsArgs)
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
       logger.debug(s"done loading stores from LCBO")
       items // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.

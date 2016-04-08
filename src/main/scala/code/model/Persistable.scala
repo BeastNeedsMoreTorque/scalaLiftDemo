@@ -12,7 +12,8 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 /**
   * Created by philippederome on 2016-03-17.
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with LCBOPageFetcher[T] with ItemStateGrouper with KeyedRecord[Long] with ORMBatchExecutor with Loggable {
+trait Persistable[T <: Persistable[T]] extends Loader[T] with LCBOPageFetcher[T] with ItemStateGrouper
+  with KeyedRecord[Long] with ORMBatchExecutor with propsSeqReader with Loggable {
   self: T=>
 
   def setLcboId(id: LCBO_ID): Unit
@@ -22,7 +23,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with LCBOPageFetcher[T]
     for (p <- nodes;
          key <- (p \ "id").extractOpt[Long];
          rec <- meta.fromJValue(p)) {
-      rec.setLcboId(LCBO_ID(key)) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl.
+      rec.setLcboId(LCBO_ID(key)) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl (KeyedEntity has def id: K, which is read-only).
       items += rec
     }
     items.toIndexedSeq
@@ -66,8 +67,8 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with LCBOPageFetcher[T]
 
     // you never know... Our input could have the same item twice in the collection with the same lcbo_id and we have unique index in DB against that.
     items.
-        filterNot { p => LcboIDs.contains(p.lcboId) }.  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
-        groupBy {_.lcboId}.map { case (_, iseq) => iseq(0) }.  // remove duplicate lcboid keys from within our own input, selecting first representative among dupes!
-        grouped(batchSize).foreach { batchTransactor( _ , insertBatch) } // break it down in reasonable size transactions, and then serialize the work.
+      filterNot { p => LcboIDs.contains(p.lcboId) }.  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
+      groupBy {_.lcboId}.map { case (_, iseq) => iseq(0) }.  // remove duplicate lcboid keys from within our own input, selecting first representative among dupes!
+      grouped(batchSize).foreach { batchTransactor( _ , insertBatch) } // break it down in reasonable size transactions, and then serialize the work.
   }
 }
