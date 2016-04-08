@@ -49,8 +49,26 @@ class Store  private() extends IStore with ErrorReporter with Persistable[Store]
   val city = new StringField(this, 30) {
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
+
+  override def Name = name.get
   override def isDead = is_dead.get
   override def addressLine1 = address_line_1.get
+
+  override def canEqual(other: Any) =
+    other.isInstanceOf[Store]
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: Store =>
+        if (this eq that) true
+        else {
+          that.canEqual(this) &&
+          (Name == that.Name &&
+           isDead == that.isDead &&
+           addressLine1 == that.addressLine1 )
+        }
+      case _ => false
+    }
 
   //products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)

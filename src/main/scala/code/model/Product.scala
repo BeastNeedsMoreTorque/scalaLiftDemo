@@ -92,6 +92,26 @@ class Product private() extends IProduct with ErrorReporter with Persistable[Pro
     val v = volume_in_milliliters.get / 1000.0
     f"$v%1.3f L"
   }
+
+  override def canEqual(other: Any) =
+    other.isInstanceOf[Product]
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: Product =>
+        if (this eq that) true
+        else {
+            that.canEqual(this) &&
+            ( Name == that.Name &&
+              primaryCategory == that.primaryCategory &&
+              isDiscontinued == that.isDiscontinued &&
+              imageThumbUrl == that.imageThumbUrl &&
+              price == that.price) &&
+            (alcohol_content.get == that.alcohol_content.get) // more of an exercise than anything
+        }
+      case _ => false
+    }
+
   /**
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
@@ -164,7 +184,7 @@ object Product extends Product with MetaRecord[Product] {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
       val prods = productWebQuery( lcboStoreId, Seq("where_not" -> "is_discontinued,is_dead"), neverEnough)
-      synchDirtyAndNewItems(prods, getCachedItem, dirtyPredicate) // the side effect
+      synchDirtyAndNewItems(prods, getCachedItem, dissimilar) // the side effect
       prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
     }
     val fullContextErr = { (m: String, err: String) =>
