@@ -3,7 +3,7 @@ package code.model
 import java.text.NumberFormat
 
 import scala.collection.concurrent.TrieMap
-import scala.collection.{IndexedSeq, concurrent}
+import scala.collection._
 import scala.language.implicitConversions
 import scala.xml.Node
 import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField}
@@ -153,6 +153,9 @@ object Product extends Product with MetaRecord[Product] {
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
   override def getCachedItem: (IProduct) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
+  val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")
+  val queryAllItemsArgs = getSeq("product.query.AllItemsArgs")
+
   /* Convert a store to XML @see progscala2 chapter on implicits */
   implicit def toXml(p: Product): Node =
     <product>{Xml.toXml(p.asJValue)}</product>
@@ -175,7 +178,7 @@ object Product extends Product with MetaRecord[Product] {
    * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
    */
   def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
-    productWebQuery( lcboStoreId, Seq("q" -> category, "where_not" -> "is_discontinued,is_dead", "order"-> "inventory_count.desc"),
+    productWebQuery( lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs,
                   sizeFulfilled(requiredSize) )
 
   // side effect to store updates of the products
@@ -183,7 +186,7 @@ object Product extends Product with MetaRecord[Product] {
     val box = tryo {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
-      val prods = productWebQuery( lcboStoreId, Seq("where_not" -> "is_discontinued,is_dead"), neverEnough)
+      val prods = productWebQuery( lcboStoreId, queryAllItemsArgs, neverEnough)
       synchDirtyAndNewItems(prods, getCachedItem, dissimilar) // the side effect
       prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
     }
