@@ -156,7 +156,7 @@ object Product extends Product with MetaRecord[Product] {
   val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")
   val queryAllItemsArgs = getSeq("product.query.AllItemsArgs")
 
-  /* Convert a store to XML @see progscala2 chapter on implicits */
+  /* Convert a store to XML @see progscala2 chapter on implicits or Scala in Depth implicit view */
   implicit def toXml(p: Product): Node =
     <product>{Xml.toXml(p.asJValue)}</product>
 
