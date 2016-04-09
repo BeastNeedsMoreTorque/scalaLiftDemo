@@ -19,14 +19,15 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with LCBOPageFetcher[T]
   def setLcboId(id: LCBO_ID): Unit
 
   val LcboExtract: JSitemsExtractor =  { nodes =>
-    val items = ArrayBuffer[T]()
-    for (p <- nodes;
-         key <- (p \ "id").extractOpt[Long];
-         rec <- meta.fromJValue(p)) {
-      rec.setLcboId(LCBO_ID(key)) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl (KeyedEntity has def id: K, which is read-only).
-      items += rec
-    }
-    items.toIndexedSeq
+    nodes.foldLeft(ArrayBuffer[T]()) {
+      (buffer, node) =>
+        for (key <- (node \ "id").extractOpt[Long];
+             rec <- meta.fromJValue(node)) {
+          rec.setLcboId(LCBO_ID(key)) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl (KeyedEntity has def id: K, which is read-only).
+          buffer.append(rec)
+        }
+        buffer
+    }.toIndexedSeq
   }
 
   // I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class, and it should not return just anything.

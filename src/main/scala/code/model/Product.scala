@@ -166,8 +166,7 @@ object Product extends Product with MetaRecord[Product] {
     logger.info("Product.init end")
   }
 
-  val productWebQuery: (Long, Seq[(String, Any)], GotEnough_?) => IndexedSeq[Product] =
-   (lcboStoreId, seq, isEnough ) =>
+  def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)], isEnough: GotEnough_? = neverEnough ): IndexedSeq[Product] =
      collectItemsAsWebClient(s"$LcboDomainURL/products",
        LcboExtract,
        ("store_id" -> lcboStoreId) +: seq,
@@ -178,15 +177,16 @@ object Product extends Product with MetaRecord[Product] {
    * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
    */
   def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
-    productWebQuery( lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs,
-                  sizeFulfilled(requiredSize) )
+    productWebQuery( lcboStoreId,
+      Seq("q" -> category) ++ queryByCategoryArgs,
+      sizeFulfilled(requiredSize) )
 
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
     val box = tryo {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
-      val prods = productWebQuery( lcboStoreId, queryAllItemsArgs, neverEnough)
+      val prods = productWebQuery( lcboStoreId, queryAllItemsArgs)
       synchDirtyAndNewItems(prods, getCachedItem, dissimilar) // the side effect
       prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
     }
