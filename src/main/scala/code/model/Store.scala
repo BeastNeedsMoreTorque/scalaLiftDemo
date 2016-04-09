@@ -217,7 +217,7 @@ object Store extends Store with MetaRecord[Store] {
 
   override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
 
-    /* Convert a store to XML */
+    /* Convert a store to XML, @see Scala in Depth implicit view */
   implicit def toXml(st: Store): Node =
     <store>{Xml.toXml(st.asJValue)}</store>
 

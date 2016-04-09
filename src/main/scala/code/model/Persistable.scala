@@ -46,7 +46,8 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with LCBOPageFetcher[T]
   private def insertBatch: (Iterable[T]) => Unit = table().insert _
 
   def loadToCacheLastTransaction(items: Iterable[T]) = {
-    val itemsWithPK = from(table())(item => where( item.idField in items.map( _.pKey.underlying)) select(item))
+    val pkIds = items.map(_.pKey: Long)  // type ascription to integrate with Squeryl below
+    val itemsWithPK = from(table())(item => where(item.idField in pkIds) select(item))
     cache() ++= itemsWithPK.map{item => item.pKey -> item } (collection.breakOut)
   }
 
