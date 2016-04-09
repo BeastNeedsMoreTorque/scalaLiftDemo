@@ -166,14 +166,11 @@ object Product extends Product with MetaRecord[Product] {
     logger.info("Product.init end")
   }
 
-  // the implicit isEnough parameter is strictly to play around with the concept as in this case, implicit is definitely not warranted.
-  // expected usage would instead be (environment, context, thread pool, db connection, etc).
-  // See the two calls to productWebQuery.
+  // the implicit isEnough parameter is strictly to play around with the concept as in this case, implicit is not particularly compelling.
+  // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
+  // a cross cutting concern or a strategy.
   private def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = neverEnough ) =
-   collectItemsAsWebClient(s"$LcboDomainURL/products",
-     LcboExtract,
-     ("store_id" -> lcboStoreId) +: seq,
-     isEnough)
+   collectItemsAsWebClient(s"$LcboDomainURL/products", LcboExtract, ("store_id" -> lcboStoreId) +: seq)
 
   /*
    * Queries LCBO matching category
@@ -181,9 +178,8 @@ object Product extends Product with MetaRecord[Product] {
    * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
    */
   def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
-    implicit val checkSize = sizeFulfilled(requiredSize)
-    productWebQuery(lcboStoreId,
-      Seq("q" -> category) ++ queryByCategoryArgs)
+    implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize) // don't fetch more than required size.
+    productWebQuery(lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs)
   }
 
   // side effect to store updates of the products
