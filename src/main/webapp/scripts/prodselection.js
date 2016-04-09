@@ -18,15 +18,20 @@ var prodSelection = (function() {
     var siblings = $(this).parent().siblings();
 
     var quantityEl = $(siblings).find('input.prodQty');
-    var quantity = parseInt($(quantityEl).val()) || 0;
+    var desiredQuantity = parseInt($(quantityEl).val()) || 0;
 
     var fixedCostEl = $(siblings).parent().find('input.hiddenProdCost');
+    var availableQtyEl = $(siblings).parent().find('input.hiddenProdInv');
+    var quantity = Math.min(desiredQuantity, parseInt($(availableQtyEl).val()) || 0);
+    var missedQty = desiredQuantity - quantity;
+
     var cost = quantity * parseCurrency($(fixedCostEl).val());
 
     var data = {
       id: id,
       quantity: quantity,
-      cost: cost
+      cost: cost,
+      missedQty: missedQty
     };
     selectedItems.push(data);
   }
