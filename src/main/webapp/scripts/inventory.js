@@ -25,7 +25,7 @@ var inventory = (function() {
     var productId = parseInt(this.value) || 0;
     var quantityEl = prodIdCBQuantityBuddy($(this), productId);
     var quantity = parseInt($(quantityEl).val()) || 0;
-    if (storeId > 0 && productId > 0 && quantity <= 0) { // browser gets an update
+    if (storeId > 0 && productId > 0 && quantity <= 0) { // browser gets an update to complete likely missing info
       ajaxFetchInventory(storeId, productId);
     }
   }
@@ -50,14 +50,14 @@ var inventory = (function() {
     }
   };
 
-  var inventoryError = function(data, status){
+  var inventoryError = function(data, status){  // deliberate avoidance of callback hell with much nesting being avoided
     console.log('Error Data: ' + data.responseText + '\nStatus: ' + status );
   };
 
   return {
     fetchInventories: function() {
       prodIdCheckboxes = {}; // reset it. Too bad, if there was an earlier request. Just take current user input.
-      storeId = storeFinder.getTheSelectedLcboStoreId();
+      storeId = storeFinder.getTheSelectedLcboStoreId(); // calls for requirejs or ES6 module usage perhaps
       $('div.prodContainer').find('input:checkbox').each(collectProductInventories);
     }
   }

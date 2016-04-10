@@ -1,6 +1,7 @@
 package code.model
 
 import code.model.GlobalLCBO_IDs.LCBO_ID
+import code.model.pageFetcher.LCBOPageFetcher
 
 import scala.collection.{IndexedSeq, Iterable}
 import scala.collection.mutable.ArrayBuffer
@@ -20,13 +21,13 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with LCBOPageFetcher[T]
 
   val LcboExtract: JSitemsExtractor =  { nodes =>
     nodes.foldLeft(ArrayBuffer[T]()) {
-      (buffer, node) =>
+      (recsBuffer, node) =>
         for (key <- (node \ "id").extractOpt[Long];
              rec <- meta.fromJValue(node)) {
           rec.setLcboId(LCBO_ID(key)) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl (KeyedEntity has def id: K, which is read-only).
-          buffer.append(rec)
+          recsBuffer.append(rec)
         }
-        buffer
+        recsBuffer
     }.toIndexedSeq
   }
 

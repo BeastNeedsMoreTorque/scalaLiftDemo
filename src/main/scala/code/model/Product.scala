@@ -161,16 +161,10 @@ object Product extends Product with MetaRecord[Product] {
   implicit def toXml(p: Product): Node =
     <product>{Xml.toXml(p.asJValue)}</product>
 
-  def init(): Unit = {
-    logger.info("Product.init start")  // don't query all products as we don't see the need to query them in isolation of stores (i.e don't care about products not available in stores)
-    load()
-    logger.info("Product.init end")
-  }
-
   // the implicit isEnough parameter is strictly to play around with the concept as in this case, implicit is not particularly compelling.
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
   // a cross cutting concern or a strategy.
-  private def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? ) =
+  private def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = pageFetcher.neverEnough ) =
     collectItemsAsWebClient(s"$LcboDomainURL/products", LcboExtract, ("store_id" -> lcboStoreId) +: seq)
 
   /*
@@ -186,7 +180,6 @@ object Product extends Product with MetaRecord[Product] {
 
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
-    implicit val fetchAll = pageFetcher.neverEnough
     val box = tryo {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.

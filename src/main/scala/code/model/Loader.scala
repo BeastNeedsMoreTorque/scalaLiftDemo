@@ -5,12 +5,13 @@ import net.liftweb.record.Record
 import net.liftweb.squerylrecord.RecordTypeMode._
 import org.squeryl.Table
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import net.liftweb.common.Loggable
 
 /**
   * Created by philippederome on 2016-03-23.
   */
 
-trait Loader[T <: Loader[T]] extends Record[T]
+trait Loader[T <: Loader[T]] extends Record[T] with Loggable
 {
   self: T =>
 
@@ -26,12 +27,12 @@ trait Loader[T <: Loader[T]] extends Record[T]
     LcboIdsToDBIds() ++= cache().map { case(pk, item) => item.lcboId -> pk }
   }
 
-  protected def load(): Unit = {
+  def load(): Unit = inTransaction {
+    logger.info("load start")
     // load all items from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
-    inTransaction {
       val items = from(table())(s => select(s))
       cacheNewItems(items)
-    }
+    logger.info("load end")
   }
 }
 

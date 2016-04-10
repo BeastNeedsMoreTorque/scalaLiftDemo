@@ -39,22 +39,20 @@ var storeFinder = (function() {
 
   var theSelectedStore = null;
 
-  // evaluate distance ourselves because of 25 destination distances limit, we have more than 600. Some hack.
+  // evaluate distance ourselves because of 25 destination distances limit in Google API, we have more than 600. Some hack.
   var distanceByGeo = function(latLng1, latLng2) {
-    var x = KMS_PER_LAT * (latLng1.lat()-latLng2.lat());
-    var y = KMS_PER_LNG * (latLng1.lng()-latLng2.lng());
-
+    var x = KMS_PER_LAT * (latLng1.lat()-latLng2.lat());  // reliable
+    var y = KMS_PER_LNG * (latLng1.lng()-latLng2.lng());  // approximately reliable at 45 North, which is typical Ontario (don't care about users out of continent).
     return (Math.sqrt(Math.pow(x,2) + Math.pow(y,2)));
   };
 
   var closestStore = function(latLng) {
     var bestDistance = +Infinity;
-    var dist = bestDistance;
     var closest = null;
     stores.forEach(
       function (store) {
         var storeLatLng = new google.maps.LatLng(store.latitude, store.longitude)
-        dist = distanceByGeo(latLng, storeLatLng);
+        var dist = distanceByGeo(latLng, storeLatLng);
         if (dist < bestDistance) {
           closest = store;
           bestDistance = dist;

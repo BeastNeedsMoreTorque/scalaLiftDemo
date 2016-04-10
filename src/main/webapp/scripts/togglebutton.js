@@ -16,8 +16,9 @@ var toggleButton = (function() {
         return $(selector).hasClass(thickBorder);
       });
       if (typeof oldSelection != 'undefined') toggleSelect(oldSelection, thinBorder, thickBorder);
-        toggleSelect($("[name="+newSelection+"]"), thickBorder, thinBorder);
-      }
+      
+      toggleSelect($("[name="+newSelection+"]"), thickBorder, thinBorder);
     }
+  }
 }());
 

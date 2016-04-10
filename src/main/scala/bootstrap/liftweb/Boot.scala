@@ -115,7 +115,7 @@ class Boot {
         }
       }
     })
-    Product.init()
-    Store.init()
+    Product.load()
+    Store.load()
   }
 }

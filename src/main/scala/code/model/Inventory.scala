@@ -12,7 +12,7 @@ import org.apache.http.TruncatedChunkException
 import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-
+import code.model.pageFetcher.LCBOPageFetcher
 
 /**
   * Created by philippederome on 2016-03-26.
