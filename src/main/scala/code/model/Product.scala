@@ -13,6 +13,7 @@ import net.liftweb.json._
 import net.liftweb.util.Helpers._
 import org.squeryl.annotations._
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.pageFetcher.GotEnough_?
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -169,8 +170,8 @@ object Product extends Product with MetaRecord[Product] {
   // the implicit isEnough parameter is strictly to play around with the concept as in this case, implicit is not particularly compelling.
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
   // a cross cutting concern or a strategy.
-  private def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = neverEnough ) =
-   collectItemsAsWebClient(s"$LcboDomainURL/products", LcboExtract, ("store_id" -> lcboStoreId) +: seq)
+  private def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? ) =
+    collectItemsAsWebClient(s"$LcboDomainURL/products", LcboExtract, ("store_id" -> lcboStoreId) +: seq)
 
   /*
    * Queries LCBO matching category
@@ -178,12 +179,14 @@ object Product extends Product with MetaRecord[Product] {
    * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
    */
   def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
-    implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize) // don't fetch more than required size.
+    implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize)
+    // don't fetch more than required size.
     productWebQuery(lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs)
   }
 
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
+    implicit val fetchAll = pageFetcher.neverEnough
     val box = tryo {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
