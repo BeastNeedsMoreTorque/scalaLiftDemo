@@ -1,4 +1,4 @@
-package code.model
+package code.model.pageFetcher
 
 import java.net.URLEncoder
 
@@ -17,8 +17,6 @@ trait LCBOPageFetcher[T] extends RestClient {
   def MaxPerPage: Int
 
   type JSitemsExtractor = Iterable[JValue] => Iterable[T]
-  type GotEnough_? = (Int) => Boolean
-  val neverEnough: GotEnough_? = { x => false }
 
   final def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
 
