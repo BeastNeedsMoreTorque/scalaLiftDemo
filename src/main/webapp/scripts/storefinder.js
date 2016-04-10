@@ -41,28 +41,26 @@ var storeFinder = (function() {
   var theSelectedStore = null;
 
   var buildKey = function(store) { // name is not unique! There are two pairs at King & Queen and on North 17!
-    return store.name + ' : ' + store.lcbo_id;
+    return store.name + ' , ' + store.lcbo_id;
   };
 
-  var minDistanceStore = function (zippedStores) { // FP storm is reaching JS, embrace it.
-    if (zippedStores.length == 0) return null;
-    return zippedStores.reduce( function(a, b) {
-      if (a.dist < b.dist)
-        return a;
-      else
-        return b;
-      },
-      zippedStores[0] );
+  var minDistanceStore = function (storesAndDists) { // FP storm is reaching JS, embrace it with use of reduce.
+    if (storesAndDists.length == 0) return null;
+    return storesAndDists.reduce( function(a, b) {
+      if (a.dist < b.dist) return a;
+      return b;
+    },
+    storesAndDists[0] );
   };
 
-  var zipUserDistances = function (stores, userLatLng) { // don't know if JS allocates and GCs as well as Scala, but let's assume so for now.
-    var zipped = stores.map(function(s){
-      var zStore = {};
+  var addUserDistances = function (stores, userLatLng) { // don't know if JS allocates and GCs as well as Scala, but let's assume so for now. FP map usage below.
+    var withDistances = stores.map(function(s){
+      var withDistance = {};
       var d = distanceByGeo(userLatLng, s.latitude, s.longitude);
-      zStore = {store:s, dist:d};
-      return zStore;
+      withDistance = {store:s, dist:d};
+      return withDistance;
     });
-    return zipped;
+    return withDistances;
   };
 
   // evaluate distance ourselves because of 25 destination distances limit in Google API, we have more than 600. Some hack.
@@ -75,7 +73,7 @@ var storeFinder = (function() {
   var closestStore = function(latLng) {
     var bestDistance = +Infinity;
     var closest = null;
-    var zippedStores = zipUserDistances(stores, latLng); // collect user distances of each store with each store as intermediate step. Then find one with min distance
+    var zippedStores = addUserDistances(stores, latLng); // collect user distances of each store with each store as intermediate step. Then find one with min distance
     closest = minDistanceStore(zippedStores).store;
     if (closest !== null && theSelectedStore == null) {
       flipMarker(closest);
@@ -162,9 +160,6 @@ var storeFinder = (function() {
     if (this.zoom > ZOOM_LOWER_BOUND) {
       showMarkers();
     }
-    else {
-      clearMarkers();
-    }
   };
 
   var userLocationCallback = function(position) {
@@ -180,10 +175,8 @@ var storeFinder = (function() {
     }
     map = new google.maps.Map(mapCanvas, mapOptions);
     map.addListener('bounds_changed', boundsChangedListener);
-    var rendererOptions = {
-      suppressMarkers: true
-    }
 
+    var rendererOptions = { suppressMarkers: true };
     directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
     directionsDisplay.setMap(map);
     userMarker = new google.maps.Marker(
