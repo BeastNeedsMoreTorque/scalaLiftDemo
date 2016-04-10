@@ -1,5 +1,6 @@
 "use strict";
 
+// ES 6 (2015) dependent for Map() (welcome to transpilers to address old non-compliant browsers, works fine on my Chrome on OS X)
 // Global variable, singleton storeFinder
 // API:
 // <localhost:port>/stores gives us all stores with coordinates and we evaluate the closest.
@@ -30,7 +31,7 @@ var storeFinder = (function() {
 
   var mapCanvas = document.getElementById('map-canvas');
   var map;
-  var markers = [];
+  var markers = new Map(); // keyed by title (name of store + lcbo_id for uniqueness, otherwise if name only need an array here)
   var stores = [];
   var userMarker;
   var userLocation;
@@ -39,41 +40,55 @@ var storeFinder = (function() {
 
   var theSelectedStore = null;
 
+  var buildKey = function(store) { // name is not unique! There are two pairs at King & Queen and on North 17!
+    return store.name + ' : ' + store.lcbo_id;
+  };
+
+  var minDistanceStore = function (zippedStores) { // FP storm is reaching JS, embrace it.
+    if (zippedStores.length == 0) return null;
+    return zippedStores.reduce( function(a, b) {
+      if (a.dist < b.dist)
+        return a;
+      else
+        return b;
+      },
+      zippedStores[0] );
+  };
+
+  var zipUserDistances = function (stores, userLatLng) { // don't know if JS allocates and GCs as well as Scala, but let's assume so for now.
+    var zipped = stores.map(function(s){
+      var zStore = {};
+      var d = distanceByGeo(userLatLng, s.latitude, s.longitude);
+      zStore = {store:s, dist:d};
+      return zStore;
+    });
+    return zipped;
+  };
+
   // evaluate distance ourselves because of 25 destination distances limit in Google API, we have more than 600. Some hack.
-  var distanceByGeo = function(latLng1, latLng2) {
-    var x = KMS_PER_LAT * (latLng1.lat()-latLng2.lat());  // reliable
-    var y = KMS_PER_LNG * (latLng1.lng()-latLng2.lng());  // approximately reliable at 45 North, which is typical Ontario (don't care about users out of continent).
-    return (Math.sqrt(Math.pow(x,2) + Math.pow(y,2)));
+  var distanceByGeo = function(latLng, refLat, refLng) {
+    var x = KMS_PER_LAT * (latLng.lat()-refLat);  // reliable
+    var y = KMS_PER_LNG * (latLng.lng()-refLng);  // approximately reliable at 45 North, which is typical Ontario (don't care about users out of continent).
+    return (Math.sqrt(x*x + y*y));
   };
 
   var closestStore = function(latLng) {
     var bestDistance = +Infinity;
     var closest = null;
-    stores.forEach(
-      function (store) {
-        var storeLatLng = new google.maps.LatLng(store.latitude, store.longitude)
-        var dist = distanceByGeo(latLng, storeLatLng);
-        if (dist < bestDistance) {
-          closest = store;
-          bestDistance = dist;
-        }
-      }
-    );
+    var zippedStores = zipUserDistances(stores, latLng); // collect user distances of each store with each store as intermediate step. Then find one with min distance
+    closest = minDistanceStore(zippedStores).store;
     if (closest !== null && theSelectedStore == null) {
-      flipMarker(closest.name);
+      flipMarker(closest);
     }
     return closest;
-  }
+  };
 
-  var flipMarker = function(name) {
-    markers.forEach(
-      function (marker, index, array) {
-        if (marker.title.localeCompare(name) == 0) {
-          marker.setIcon(BLUE_MARKER_ICON_URI);
-        }
-      }
-    );
-  }
+  var flipMarker = function(store) {
+    var marker = markers.get(buildKey(store));
+    if (marker != undefined) {
+      marker.setIcon(BLUE_MARKER_ICON_URI);
+    }
+  };
 
   var fetchStore = function(userLatLng) {
     theSelectedStore = closestStore(userLatLng);
@@ -126,9 +141,10 @@ var storeFinder = (function() {
       url: '/stores',
       type: 'GET',
       success: function(data, status){
-        function createMarker(element, index, array) {
-          var latlng = new google.maps.LatLng(element.latitude, element.longitude);
-          addMarker(element.name, latlng);
+        function createMarker(store, index, array) {
+          var latlng = new google.maps.LatLng(store.latitude, store.longitude);
+          var key = buildKey(store);
+          addMarker(key, latlng);
         }
         data.forEach(createMarker);
         stores = data;
@@ -185,38 +201,32 @@ var storeFinder = (function() {
     fetchStore(defaultOntarioLocation);
   };
 
-  // Adds a marker to the map and push to the array.
-  var addMarker = function(name, location) {
+  // Adds a marker to the google map and add to our internal map.
+  var addMarker = function(storeKey, location) {
     var marker = new google.maps.Marker({
-      title: name,
+      title: storeKey,
       position: location,
       map: map
     });
     marker.addListener('click', storeFinder.storeClickCB);
-    markers.push(marker);
+    markers.set(storeKey, marker);
   };
 
-  // Sets the map on all markers in the array.
+  // Sets the map on all markers in our collection.
   var setMapOnAll = function (map) {
-    markers.forEach( function(marker) {
+    for (var marker of markers.values()) {
       marker.setMap(map);
-    });
+    };
   };
 
-  // Removes the markers from the map, but keeps them in the array.
+  // Removes the markers from the map, but keeps them in our internal collection.
   var clearMarkers= function() {
     setMapOnAll(null);
   };
 
-  // Shows any markers currently in the array.
+  // Shows any markers currently in our internal collection.
   var showMarkers = function() {
     setMapOnAll(map);
-  };
-
-  // Deletes all markers in the array by removing references to them.
-  var deleteMarkers = function() {
-    clearMarkers();
-    markers = [];
   };
 
   return {
