@@ -1,43 +1,18 @@
 package code.model
 
-import code.model.GlobalLCBO_IDs.LCBO_ID
-import code.model.pageFetcher.LCBOPageFetcher
-
 import scala.collection.{IndexedSeq, Iterable}
-import scala.collection.mutable.ArrayBuffer
 import net.liftweb.util.Props
-import net.liftweb.common.Loggable
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
 
 /**
   * Created by philippederome on 2016-03-17.
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with LCBOPageFetcher[T] with ItemStateGrouper
-  with KeyedRecord[Long] with ORMBatchExecutor with propsSeqReader with Loggable {
+trait Persistable[T <: Persistable[T]] extends  Loader[T] with KeyedRecord[Long] with ORMBatchExecutor {
   self: T=>
 
-  def setLcboId(id: LCBO_ID): Unit
-
-  val LcboExtract: JSitemsExtractor =  { nodes =>
-    nodes.foldLeft(ArrayBuffer[T]()) {
-      (recsBuffer, node) =>
-        for (key <- (node \ "id").extractOpt[Long];
-             rec <- meta.fromJValue(node)) {
-          rec.setLcboId(LCBO_ID(key)) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl (KeyedEntity has def id: K, which is read-only).
-          recsBuffer.append(rec)
-        }
-        recsBuffer
-    }.toIndexedSeq
-  }
-
-  // I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class, and it should not return just anything.
-  def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], getCachedItem: (I) => Option[I], dirtyPred: (I, T) => Boolean): Unit = {
-    val (dirtyItems, newItems) = itemsByState[I, T](items, getCachedItem, dirtyPred)
-    updateAndInsert(dirtyItems, newItems) // updates DB AND cache.
-  }
   // Always call update before insert just to be consistent and safe. Enforce it.
-  private def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = inTransaction {
+  protected def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = inTransaction {
     update(updateItems)
     insert(insertItems)
   }

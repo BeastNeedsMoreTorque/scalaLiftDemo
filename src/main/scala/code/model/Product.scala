@@ -19,14 +19,14 @@ import code.model.pageFetcher.GotEnough_?
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends IProduct with ErrorReporter with Persistable[Product] with CreatedUpdated[Product] {
+class Product private() extends IProduct  with LCBOEntity[Product]  {
   def meta = Product
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
 
-  // for Persistable
+  // for Loader and LCBOEntity
   override def table(): org.squeryl.Table[Product] = Product.table()
   override def cache() = Product.productsCache
   override def LcboIdsToDBIds() = Product.LcboIdsToDBIds
