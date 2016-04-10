@@ -13,10 +13,10 @@ object GlobalLCBO_IDs {
   implicit class LCBO_ID(val underlying: Long) extends AnyVal {
     override def toString = underlying.toString
   }
-  implicit def LCBO_IDtoLong(id: LCBO_ID): Long = id.underlying  // implicit view
+  implicit def externalIDtoLong(id: LCBO_ID): Long = id.underlying  // implicit view
 
   implicit class P_KEY(val underlying: Long) extends AnyVal {
     override def toString = underlying.toString
   }
-  implicit def P_KEYtoLong(id: P_KEY): Long = id.underlying // implicit view
+  implicit def internalIDtoLong(id: P_KEY): Long = id.underlying // implicit view
 }

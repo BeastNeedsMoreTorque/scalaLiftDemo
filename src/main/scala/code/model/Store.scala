@@ -235,20 +235,16 @@ object Store extends Store with MetaRecord[Store] {
     checkErrors(box, fullContextErr, briefContextErr)
   }
 
-  def init(): Unit = {
-    logger.info("Store.init start")
-    load()
-    logger.info("Store.init end")
-  }
-
   /**
     *  synchronous because once the webapp accepts requests, this load must have completed so that the store collection is not empty.
     */
   override def load(): Unit = inTransaction {
+    logger.info("load start")
     val items = from(table())(s => select(s))
     cacheNewItems(items)
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
     getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
+    logger.info("load end")
   }
 
  def findAll(): Iterable[Store] = storesCache.values

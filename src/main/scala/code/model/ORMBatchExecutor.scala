@@ -7,7 +7,7 @@ import net.liftweb.common.Loggable
 import scala.collection.Iterable
 
 /**
-  * Created by philippederome on 2016-04-03. Just to isolate the verbose try catch block.
+  * Created by philippederome on 2016-04-03. Just to isolate the verbose try catch block. Please, hide this try catch block from privy eyes.
   */
 trait ORMBatchExecutor extends Loggable {
   def execute[T](items: Iterable[T], transactor: (Iterable[T]) => Unit): Unit = {
