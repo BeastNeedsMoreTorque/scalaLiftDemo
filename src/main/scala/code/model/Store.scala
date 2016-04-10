@@ -19,13 +19,13 @@ import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 
-class Store  private() extends IStore with ErrorReporter with Persistable[Store] with CreatedUpdated[Store] with Loggable  {
+class Store private() extends IStore with LCBOEntity[Store]  {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
 
-  // for Persistable
+  // for Loader and LCBOEntity
   override def table(): org.squeryl.Table[Store] = Store.table()
   override def cache() = Store.storesCache
   override def LcboIdsToDBIds() = Store.LcboIdsToDBIds
