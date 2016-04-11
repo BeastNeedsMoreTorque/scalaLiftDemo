@@ -16,7 +16,7 @@ import scala.collection.IndexedSeq
 trait LCBOPageFetcher[T] extends RestClient {
   def MaxPerPage: Int
 
-  type JSitemsExtractor = Iterable[JValue] => Iterable[T]
+  type JSitemsExtractor[T] = Iterable[JValue] => Iterable[T]
 
   final def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
 
@@ -70,7 +70,7 @@ trait LCBOPageFetcher[T] extends RestClient {
   @throws(classOf[TruncatedChunkException])  // that's a brutal one.
   @tailrec
   final private def collectItemsOnAPage(accumItems: IndexedSeq[T],
-                                        extractor:  JSitemsExtractor,
+                                        extractor:  JSitemsExtractor[T],
                                         urlRoot: String,
                                         pageNo: Int,
                                         params: Seq[(String, Any)],
@@ -94,9 +94,9 @@ trait LCBOPageFetcher[T] extends RestClient {
       sizeFulfilled)
   }
 
-  // tp present a cleaner interface than the tail recursive method
+  // to present a cleaner interface than the tail recursive method
   final def collectItemsAsWebClient(urlRoot: String,
-                                    extractor:  JSitemsExtractor,
+                                    extractor:  JSitemsExtractor[T],
                                     params: Seq[(String, Any)] = Seq())
                                     (implicit sizeFulfilled: GotEnough_? = neverEnough): IndexedSeq[T] = {
     collectItemsOnAPage(

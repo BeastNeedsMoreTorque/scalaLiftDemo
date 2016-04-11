@@ -9,5 +9,4 @@ package code.model
 // we don't have)
 object EntityRecordState extends Enumeration {
   val New, Dirty, Clean, Undefined = Value
-  type EnumerationValueType = Enumeration#Value
 }

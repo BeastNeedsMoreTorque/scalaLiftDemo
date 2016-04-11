@@ -156,7 +156,7 @@ class ProductInteraction extends JSUtilities with Loggable {
         }
 
         // for each element of qOfProds, build a Div as NodeSeq and concatenate them as a NodeSeq for the several divs
-        val divs = qOfProds.map(getDiv).fold(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => a ++ b)
+        val divs = qOfProds.map(getDiv).reduce((a, b) => a ++ b)  // map reduce, whoa-hoh!
         SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
       }
 
