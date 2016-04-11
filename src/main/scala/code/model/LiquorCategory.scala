@@ -1,8 +1,6 @@
 package code.model
 
 import net.liftweb.util.Props
-import net.liftweb.json.JsonParser.parse
-import scala.collection.breakOut
 
 /**
   * Created by philippederome on 15-10-26.
