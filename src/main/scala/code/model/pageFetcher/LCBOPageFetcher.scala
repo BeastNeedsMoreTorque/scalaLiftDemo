@@ -13,7 +13,7 @@ import scala.collection.IndexedSeq
 /**
   * Created by philippederome on 2016-03-30.
   */
-trait LCBOPageFetcher[T] extends RestClient {
+trait LCBOPageFetcher extends RestClient {
   def MaxPerPage: Int
 
   type JSitemsExtractor[T] = Iterable[JValue] => Iterable[T]
@@ -69,7 +69,7 @@ trait LCBOPageFetcher[T] extends RestClient {
   @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
   @throws(classOf[TruncatedChunkException])  // that's a brutal one.
   @tailrec
-  final private def collectItemsOnAPage(accumItems: IndexedSeq[T],
+  final private def collectItemsOnAPage[T](accumItems: IndexedSeq[T],
                                         extractor:  JSitemsExtractor[T],
                                         urlRoot: String,
                                         pageNo: Int,
@@ -95,7 +95,7 @@ trait LCBOPageFetcher[T] extends RestClient {
   }
 
   // to present a cleaner interface than the tail recursive method
-  final def collectItemsAsWebClient(urlRoot: String,
+  final def collectItemsAsWebClient[T](urlRoot: String,
                                     extractor:  JSitemsExtractor[T],
                                     params: Seq[(String, Any)] = Seq())
                                     (implicit sizeFulfilled: GotEnough_? = neverEnough): IndexedSeq[T] = {
