@@ -1,14 +1,8 @@
 package code.model
 
-import java.io.IOException
-import java.net.SocketTimeoutException
-
 import scala.collection.{IndexedSeq, Iterable}
-import net.liftweb.common.Loggable
-import net.liftweb.json._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
-import org.apache.http.TruncatedChunkException
 import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
@@ -19,7 +13,13 @@ import code.model.pageFetcher.LCBOPageFetcher
   * storeid and productid are our composite PK whereas store_id and product_id is the same from LCBO's point of view with their PK.
   * We keep it in for referencing. See also case class InventoryAsLCBOJson further down.
   */
-class Inventory private(val storeid: Long, val productid: Long, var quantity: Long, var updated_on: String, var is_dead: Boolean, var store_id: Long=0, var product_id: Long=0)
+class Inventory private(val storeid: Long,
+                        val productid: Long,
+                        var quantity: Long,
+                        var updated_on: String,
+                        var is_dead: Boolean,
+                        var store_id: Long=0,
+                        var product_id: Long=0)
   extends KeyedEntity[CompositeKey2[Long,Long]] {
 
   def id = compositeKey(storeid, productid)
@@ -37,7 +37,7 @@ class Inventory private(val storeid: Long, val productid: Long, var quantity: Lo
   }
 }
 
-object Inventory extends LCBOPageFetcher[Inventory] with ItemStateGrouper with ORMBatchExecutor with Loggable {
+object Inventory extends LCBOPageFetcher with ItemStateGrouper with ORMBatchExecutor {
   override def MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   private val dirtyPredicate: (Inventory, Inventory) => Boolean = {(x, y)=> x.isDirty(y)}
 

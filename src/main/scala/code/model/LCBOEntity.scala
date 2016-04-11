@@ -9,7 +9,7 @@ import code.model.pageFetcher.LCBOPageFetcher
 /**
   * Created by philippederome on 2016-04-10. Highest level trait to share between Product and Store that have much logic in common.
   */
-trait LCBOEntity[T <: LCBOEntity[T]] extends LCBOPageFetcher[T] with Persistable[T]
+trait LCBOEntity[T <: LCBOEntity[T]] extends LCBOPageFetcher with Persistable[T]
   with CreatedUpdated[T] with ItemStateGrouper with propsSeqReader with ErrorReporter {
   self: T=>
 
