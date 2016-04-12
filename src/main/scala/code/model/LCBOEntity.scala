@@ -11,7 +11,7 @@ import code.model.pageFetcher.LCBOPageFetcher
   */
 trait LCBOEntity[T <: LCBOEntity[T]] extends LCBOPageFetcher with Persistable[T]
   with CreatedUpdated[T] with ItemStateGrouper with propsSeqReader with ErrorReporter {
-  self: T=>
+  self: T =>
 
   def setLcboId(id: LCBO_ID): Unit
 
