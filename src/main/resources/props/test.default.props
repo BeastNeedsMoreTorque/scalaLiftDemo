@@ -1,0 +1,49 @@
+# FOR SCALATEST
+
+product.shortCategories={"wine":"Wine","spirits":"Spirits","beer":"Beer"}
+
+
+
+
+
+db.driver=org.postgresql.Driver
+
+# choose available port and suitable host and driver url (liftweb offered "jdbc:h2:lift_proto.db;AUTO_SERVER=TRUE")
+db.url=jdbc:postgresql://localhost:5432
+#specify db.user, db.password for dev if required. Phil Derome's toy environment does not require this.
+
+# time out in ms when we consume a web api.
+http.ClientConnTimeOut=5000
+# different value to prove a point
+http.ClientReadTimeOut=8000
+lcboDomainURL=http://lcboapi.com
+DBWrite.BatchSize=1024
+
+radio.selectClass=thickBorder
+radio.unselectClass=thinBorder
+
+# implied with LCBO tests (40 throws and then it can wipe out cache!)
+product.lcboMaxPerPage=20
+product.query.ByCategoryArgs={"where_not":"is_discontinued,is_dead", "order":"inventory_count.desc"}
+# application product designer believes all items of relevance are not discontinued nor dead, so developer allows him to assign this view at run-time to the concept of "all items".
+# In general our policy or interpretation of how we should use the WEB API should be run-time attributes and not hard coded
+# (open question as to end-user having such choice, convention over configuration I often hear them say?).
+product.query.AllItemsArgs={"where_not":"is_discontinued,is_dead"}
+
+product.CategoriesImageMap={"wine":"/images/wineGlassPour.jpg","spirits":"/images/brandy.jpg","beer":"/images/beerGlass.jpg","ciders":"/images/ciderGlass.jpg","coolers":"/images/coolerGlass.jpg","non-Alc":"/images/giftBox.jpg"}
+product.interactionsImageMap={"recommend":"/images/recommend.jpg","cancel":"/images/cancel.jpg"}
+
+#No order on a map, so we impose an order on the keys
+product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
+product.Category=wine
+product.DBBatchSize=512
+product.cacheSize=20000
+
+# When going synchronously to select products of a category, we'll request no more than store.maxSampleSize from LCBO
+store.maxSampleSize=60
+# implied with LCBO tests as max we can query on a page
+store.lcboMaxPerPage=40
+# careful observer will notice it's not same value as for product.
+store.query.AllItemsArgs={"where_not":"is_dead"}
+
+inventory.lcboMaxPerPage=50
