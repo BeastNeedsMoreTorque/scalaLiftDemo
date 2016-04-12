@@ -1,16 +1,11 @@
 package code.model
 
-import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-
 import scala.collection.IndexedSeq
 
 /**
   * Created by philippederome on 2016-03-25.
   */
-trait IProduct extends Equals {
-  def lcboId: LCBO_ID
-  def pKey: P_KEY
-
+trait IProduct extends Equals with KeyKeeper {
   def Name: String
   def primaryCategory: String
   def isDiscontinued: Boolean

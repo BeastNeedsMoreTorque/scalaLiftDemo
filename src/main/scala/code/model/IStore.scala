@@ -1,17 +1,12 @@
 package code.model
 
-import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-
 import scala.collection.Iterable
 import net.liftweb.common.Box
 
 /**
   * Created by philippederome on 2016-03-25.
   */
-trait IStore extends Equals {
-  def lcboId: LCBO_ID
-  def pKey: P_KEY
-
+trait IStore extends Equals with KeyKeeper {
   def Name: String
   def isDead: Boolean
   def addressLine1: String
