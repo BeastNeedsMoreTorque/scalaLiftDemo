@@ -15,7 +15,7 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends LCBOPageFetcher with Persistable[T]
 
   def setLcboId(id: LCBO_ID): Unit
 
-  // Some LCBO entities require to backpatch JS read in "id" as a separate column in Record. They do so in with the same logic below.
+  // Some LCBO entities require to back patch JS read in "id" as a separate column in Record. They do so in with the same logic below.
   val LcboExtract: JSitemsExtractor[T] =  { nodes =>
     nodes.foldLeft(ArrayBuffer[T]()) {
       (recsBuffer, node) =>
