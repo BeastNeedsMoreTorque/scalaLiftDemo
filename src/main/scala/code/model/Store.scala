@@ -154,8 +154,9 @@ class Store private() extends IStore with LCBOEntity[Store]  {
       }
       val fullContextErr = (m: String, err: String) =>
         s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
-
-      if (checkUnitErrors(box, fullContextErr )) refreshInventories()
+      val (check, err) = checkUnitErrors(box, fullContextErr )
+      if (check) refreshInventories()
+      else logger.error(err)
     }
     val fetches =
       for (p <- Future(fetchProducts); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
@@ -232,7 +233,8 @@ object Store extends Store with MetaRecord[Store] {
       logger.debug(s"done loading stores from LCBO")
       items // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
-    checkErrors(box, fullContextErr, briefContextErr)
+    val (check, err) = checkErrors(box, fullContextErr, briefContextErr )
+    if (!check) logger.error(err)
   }
 
   /**
