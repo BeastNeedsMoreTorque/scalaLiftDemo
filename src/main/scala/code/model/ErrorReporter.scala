@@ -24,7 +24,8 @@ trait ErrorReporter extends Loggable {
       case net.liftweb.common.Failure(m, ex, _) =>
         logger.error(fullContextErr(m, ex.toString)); false
       case Full(Nil) => logger.error(simpleErr); false  // This is not None or Empty, just a normal result but empty Iterable.
-      case _ => true
+      case Empty => logger.error(simpleErr); false  // This is None or Empty
+      case _ => true // 1 or more in iterable
     }
 
 }

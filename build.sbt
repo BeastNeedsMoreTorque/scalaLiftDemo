@@ -29,7 +29,7 @@ libraryDependencies ++= {
 }
 libraryDependencies ++= Seq (
     "postgresql"        % "postgresql"          % "9.1-901.jdbc4",
-    "org.scalatest"     % "scalatest_2.11"      % "2.2.1"              % "test",
+    "org.scalatest"     % "scalatest_2.11"      % "2.2.6"            % "test",
     "org.apache.httpcomponents" % "httpclient"  % "4.5.2",
     "org.eclipse.jetty" % "jetty-webapp"        % "8.1.7.v20120910"  % "container,test",
     "org.eclipse.jetty" % "jetty-plus"          % "8.1.7.v20120910"  % "container,test", // For Jetty Config
