@@ -19,7 +19,7 @@ import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 
-class Store private() extends IStore with LCBOEntity[Store]  {
+class Store private() extends LCBOEntity[Store] with IStore {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
