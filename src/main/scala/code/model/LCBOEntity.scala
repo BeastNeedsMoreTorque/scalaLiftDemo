@@ -2,9 +2,9 @@ package code.model
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.IndexedSeq
-
 import code.model.GlobalLCBO_IDs.LCBO_ID
 import code.model.pageFetcher.LCBOPageFetcher
+import net.liftweb.json.JsonAST.{JField, JInt}
 
 /**
   * Created by philippederome on 2016-04-10. Highest level trait to share between Product and Store that have much logic in common.
@@ -15,13 +15,18 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends LCBOPageFetcher with Persistable[T]
 
   def setLcboId(id: LCBO_ID): Unit
 
-  // Some LCBO entities require to back patch JS read in "id" as a separate column in Record. They do so in with the same logic below.
-  val LcboExtract: JSitemsExtractor[T] =  { nodes =>
+  // Some LCBO entities require to back patch JSon read in "id" as a separate column in Record (lcbo_id). They do so with the logic below (idFix = transform).
+  // In other words, JSON comes in as id=123 and we need to store that to table.column[lcbo_id]. The crux of problem is Lift Record wanting to use Fields
+  // that have a functional read-only interface while accepting to do sets on the columns and that clashes with underlying Squeryl ORM library that has defined
+  // id as a def (a true read-only item). And this id thingie is required for the whole MainSchema to work with the ORM relationships in memory.
+  val LcboExtract: JSitemsExtractor[T] =  { jVal =>
+    val idFix = jVal transform {
+      case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
+    }
+    val nodes = idFix.children
     nodes.foldLeft(ArrayBuffer[T]()) {
       (recsBuffer, node) =>
-        for (key <- (node \ "id").extractOpt[Long];
-             rec <- meta.fromJValue(node)) {
-          rec.setLcboId(LCBO_ID(key)) //hack. Record is forced to use "id" as read-only def, which means we cannot extract it direct... Because of PK considerations at Squeryl (KeyedEntity has def id: K, which is read-only).
+        for (rec <- meta.fromJValue(node)) { // a lcbo_id can be set here, but not an id (it's kind of "reserved" word by Squeryl while this call is Lift Record).
           recsBuffer.append(rec)
         }
         recsBuffer

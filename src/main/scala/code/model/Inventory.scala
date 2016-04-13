@@ -60,8 +60,8 @@ object Inventory extends LCBOPageFetcher with ItemStateGrouper with ORMBatchExec
     )
   }
 
-  val extract: JSitemsExtractor[Inventory] =  { nodes =>
-    for (p <- nodes;
+  val extract: JSitemsExtractor[Inventory] =  { jVal =>
+    for (p <- jVal.children.toIndexedSeq;
          inv = p.extract[InventoryAsLCBOJson];
          sKey <- Store.lcboIdToDBId(LCBO_ID(inv.store_id));
          pKey <- Product.lcboIdToDBId(LCBO_ID(inv.product_id));

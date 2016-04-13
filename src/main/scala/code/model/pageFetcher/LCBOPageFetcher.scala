@@ -16,7 +16,7 @@ import scala.collection.IndexedSeq
 trait LCBOPageFetcher extends RestClient {
   def MaxPerPage: Int
 
-  type JSitemsExtractor[T] = Iterable[JValue] => Iterable[T]
+  type JSitemsExtractor[T] = JValue => Iterable[T]
 
   final def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
 
@@ -78,7 +78,7 @@ trait LCBOPageFetcher extends RestClient {
 
     val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage, params:_*)
     val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
-    val items = extractor( (jsonRoot \ "result").children).toIndexedSeq // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
+    val items = extractor( jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
     val revisedAccumItems = accumItems ++ items
 
     if (isFinalPage(jsonRoot, pageNo) || sizeFulfilled(items.size + accumItems.size)) {
