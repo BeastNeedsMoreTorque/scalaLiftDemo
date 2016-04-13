@@ -8,7 +8,7 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 /**
   * Created by philippederome on 2016-03-17.
   */
-trait Persistable[T <: Persistable[T]] extends  Loader[T] with KeyedRecord[Long] with ORMBatchExecutor {
+trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMBatchExecutor {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.
