@@ -7,7 +7,7 @@ import scala.xml.Node
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
-import net.liftweb.common.{Box, Loggable}
+import net.liftweb.common.Box
 import net.liftweb.json._
 import net.liftweb.util.Helpers.tryo
 import net.liftweb.record.MetaRecord
@@ -31,7 +31,6 @@ class Store private() extends IStore with LCBOEntity[Store]  {
   override def LcboIdsToDBIds() = Store.LcboIdsToDBIds
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
-  override def setLcboId(id: LCBO_ID): Unit = lcbo_id.set(id)
   override def meta = Store
 
   override def MaxPerPage = Store.MaxPerPage
@@ -178,16 +177,16 @@ class Store private() extends IStore with LCBOEntity[Store]  {
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
   def refreshInventories(): Unit = inTransaction {
-      storeProducts.refresh // key for whole inventory caching to work!
-      inventoryByProductId ++= getInventories
-    }
+    storeProducts.refresh // key for whole inventory caching to work!
+    inventoryByProductId ++= getInventories
+  }
 
   def refreshProducts(): Unit = inTransaction {
-      storeProducts.refresh // key for whole inventory caching and products caching to work!
-      productsCache ++= productsByLcboId
-      productsCacheByCategory ++= productsByCategory
-      inventoryByProductId ++= getInventories
-    }
+    storeProducts.refresh // key for whole inventory caching and products caching to work!
+    productsCache ++= productsByLcboId
+    productsCacheByCategory ++= productsByCategory
+    inventoryByProductId ++= getInventories
+  }
 }
 
 object Store extends Store with MetaRecord[Store] {
@@ -230,19 +229,20 @@ object Store extends Store with MetaRecord[Store] {
     val box = tryo {
       val items =  collectItemsAsWebClient(s"$LcboDomainURL/stores", LcboExtract, queryAllItemsArgs)
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
-      logger.debug(s"done loading stores from LCBO")
       items // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
     val (check, err) = checkErrors(box, fullContextErr, briefContextErr )
-    if (!check) logger.error(err)
+    if (!check) logger.error(err) // try to log at higher level of code to avoid side effects.
+    logger.debug(s"done loading stores from LCBO")
   }
 
   /**
-    *  synchronous because once the webapp accepts requests, this load must have completed so that the store collection is not empty.
+    * synchronous because once the webapp accepts requests, this load must have completed so that the store collection is not empty.
+    * Well... Trend is to do everything asynch these days...
     */
   override def load(): Unit = inTransaction {
     logger.info("load start")
-    val items = from(table())(s => select(s))
+    val items = from(table())(item => select(item))
     cacheNewItems(items)
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
     getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while

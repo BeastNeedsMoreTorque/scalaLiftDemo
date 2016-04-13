@@ -32,7 +32,6 @@ class Product private() extends IProduct  with LCBOEntity[Product]  {
   override def LcboIdsToDBIds() = Product.LcboIdsToDBIds
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
-  override def setLcboId(id: LCBO_ID): Unit = lcbo_id.set(id)
 
   override def MaxPerPage = Product.MaxPerPage
   override def getCachedItem: (IProduct) => Option[IProduct] = s => Product.getItemByLcboId(s.lcboId)

@@ -6,13 +6,14 @@ import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
 
 /**
-  * Created by philippederome on 2016-03-17.
+  * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,
+  * so mitigate with access control on methods.
   */
 trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMBatchExecutor {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.
-  protected def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = inTransaction {
+  protected final def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T]): Unit = inTransaction {
     update(updateItems)
     insert(insertItems)
   }
@@ -22,13 +23,13 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
   private def forceUpdater: (Iterable[T]) => Unit = table().forceUpdate _  // @see http://squeryl.org/occ.html. Regular call as update throws because of possibility of multiple updates on same record.
   private def insertBatch: (Iterable[T]) => Unit = table().insert _
 
-  def loadToCacheLastTransaction(items: Iterable[T]) = {
+  private def loadToCacheLastTransaction(items: Iterable[T]) = {
     val pkIds = items.map(_.pKey: Long)  // type ascription to integrate with Squeryl below
     val itemsWithPK = from(table())(item => where(item.idField in pkIds) select(item))
     cache() ++= itemsWithPK.map{item => item.pKey -> item } (collection.breakOut)
   }
 
-  def batchTransactor(items: Iterable[T], transactor: (Iterable[T]) => Unit) = {
+  private def batchTransactor(items: Iterable[T], transactor: (Iterable[T]) => Unit) = {
     execute[T](items, transactor)
     loadToCacheLastTransaction(items)
   }
