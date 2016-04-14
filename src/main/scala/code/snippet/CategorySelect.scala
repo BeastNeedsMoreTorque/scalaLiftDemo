@@ -5,11 +5,11 @@ import code.snippet.SessionCache.theCategory
 import net.liftweb.common.Full
 import net.liftweb.http.SHtml
 import net.liftweb.util.Helpers._
-
+import JSUtilities.setBorderJS
 /**
   * Created by philippederome on 2015-12-05.
   */
-class CategorySelect extends JSUtilities {
+class CategorySelect {
   private val categoryImg = LiquorCategory.toImg(SessionCache.defaultCategory)
   private val defaultOption = RadioElements.selectOption(SessionCache.defaultCategory, categoryImg)  // selected with style that frames it
   private val radioOptions: Seq[RadioElements] = RadioElements.radioOptions( LiquorCategory.categoriesSeq, SessionCache.defaultCategory, LiquorCategory.toImg)

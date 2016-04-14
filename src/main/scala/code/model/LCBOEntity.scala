@@ -4,12 +4,11 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.IndexedSeq
 import code.model.pageFetcher.LCBOPageFetcher
 import net.liftweb.json.JsonAST.{JField, JInt}
-
 /**
   * Created by philippederome on 2016-04-10. Highest level trait to share between Product and Store that have much logic in common.
   */
 trait LCBOEntity[T <: LCBOEntity[T]] extends LCBOPageFetcher with Persistable[T]
-  with CreatedUpdated[T] with ItemStateGrouper with propsSeqReader with ErrorReporter {
+  with CreatedUpdated[T] with ItemStateGrouper with ErrorReporter {
   self: T =>
 
   // Some LCBO entities require to back patch JSon read in "id" as a separate column in Record (lcbo_id). They do so with the logic below (idFix = transform).

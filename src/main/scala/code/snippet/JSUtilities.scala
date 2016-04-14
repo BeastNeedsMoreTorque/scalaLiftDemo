@@ -6,7 +6,7 @@ import net.liftweb.http.js.JsCmd
 /**
   * Created by philippederome on 2016-02-15.
   */
-trait JSUtilities {
+object JSUtilities {
   /**
     *
     * @param DomRootContainer container from where JS query will look for

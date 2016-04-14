@@ -16,6 +16,7 @@ import net.liftweb.http.SHtml._
 import code.model.{IProduct,Product,Store,User}
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.snippet.SessionCache._
+import JSUtilities._
 
 /**
   * This is a Lift Snippet: it plays the equivalent of a controller and a view with render being responsible to render to client (a bit like a PLAY! Action)
@@ -47,7 +48,7 @@ import code.snippet.SessionCache._
   * Much html and Javascript is generated here thanks to the capabilities of liftweb.
   * Created by philippederome on 15-10-26.
   */
-class ProductInteraction extends JSUtilities with Loggable {
+class ProductInteraction extends Loggable {
   case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
   case class QuantityOfProduct(quantity: Long, product: IProduct)  // quantity available at the current store for a product (store is implied by context)
   case class SelectedProduct(id: Long, quantity: Long, cost: Double, missedQty: Long) // to capture user input via JS and JSON (stick to Long to simplify interface with JS)
