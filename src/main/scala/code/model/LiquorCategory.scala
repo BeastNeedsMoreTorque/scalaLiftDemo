@@ -7,8 +7,8 @@ import net.liftweb.util.Props
   * provides sequence of product categories to display to client, which is configurable via properties, additionally, provides a mapping of queryable pattern-categories to those used as primary categories in LCBO catalog
   */
 object LiquorCategory extends propsSeqReader {
-  private def getMap(propKey: String): Map[String, String] =
-    getSeq(propKey).toMap
+  private def getMap(k: String): Map[String, String] =
+    getSeq(k).toMap
 
   val toPrimaryCategory = getMap("product.CategoriesMap")
   val toImg = getMap("product.CategoriesImageMap")

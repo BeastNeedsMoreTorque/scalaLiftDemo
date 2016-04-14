@@ -37,7 +37,7 @@ class Inventory private(val storeid: Long,
   }
 }
 
-object Inventory extends LCBOPageFetcher with ItemStateGrouper with ORMBatchExecutor {
+object Inventory extends LCBOPageFetcher with ItemStateGrouper with ORMExecutor {
   override def MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   private val dirtyPredicate: (Inventory, Inventory) => Boolean = {(x, y)=> x.isDirty(y)}
 
