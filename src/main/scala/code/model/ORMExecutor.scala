@@ -9,10 +9,10 @@ import scala.collection.Iterable
 /**
   * Created by philippederome on 2016-04-03. Just to isolate the verbose try catch block. Please, hide this try catch block from privy eyes.
   */
-trait ORMBatchExecutor extends Loggable {
-  def execute[T](items: Iterable[T], transactor: (Iterable[T]) => Unit): Unit = {
+trait ORMExecutor extends Loggable {
+  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Unit = {
     try {
-      transactor(items)
+      apply(items) // e.g. insert, update, delete
     } catch {
       case se: SQLException =>
         logger.error(s"SQLException $items")

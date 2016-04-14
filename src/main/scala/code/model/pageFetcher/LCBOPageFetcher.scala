@@ -70,42 +70,42 @@ trait LCBOPageFetcher extends RestClient {
   @throws(classOf[TruncatedChunkException])  // that's a brutal one.
   @tailrec
   final private def collectItemsOnAPage[T](accumItems: IndexedSeq[T],
-                                        extractor:  JSitemsExtractor[T],
-                                        urlRoot: String,
-                                        pageNo: Int,
-                                        params: Seq[(String, Any)],
-                                        sizeFulfilled: GotEnough_? = neverEnough): IndexedSeq[T] = {
+                                           xt:  JSitemsExtractor[T],
+                                           urlRoot: String,
+                                           pageNo: Int,
+                                           params: Seq[(String, Any)],
+                                           enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
 
     val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage, params:_*)
     val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
-    val items = extractor( jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
+    val items = xt( jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
     val revisedAccumItems = accumItems ++ items
 
-    if (isFinalPage(jsonRoot, pageNo) || sizeFulfilled(items.size + accumItems.size)) {
+    if (isFinalPage(jsonRoot, pageNo) || enough(items.size + accumItems.size)) {
       logger.info(uri) // log only last one to be less verbose
       return revisedAccumItems
     }
     collectItemsOnAPage(
       revisedAccumItems, // union of this page with next page when we are asked for a full sample
-      extractor,
+      xt,
       urlRoot,
       pageNo + 1,
       params,
-      sizeFulfilled)
+      enough)
   }
 
   // to present a cleaner interface than the tail recursive method
   final def collectItemsAsWebClient[T](urlRoot: String,
-                                    extractor:  JSitemsExtractor[T],
-                                    params: Seq[(String, Any)] = Seq())
-                                    (implicit sizeFulfilled: GotEnough_? = neverEnough): IndexedSeq[T] = {
+                                       xt:  JSitemsExtractor[T],
+                                       params: Seq[(String, Any)] = Seq())
+                                       (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
     collectItemsOnAPage(
       IndexedSeq[T](), // union of this page with next page when we are asked for a full sample
-      extractor,
+      xt,
       urlRoot,
       1,
       params,
-      sizeFulfilled)
+      enough)
   }
 }
 

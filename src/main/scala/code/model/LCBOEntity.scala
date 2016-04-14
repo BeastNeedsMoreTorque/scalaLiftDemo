@@ -16,7 +16,7 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends LCBOPageFetcher with Persistable[T]
   // In other words, JSON comes in as id=123 and we need to store that to table.column[lcbo_id]. The crux of problem is Lift Record wanting to use Fields
   // that have a functional read-only interface while accepting to do sets on the columns and that clashes with underlying Squeryl ORM library that has defined
   // id as a def (a true read-only item). And this id thingie is required for the whole MainSchema to work with the ORM relationships in memory.
-  val LcboExtract: JSitemsExtractor[T] = { json =>
+  val extract: JSitemsExtractor[T] = { json =>
     val idFix = json transform {
       case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
     }
@@ -33,8 +33,8 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends LCBOPageFetcher with Persistable[T]
   // type parameter I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class, and it should not return just anything.
   // Some LCBO entities also have a similar pattern of identifying new info from LCBO (items being provided from a query), reconciling/interpreting as new or dirty (or clean/unchanged)
   // and then make sure first DB is brought up to date with that info and synchronously the cache memory as well.
-  final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], getItem: (I) => Option[I], p: (I, T) => Boolean): Unit = {
-    val (dirtyItems, newItems) = itemsByState[I, T](items, getItem, p)
+  final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], get: (I) => Option[I], p: (I, T) => Boolean): Unit = {
+    val (dirtyItems, newItems) = itemsByState[I, T](items, get, p)
     updateAndInsert(dirtyItems, newItems) // updates DB AND cache.
   }
 }

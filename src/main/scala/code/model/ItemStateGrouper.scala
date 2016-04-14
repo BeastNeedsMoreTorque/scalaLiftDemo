@@ -10,12 +10,12 @@ trait ItemStateGrouper {
   // return to user only new and dirty since there is not much to do with clean, at least for now.
   // We want I to be an interface of T when using getCachedItem.
   def itemsByState[I, T <: I](items: IndexedSeq[T],
-                              getCachedItem: (I) => Option[I],
-                              dirtyPred: (I, T) => Boolean): (IndexedSeq[T], IndexedSeq[T]) = {
+                              get: I => Option[I],
+                              isDirty: (I, T) => Boolean): (IndexedSeq[T], IndexedSeq[T]) = {
     val x = items.groupBy {
-      latest => (getCachedItem(latest), latest) match {
+      latest => (get(latest), latest) match {
         case (None, _) => EntityRecordState.New
-        case (Some(cached), latest) if dirtyPred(cached, latest) => EntityRecordState.Dirty
+        case (Some(retrieved), latest) if isDirty(retrieved, latest) => EntityRecordState.Dirty
         case (_, _) => EntityRecordState.Clean
       }
     }

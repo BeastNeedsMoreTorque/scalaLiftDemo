@@ -9,7 +9,7 @@ import net.liftweb.squerylrecord.RecordTypeMode._
   * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,
   * so mitigate with access control on methods.
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMBatchExecutor {
+trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.

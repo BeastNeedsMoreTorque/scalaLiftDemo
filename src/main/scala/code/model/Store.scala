@@ -196,8 +196,8 @@ object Store extends Store with MetaRecord[Store] {
   override val LcboIdsToDBIds: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache
   override def table(): org.squeryl.Table[Store] = MainSchema.stores
 
-  override def cacheNewItems(items: Iterable[Store]): Unit = {
-    super.cacheNewItems(items)
+  override def cacheItems(items: Iterable[Store]): Unit = {
+    super.cacheItems(items)
     storesCache.foreach { case (_, s)  => s.refreshProducts() }  // ensure inventories are refreshed INCLUDING on start up.
   }
 
@@ -227,7 +227,7 @@ object Store extends Store with MetaRecord[Store] {
     def briefContextErr(): String =
       "Problem loading LCBO stores into cache, none found"
     val box = tryo {
-      val items =  collectItemsAsWebClient(s"$LcboDomainURL/stores", LcboExtract, queryAllItemsArgs)
+      val items =  collectItemsAsWebClient(s"$LcboDomainURL/stores", extract, queryAllItemsArgs)
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
       items // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
@@ -243,7 +243,7 @@ object Store extends Store with MetaRecord[Store] {
   override def load(): Unit = inTransaction {
     logger.info("load start")
     val items = from(table())(item => select(item))
-    cacheNewItems(items)
+    cacheItems(items)
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
     getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
     logger.info("load end")

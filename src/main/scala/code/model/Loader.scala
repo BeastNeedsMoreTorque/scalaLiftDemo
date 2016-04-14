@@ -22,7 +22,7 @@ trait Loader[T <: Loader[T]] extends Record[T] with Loggable
   protected def pKey: P_KEY
   protected def lcboId: LCBO_ID
 
-  protected def cacheNewItems(items: Iterable[T]): Unit = {
+  protected def cacheItems(items: Iterable[T]): Unit = {
     cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)
     LcboIdsToDBIds() ++= cache().map { case(pk, item) => item.lcboId -> pk }
   }
@@ -31,7 +31,7 @@ trait Loader[T <: Loader[T]] extends Record[T] with Loggable
     logger.info("load start")
     // load all items from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
       val items = from(table())(s => select(s))
-      cacheNewItems(items)
+      cacheItems(items)
     logger.info("load end")
   }
 }
