@@ -14,7 +14,6 @@ import net.liftweb.util.Helpers._
 import org.squeryl.annotations._
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.pageFetcher.GotEnough_?
-import propsSeqReader.getSeq
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -154,8 +153,13 @@ object Product extends Product with MetaRecord[Product] {
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
   override def getCachedItem: (IProduct) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
-  val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")
-  val queryAllItemsArgs = getSeq("product.query.AllItemsArgs")
+  val queryByCategoryArgs =
+    ConfigPairsRepo.ConfigPairsRepoDefaultImpl.getSeq("product.query.ByCategoryArgs")
+
+
+  val queryAllItemsArgs =
+    ConfigPairsRepo.ConfigPairsRepoDefaultImpl.getSeq("product.query.AllItemsArgs")
+
 
   /* Convert a store to XML @see progscala2 chapter on implicits or Scala in Depth implicit view */
   implicit def toXml(p: Product): Node =

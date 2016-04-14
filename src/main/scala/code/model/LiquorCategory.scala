@@ -1,7 +1,6 @@
 package code.model
 
 import net.liftweb.util.Props
-import propsSeqReader.getSeq
 
 /**
   * Created by philippederome on 15-10-26.
@@ -9,7 +8,7 @@ import propsSeqReader.getSeq
   */
 object LiquorCategory {
   private def getMap(k: String): Map[String, String] =
-    getSeq(k).toMap
+    ConfigPairsRepo.ConfigPairsRepoPropsImpl.getSeq(k).toMap
 
   val toPrimaryCategory = getMap("product.CategoriesMap")
   val toImg = getMap("product.CategoriesImageMap")

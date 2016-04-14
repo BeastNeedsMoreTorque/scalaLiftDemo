@@ -18,7 +18,6 @@ import org.squeryl.annotations._
 import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import propsSeqReader.getSeq
 
 class Store private() extends LCBOEntity[Store] with IStore {
 
@@ -205,7 +204,7 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
-  val queryAllItemsArgs = getSeq("store.query.AllItemsArgs")
+  val queryAllItemsArgs = ConfigPairsRepo.ConfigPairsRepoDefaultImpl.getSeq("store.query.AllItemsArgs")
 
   override def getCachedItem: (IStore) => Option[IStore] = s => getItemByLcboId(s.lcboId)
   def availableStores: Set[P_KEY] = storesCache.keySet
