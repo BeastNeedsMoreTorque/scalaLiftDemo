@@ -2,12 +2,12 @@ package code.model
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.IndexedSeq
-import code.model.pageFetcher.LCBOPageFetcher
+import code.model.pageFetcher.LCBOPageFetcher.JSitemsExtractor
 import net.liftweb.json.JsonAST.{JField, JInt}
 /**
   * Created by philippederome on 2016-04-10. Highest level trait to share between Product and Store that have much logic in common.
   */
-trait LCBOEntity[T <: LCBOEntity[T]] extends LCBOPageFetcher with Persistable[T]
+trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
   with CreatedUpdated[T] with ItemStateGrouper with ErrorReporter {
   self: T =>
 

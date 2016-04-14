@@ -15,11 +15,12 @@ trait ConfigPairsRepo {
   def getSeq(masterKey: String, default: String = ""): Seq[(String, String)]
 }
 
-object ConfigPairsRepo { // lo and behold, a module!!! ;-)
-  implicit def ConfigPairsRepoPropsImpl = new propsSeqReader
-  implicit def ConfigPairsRepoDefaultImpl = ConfigPairsRepoPropsImpl
-  class propsSeqReader {
-    def getSeq(masterKey: String, default: String = ""): Seq[(String, String)] = {
+object ConfigPairsRepo { // lo and behold, a module!!! ;-)  Arguably, excessive design for such a small app, but it shows the way.
+  implicit def ConfigPairsRepoPropsImpl = new propsSeqReader // client wants this specific one
+  implicit val defaultInstance = new propsSeqReader // client does not care about which one
+  // provide as many implementations as required.
+  class propsSeqReader extends ConfigPairsRepo {
+    override def getSeq(masterKey: String, default: String = ""): Seq[(String, String)] = {
       val json = parse(Props.get(masterKey, default) )
       val vals = for (elem <- json.children) yield elem.values // contains List of (String, JString(String))
       vals.map(_.asInstanceOf[(String, String)]) // could throw if contents that are configured are in wrong format (violating assumption of pairs (String,String)...

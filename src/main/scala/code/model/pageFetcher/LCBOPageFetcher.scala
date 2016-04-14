@@ -13,28 +13,43 @@ import scala.collection.IndexedSeq
 /**
   * Created by philippederome on 2016-03-30.
   */
-trait LCBOPageFetcher extends RestClient {
-  def MaxPerPage: Int
+object LCBOPageFetcher extends RestClient { // stateless singleton
 
   type JSitemsExtractor[T] = JValue => Iterable[T]
 
   final def LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
 
+  // to present a cleaner interface than the tail recursive method
+  final def collectItemsAsWebClient[T](urlRoot: String,
+                                       xt:  JSitemsExtractor[T],
+                                       maxPerPage: Int,
+                                       params: Seq[(String, Any)] = Seq())
+                                      (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
+    collectItemsOnAPage(
+      IndexedSeq[T](), // union of this page with next page when we are asked for a full sample
+      xt,
+      urlRoot,
+      maxPerPage,
+      1,
+      params,
+      enough)
+  }
+
   implicit val formats = net.liftweb.json.DefaultFormats
 
-  final def buildUrlWithPaging(urlRoot: String, pageNo: Int, maxPerPage: Int, params: (String, Any)* ): String = {
+  final private def buildUrlWithPaging(urlRoot: String, pageNo: Int, maxPerPage: Int, params: (String, Any)* ) = {
     val fullParams = params ++ Seq(("per_page", maxPerPage), ("page", pageNo)) // get as many as possible on a page because we could have few matches.
     buildUrl(urlRoot, fullParams)
   }
 
-  final def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
+  final private def isFinalPage(jsonRoot: JValue, pageNo: Int) = {
     //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
     val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
     isFinalPage || totalPages < pageNo + 1
   }
 
-  final def buildUrl(urlRoot: String, params: Seq[(String, Any)] ): String = {
+  final private def buildUrl(urlRoot: String, params: Seq[(String, Any)] ) = {
     val encoding = "UTF-8"
     val paramsAsSuffix = params.map(v =>
       URLEncoder.encode(v._1, encoding) +
@@ -72,11 +87,12 @@ trait LCBOPageFetcher extends RestClient {
   final private def collectItemsOnAPage[T](accumItems: IndexedSeq[T],
                                            xt:  JSitemsExtractor[T],
                                            urlRoot: String,
+                                           maxPerPage: Int,
                                            pageNo: Int,
                                            params: Seq[(String, Any)],
                                            enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
 
-    val uri = buildUrlWithPaging(urlRoot, pageNo, MaxPerPage, params:_*)
+    val uri = buildUrlWithPaging(urlRoot, pageNo, maxPerPage, params:_*)
     val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
     val items = xt( jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
     val revisedAccumItems = accumItems ++ items
@@ -89,24 +105,13 @@ trait LCBOPageFetcher extends RestClient {
       revisedAccumItems, // union of this page with next page when we are asked for a full sample
       xt,
       urlRoot,
+      maxPerPage,
       pageNo + 1,
       params,
       enough)
   }
 
-  // to present a cleaner interface than the tail recursive method
-  final def collectItemsAsWebClient[T](urlRoot: String,
-                                       xt:  JSitemsExtractor[T],
-                                       params: Seq[(String, Any)] = Seq())
-                                       (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
-    collectItemsOnAPage(
-      IndexedSeq[T](), // union of this page with next page when we are asked for a full sample
-      xt,
-      urlRoot,
-      1,
-      params,
-      enough)
-  }
+
 }
 
 
