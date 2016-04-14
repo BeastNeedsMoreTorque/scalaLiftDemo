@@ -18,6 +18,7 @@ import org.squeryl.annotations._
 import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.pageFetcher.LCBOPageFetcher
 
 class Store private() extends LCBOEntity[Store] with IStore {
 
@@ -33,7 +34,6 @@ class Store private() extends LCBOEntity[Store] with IStore {
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
   override def meta = Store
 
-  override def MaxPerPage = Store.MaxPerPage
   override def getCachedItem: (IStore) => Option[IStore] =  s => Store.getItemByLcboId(s.lcboId)
 
   val is_dead = new BooleanField(this, false)
@@ -146,7 +146,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
     def fetchInventories() = {
       val box = tryo {
         fetchInventoriesByStore(
-          uri = s"$LcboDomainURL/inventories",
+          uri = s"${LCBOPageFetcher.LcboDomainURL}/inventories",
           getCachedInventoryItem,
           inventoryByProductId.toMap,
           Seq("store_id" -> lcboId, "where_not" -> "is_dead"))
@@ -204,7 +204,11 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
-  val queryAllItemsArgs = ConfigPairsRepo.ConfigPairsRepoDefaultImpl.getSeq("store.query.AllItemsArgs")
+  def getSeq(masterKey: String, default: String = "")(c: ConfigPairsRepo): Seq[(String, String)] =
+    c.getSeq(masterKey, default)
+
+  // if we were not in a  singleton, we'd use getSeq via self instead
+  val queryAllItemsArgs = getSeq("store.query.AllItemsArgs")(ConfigPairsRepo.defaultInstance)
 
   override def getCachedItem: (IStore) => Option[IStore] = s => getItemByLcboId(s.lcboId)
   def availableStores: Set[P_KEY] = storesCache.keySet
@@ -215,7 +219,7 @@ object Store extends Store with MetaRecord[Store] {
     for (dbId <- LcboIdsToDBIds.get(id);
          s <- storesCache.get(dbId)) yield s
 
-  override def MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
+  val MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
 
     /* Convert a store to XML, @see Scala in Depth implicit view */
   implicit def toXml(st: Store): Node =
@@ -227,7 +231,7 @@ object Store extends Store with MetaRecord[Store] {
     def briefContextErr(): String =
       "Problem loading LCBO stores into cache, none found"
     val box = tryo {
-      val items =  collectItemsAsWebClient(s"$LcboDomainURL/stores", extract, queryAllItemsArgs)
+      val items =  LCBOPageFetcher.collectItemsAsWebClient(s"${LCBOPageFetcher.LcboDomainURL}/stores", extract, MaxPerPage, queryAllItemsArgs)
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
       items // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }

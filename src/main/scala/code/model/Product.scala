@@ -13,7 +13,7 @@ import net.liftweb.json._
 import net.liftweb.util.Helpers._
 import org.squeryl.annotations._
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.pageFetcher.GotEnough_?
+import code.model.pageFetcher.{GotEnough_?, LCBOPageFetcher}
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -33,7 +33,6 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
-  override def MaxPerPage = Product.MaxPerPage
   override def getCachedItem: (IProduct) => Option[IProduct] = s => Product.getItemByLcboId(s.lcboId)
 
   val is_discontinued = new BooleanField(this, false)
@@ -148,18 +147,17 @@ object Product extends Product with MetaRecord[Product] {
 
   override val LcboIdsToDBIds: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
   override def table(): org.squeryl.Table[Product] = MainSchema.products
-  override def MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
+  val MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   private val sizeFulfilled: (Int) => GotEnough_? =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
   override def getCachedItem: (IProduct) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
-  val queryByCategoryArgs =
-    ConfigPairsRepo.ConfigPairsRepoDefaultImpl.getSeq("product.query.ByCategoryArgs")
+  def getSeq(masterKey: String, default: String = "")(c: ConfigPairsRepo): Seq[(String, String)] =
+    c.getSeq(masterKey, default)
 
+  val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)
 
-  val queryAllItemsArgs =
-    ConfigPairsRepo.ConfigPairsRepoDefaultImpl.getSeq("product.query.AllItemsArgs")
-
+  val queryAllItemsArgs = getSeq("product.query.AllItemsArgs")(ConfigPairsRepo.defaultInstance)
 
   /* Convert a store to XML @see progscala2 chapter on implicits or Scala in Depth implicit view */
   implicit def toXml(p: Product): Node =
@@ -169,7 +167,7 @@ object Product extends Product with MetaRecord[Product] {
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
   // a cross cutting concern or a strategy.
   private def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = pageFetcher.neverEnough ) =
-    collectItemsAsWebClient(s"$LcboDomainURL/products", extract, ("store_id" -> lcboStoreId) +: seq)
+    LCBOPageFetcher.collectItemsAsWebClient(s"${LCBOPageFetcher.LcboDomainURL}/products", extract, MaxPerPage, ("store_id" -> lcboStoreId) +: seq)
 
   /*
    * Queries LCBO matching category
