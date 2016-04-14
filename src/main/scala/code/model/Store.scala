@@ -18,6 +18,7 @@ import org.squeryl.annotations._
 import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import propsSeqReader.getSeq
 
 class Store private() extends LCBOEntity[Store] with IStore {
 
@@ -206,7 +207,7 @@ object Store extends Store with MetaRecord[Store] {
 
   val queryAllItemsArgs = getSeq("store.query.AllItemsArgs")
 
-  override def getCachedItem: (IStore) => Option[IStore] =  s => getItemByLcboId(s.lcboId)
+  override def getCachedItem: (IStore) => Option[IStore] = s => getItemByLcboId(s.lcboId)
   def availableStores: Set[P_KEY] = storesCache.keySet
   def lcboIdToDBId(id: LCBO_ID): Option[P_KEY] = LcboIdsToDBIds.get(id)
   def storeIdToLcboId(s: P_KEY): Option[LCBO_ID] = storesCache.get(s).map(_.lcboId)

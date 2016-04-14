@@ -8,7 +8,7 @@ import scala.collection.Seq
 /**
   * Created by philippederome on 2016-04-08.
   */
-trait propsSeqReader {
+object propsSeqReader {
   def getSeq(k: String, default: String = ""): Seq[(String, String)] = {
     val json = parse(Props.get(k, default) )
     val vals = for (elem <- json.children) yield elem.values // contains List of (String, JString(String))
