@@ -13,6 +13,7 @@ import code.Rest.RestClient
 /**
   * Created by philippederome on 2016-03-30.
   * An excuse to exercise myself in Cake Pattern as per example found at
+ *
   * @see http://blog.originate.com/blog/2013/10/21/reader-monad-for-dependency-injection/
   *      He makes very interesting observations about using Reader Monads in web app and cake pattern at outer edges.
   *
@@ -23,8 +24,10 @@ import code.Rest.RestClient
   *      to think about access rights!
   */
 trait LCBOPageFetcherComponent  {
-  def hiddenHandle: LCBOPageFetcher
+  def fetcher: LCBOPageFetcher
   type JSitemsExtractor[T] = JValue => Iterable[T]
+  type GotEnough_? = (Int) => Boolean
+  val neverEnough: GotEnough_? = { x => false }
 
   trait LCBOPageFetcher {
     def collectItemsAsWebClient[T](webApiRoute: String,
@@ -35,7 +38,7 @@ trait LCBOPageFetcherComponent  {
   }
 }
 
-trait LCBOPageFetcher {
+trait LCBOPageLoader {
   this: LCBOPageFetcherComponent =>
 
   def collectItemsAsWebClient[T](webApiRoute: String,
@@ -43,11 +46,11 @@ trait LCBOPageFetcher {
                                  maxPerPage: Int,
                                  params: Seq[(String, Any)] = Seq())
                                 (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] =
-    hiddenHandle.collectItemsAsWebClient(webApiRoute, xt, maxPerPage, params)(enough)
+    fetcher.collectItemsAsWebClient(webApiRoute, xt, maxPerPage, params)(enough)
 }
 
 trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
-  def hiddenHandle = new FetcherImpl
+  def fetcher = new FetcherImpl
 
   // this whole class is hidden from clients. So, who needs to worry about private, public, protected here? No one.
   class FetcherImpl extends LCBOPageFetcher with RestClient {
