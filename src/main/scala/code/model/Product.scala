@@ -13,7 +13,7 @@ import net.liftweb.json._
 import net.liftweb.util.Helpers._
 import org.squeryl.annotations._
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.pageFetcher.{GotEnough_?, LCBOPageFetcher}
+import code.model.pageFetcher.GotEnough_?
 
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
@@ -167,7 +167,7 @@ object Product extends Product with MetaRecord[Product] {
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
   // a cross cutting concern or a strategy.
   private def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = pageFetcher.neverEnough ) =
-    LCBOPageFetcher.collectItemsAsWebClient(s"${LCBOPageFetcher.LcboDomainURL}/products", extract, MaxPerPage, ("store_id" -> lcboStoreId) +: seq)
+    collectItemsAsWebClient("/products", extract, MaxPerPage, ("store_id" -> lcboStoreId) +: seq)
 
   /*
    * Queries LCBO matching category

@@ -18,7 +18,6 @@ import org.squeryl.annotations._
 import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.pageFetcher.LCBOPageFetcher
 
 class Store private() extends LCBOEntity[Store] with IStore {
 
@@ -146,7 +145,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
     def fetchInventories() = {
       val box = tryo {
         fetchInventoriesByStore(
-          uri = s"${LCBOPageFetcher.LcboDomainURL}/inventories",
+          webApiRoute = "/inventories",
           getCachedInventoryItem,
           inventoryByProductId.toMap,
           Seq("store_id" -> lcboId, "where_not" -> "is_dead"))
@@ -231,7 +230,7 @@ object Store extends Store with MetaRecord[Store] {
     def briefContextErr(): String =
       "Problem loading LCBO stores into cache, none found"
     val box = tryo {
-      val items =  LCBOPageFetcher.collectItemsAsWebClient(s"${LCBOPageFetcher.LcboDomainURL}/stores", extract, MaxPerPage, queryAllItemsArgs)
+      val items =  collectItemsAsWebClient("/stores", extract, MaxPerPage, queryAllItemsArgs)
       synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
       items // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
