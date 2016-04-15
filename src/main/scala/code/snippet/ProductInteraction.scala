@@ -157,7 +157,7 @@ class ProductInteraction extends Loggable {
         }
 
         // for each element of qOfProds, build a Div as NodeSeq and concatenate them as a NodeSeq for the several divs
-        val divs = qOfProds.map(getDiv).fold(NodeSeq.Empty)((a: NodeSeq, b: NodeSeq) => a ++ b)
+        val divs = qOfProds.map(getDiv).fold(NodeSeq.Empty)( _ ++ _ )
         SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
       }
 
@@ -186,7 +186,7 @@ class ProductInteraction extends Loggable {
         }
 
       val json = jsStore.extractOpt[String].map( parse)
-      val storeId = P_KEY(json.fold(-1.toLong){ json => json.extract[Long]})
+      val storeId = P_KEY(json.fold(-1.toLong){ _.extract[Long]})
       User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
       { user => maySelect(storeId)} // normal processing
     }
@@ -237,8 +237,8 @@ class ProductInteraction extends Loggable {
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
         val feedback =
           for(sp <- selectedProds;
-              product <- Product.getItemByLcboId(LCBO_ID(sp.id));
-              f = mayConsumeItem(product, sp.quantity)) yield SelectedProductFeedback(sp, f)
+              p <- Product.getItemByLcboId(LCBO_ID(sp.id));
+              f = mayConsumeItem(p, sp.quantity)) yield SelectedProductFeedback(sp, f)
         val goodAndBackFeedback = feedback.groupBy(_.feedback.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
         goodAndBackFeedback.getOrElse(false, Nil).map( _.feedback.message).foreach(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
         val goodFeedback = goodAndBackFeedback.getOrElse(true, Nil) // select those for which we have success and positive message

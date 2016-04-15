@@ -22,7 +22,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
 
   // We can afford to be less strict in our data preparation/validation than for the insert.
   private def update(items: Iterable[T]) = {
-    def ORMUpdater: (Iterable[T]) => Unit = table().forceUpdate _  // @see http://squeryl.org/occ.html. Regular call as update throws because of possibility of multiple updates on same record.
+    def ORMUpdater: Iterable[T] => Unit = table().forceUpdate _  // @see http://squeryl.org/occ.html. Regular call as update throws because of possibility of multiple updates on same record.
     items.grouped(batchSize).
       foreach {
         batchTransactor(_, ORMUpdater)
@@ -31,7 +31,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
 
   private def insert( items: IndexedSeq[T]) = {
     // following cannot be val because of table() usage and timing and need for underlying transaction, connection, etc.
-    def ORMInserter: (Iterable[T]) => Unit = table().insert _
+    def ORMInserter: Iterable[T] => Unit = table().insert _
 
     // Do special handling to filter out duplicate keys, which would throw.
     val LcboIDs = from(table())(elt => select(elt.lcboId)).toSet // alas trust the database and not the cache, some other client could insert in database
@@ -40,17 +40,18 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     // you never know... Our input could have the same item twice in the collection with the same lcbo_id and we have unique index in DB against that.
     items.
       filterNot { p => LcboIDs.contains(p.lcboId) }.  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
-      groupBy {_.lcboId}.map { case (_, iseq) => iseq(0) }.  // remove duplicate lcboid keys from within our own input, selecting first representative among dupes!
+      groupBy {_.lcboId}.map { case (_, ids) => ids(0) }.  // remove duplicate lcboid keys from within our own input, selecting first representative among dupes!
       grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) } // break it down in reasonable size transactions, and then serialize the work.
   }
 
   private def batchTransactor(items: Iterable[T], ORMTransactor: (Iterable[T]) => Unit) = {
-    def loadToCacheLastTransaction(items: Iterable[T]) = {
+    def feedCache(items: Iterable[T]) = {
       val pkIds = items.map(_.pKey: Long)  // type ascription to integrate with Squeryl below
+      // select only what we did and use DB's version of the state of the items.
       val itemsWithPK = from(table())(item => where(item.idField in pkIds) select(item))
       cache() ++= itemsWithPK.map{item => item.pKey -> item } (collection.breakOut)
     }
     execute[T](items, ORMTransactor)
-    loadToCacheLastTransaction(items)
+    feedCache(items)
   }
 }
