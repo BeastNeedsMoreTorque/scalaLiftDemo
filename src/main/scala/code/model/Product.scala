@@ -154,7 +154,7 @@ object Product extends Product with MetaRecord[Product] {
   def getSeq(masterKey: String, default: String = "")(c: ConfigPairsRepo): Seq[(String, String)] =
     c.getSeq(masterKey, default)
 
-  val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)
+  val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)  // seems difficult to apply D.I. here, so access global object.
 
   val queryAllItemsArgs = getSeq("product.query.AllItemsArgs")(ConfigPairsRepo.defaultInstance)
 
