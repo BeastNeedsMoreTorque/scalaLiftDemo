@@ -42,7 +42,7 @@ case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: I
 object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper with ORMExecutor {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   implicit val formats = net.liftweb.json.DefaultFormats
-  private val dirtyPredicate: (Inventory, Inventory) => Boolean = {(x, y)=> x.isDirty(y)}
+  private val dirtyPredicate: (Inventory, Inventory) => Boolean = { _.isDirty(_)}
 
   case class InventoryAsLCBOJson(product_id: Long,
                                  store_id: Long,
@@ -89,9 +89,9 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     val getDBReadyUpdatedInvs: (IndexedSeq[Inventory] => Iterable[Inventory]) = removeCompositeKeyDupes _ compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose.
 
     val items = collectItemsAsWebClient(webApiRoute, extract, MaxPerPage, params)
-    val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
-    val updatedInventories = getDBReadyUpdatedInvs(dirtyItems)
-    val newInventories = removeCompositeKeyDupes(newItems)
+    val dirtyAndNewItems = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
+    val updatedInventories = getDBReadyUpdatedInvs(dirtyAndNewItems.dirtys)
+    val newInventories = removeCompositeKeyDupes(dirtyAndNewItems.news)
     UpdatedAndNewInventories(updatedInventories, newInventories)
   }
 }
