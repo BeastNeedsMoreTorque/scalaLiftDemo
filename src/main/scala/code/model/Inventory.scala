@@ -6,8 +6,7 @@ import net.liftweb.util.Props
 import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.pageFetcher.LCBOPageFetcher
-import code.model.pageFetcher.LCBOPageFetcher.JSitemsExtractor
+import code.model.pageFetcher.{LCBOPageFetcher, LCBOPageFetcherComponentImpl}
 
 /**
   * Created by philippederome on 2016-03-26.
@@ -38,7 +37,7 @@ class Inventory private(val storeid: Long,
   }
 }
 
-object Inventory extends ItemStateGrouper with ORMExecutor {
+object Inventory extends LCBOPageFetcher with LCBOPageFetcherComponentImpl with ItemStateGrouper with ORMExecutor {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   implicit val formats = net.liftweb.json.DefaultFormats
   private val dirtyPredicate: (Inventory, Inventory) => Boolean = {(x, y)=> x.isDirty(y)}
@@ -71,7 +70,7 @@ object Inventory extends ItemStateGrouper with ORMExecutor {
     ) yield newInv
   }
 
-  def fetchInventoriesByStore(uri: String,
+  def fetchInventoriesByStore(webApiRoute: String,
                               getCachedItem: (Inventory) => Option[Inventory],
                               mapByProductId: Map[P_KEY, Inventory],
                               params: Seq[(String, Any)]): Unit = {
@@ -90,7 +89,7 @@ object Inventory extends ItemStateGrouper with ORMExecutor {
     def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
     val getDBReadyUpdatedInvs: (IndexedSeq[Inventory] => Iterable[Inventory]) = removeCompositeKeyDupes _ compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose.
 
-    val items = LCBOPageFetcher.collectItemsAsWebClient(uri, extract, MaxPerPage, params)
+    val items = collectItemsAsWebClient(webApiRoute, extract, MaxPerPage, params)
     val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
     val updatedInventories = getDBReadyUpdatedInvs(dirtyItems)
     val newInventories = removeCompositeKeyDupes(newItems)
