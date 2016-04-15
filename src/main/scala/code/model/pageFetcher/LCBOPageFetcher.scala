@@ -14,14 +14,16 @@ import code.Rest.RestClient
   * Created by philippederome on 2016-03-30.
   * An excuse to exercise myself in Cake Pattern as per example found at
   * @see http://blog.originate.com/blog/2013/10/21/reader-monad-for-dependency-injection/
-  *      Nice observation: after having implemented this, the RestClient trait (based on Apache Commons) is buried down at a lower level of abstraction further hidden away.
+  *      He makes very interesting observations about using Reader Monads in web app and cake pattern at outer edges.
+  *
+  *      Nice personal observation: after having implemented this, the RestClient trait (based on Apache Commons) is buried down at a lower level of abstraction further hidden away.
   *      In previous versions of code, the RestClient trait made it all the way to Product and Inventory.
   *
   *      With cake, interface is more explicit, no need to sort out public, private and we don't need
   *      to think about access rights!
   */
 trait LCBOPageFetcherComponent  {
-  def fetcher: LCBOPageFetcher
+  def hiddenHandle: LCBOPageFetcher
   type JSitemsExtractor[T] = JValue => Iterable[T]
 
   trait LCBOPageFetcher {
@@ -41,7 +43,7 @@ trait LCBOPageFetcher {
                                  maxPerPage: Int,
                                  params: Seq[(String, Any)] = Seq())
                                 (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] =
-    fetcher.collectItemsAsWebClient(webApiRoute, xt, maxPerPage, params)(enough)
+    hiddenHandle.collectItemsAsWebClient(webApiRoute, xt, maxPerPage, params)(enough)
 }
 
 trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
@@ -117,12 +119,12 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
     @throws(classOf[TruncatedChunkException]) // that's a brutal one.
     @tailrec
     final def collectItemsOnAPage[T](accumItems: IndexedSeq[T],
-                                             xt: JSitemsExtractor[T],
-                                             urlRoot: String,
-                                             maxPerPage: Int,
-                                             pageNo: Int,
-                                             params: Seq[(String, Any)],
-                                             enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
+                                     xt: JSitemsExtractor[T],
+                                     urlRoot: String,
+                                     maxPerPage: Int,
+                                     pageNo: Int,
+                                     params: Seq[(String, Any)],
+                                     enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
 
       val uri = buildUrlWithPaging(urlRoot, pageNo, maxPerPage, params: _*)
       val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
