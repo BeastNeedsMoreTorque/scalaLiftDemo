@@ -47,7 +47,7 @@ trait LCBOPageFetcher {
 }
 
 trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
-  def fetcher = new FetcherImpl
+  def hiddenHandle = new FetcherImpl
 
   // this whole class is hidden from clients. So, who needs to worry about private, public, protected here? No one.
   class FetcherImpl extends LCBOPageFetcher with RestClient {
