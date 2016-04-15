@@ -212,7 +212,7 @@ class ProductInteraction extends Loggable {
 
         val totalCost = confirmationMsgs.map{ _.selectedProduct.cost}.sum
         val formattedTotalCost = formatter.format(totalCost)
-        val listItems = confirmationMsgs.map(getItem).fold(NodeSeq.Empty)( (a, b) => a ++ b )
+        val listItems = confirmationMsgs.map(getItem).fold(NodeSeq.Empty)( _ ++ _ )
         SetHtml("transactionsConfirmationUser", Text(user)) &
         SetHtml("purchaseAmount", Text(formattedTotalCost)) &
         SetHtml("transactionsConfirmation", listItems) &

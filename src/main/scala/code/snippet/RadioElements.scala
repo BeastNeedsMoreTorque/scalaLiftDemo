@@ -21,7 +21,7 @@ object RadioElements {
 
   def radioOptions(it: Seq[String],
                    defaultName: String,
-                   toImg: (String) => String): Seq[RadioElements] =
+                   toImg: String => String): Seq[RadioElements] =
     it.map { s =>
       RadioElements(s, <img name={s} title={s} src={toImg(s)} class={if (s == defaultName) thickBorder else thinBorder} />) // selected with style that frames it
   }
