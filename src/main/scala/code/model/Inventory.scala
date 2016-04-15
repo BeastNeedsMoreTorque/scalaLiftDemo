@@ -6,7 +6,7 @@ import net.liftweb.util.Props
 import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.pageFetcher.{LCBOPageFetcher, LCBOPageFetcherComponentImpl}
+import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 
 /**
   * Created by philippederome on 2016-03-26.
@@ -37,7 +37,9 @@ class Inventory private(val storeid: Long,
   }
 }
 
-object Inventory extends LCBOPageFetcher with LCBOPageFetcherComponentImpl with ItemStateGrouper with ORMExecutor {
+case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: Iterable[Inventory]) {}
+
+object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper with ORMExecutor {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   implicit val formats = net.liftweb.json.DefaultFormats
   private val dirtyPredicate: (Inventory, Inventory) => Boolean = {(x, y)=> x.isDirty(y)}
@@ -73,9 +75,7 @@ object Inventory extends LCBOPageFetcher with LCBOPageFetcherComponentImpl with 
   def fetchInventoriesByStore(webApiRoute: String,
                               getCachedItem: (Inventory) => Option[Inventory],
                               mapByProductId: Map[P_KEY, Inventory],
-                              params: Seq[(String, Any)]): Unit = {
-    // side effect to MainSchema.inventories cache (managed by Squeryl ORM)
-
+                              params: Seq[(String, Any)]): UpdatedAndNewInventories = {
     // set up some functional transformers first, then get ready for real work.
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
     def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
@@ -85,17 +85,13 @@ object Inventory extends LCBOPageFetcher with LCBOPageFetcherComponentImpl with 
              cachedInv <- mapByProductId.get(P_KEY(freshInv.productid));
              dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
     }
-    def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update _
-    def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
+
     val getDBReadyUpdatedInvs: (IndexedSeq[Inventory] => Iterable[Inventory]) = removeCompositeKeyDupes _ compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose.
 
     val items = collectItemsAsWebClient(webApiRoute, extract, MaxPerPage, params)
     val (dirtyItems, newItems) = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
     val updatedInventories = getDBReadyUpdatedInvs(dirtyItems)
     val newInventories = removeCompositeKeyDupes(newItems)
-    inTransaction {
-      execute[Inventory](updatedInventories, inventoryTableUpdater)  // bulk update the ones needing an update, having made the change from LCBO input
-      execute[Inventory](newInventories, inventoryTableInserter) // bulk insert the ones needing an insert having filtered out duped composite keys
-    }
+    UpdatedAndNewInventories(updatedInventories, newInventories)
   }
 }

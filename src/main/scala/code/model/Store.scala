@@ -143,12 +143,20 @@ class Store private() extends LCBOEntity[Store] with IStore {
     def fetchProducts() = addToCaches( fetchByStore(lcboId) )
 
     def fetchInventories() = {
+      def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update _
+      def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
+      // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
       val box = tryo {
-        fetchInventoriesByStore(
+        val inventories = fetchInventoriesByStore(
           webApiRoute = "/inventories",
           getCachedInventoryItem,
           inventoryByProductId.toMap,
           Seq("store_id" -> lcboId, "where_not" -> "is_dead"))
+
+        inTransaction {
+          execute[Inventory](inventories.updatedInvs, inventoryTableUpdater)  // bulk update the ones needing an update, having made the change from LCBO input
+          execute[Inventory](inventories.newInvs, inventoryTableInserter) // bulk insert the ones needing an insert having filtered out duped composite keys
+        }
       }
       val fullContextErr = (m: String, err: String) =>
         s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
@@ -156,6 +164,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
       if (check) refreshInventories()
       else logger.error(err)
     }
+
     val fetches =
       for (p <- Future(fetchProducts); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
            i <- Future(fetchInventories)) yield i // similarly for inventories and serialize intentionally because of Ref.Integrity  if no exception was thrown
