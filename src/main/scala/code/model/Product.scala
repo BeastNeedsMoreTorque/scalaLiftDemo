@@ -191,7 +191,7 @@ object Product extends Product with MetaRecord[Product] {
     val fullContextErr = { (m: String, err: String) =>
       s"Problem loading products into cache with message $m and exception error $err"
     }
-    val (check, err) = checkErrors(box, fullContextErr, simpleErr = "Problem loading products into cache" )
+    val (check, err) = checkErrors(box, fullContextErr, error = "Problem loading products into cache" )
     if (!check) logger.error(err)
     box.toOption.fold(IndexedSeq[IProduct]()){ identity }
   }
