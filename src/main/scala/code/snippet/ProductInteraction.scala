@@ -51,7 +51,7 @@ import JSUtilities._
 class ProductInteraction extends Loggable {
   case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
   case class QuantityOfProduct(quantity: Long, product: IProduct)  // quantity available at the current store for a product (store is implied by context)
-  case class SelectedProduct(id: Long, quantity: Long, cost: Double, missedQty: Long) // to capture user input via JS and JSON (stick to Long to simplify interface with JS)
+  case class SelectedProduct(id: Long, quantity: Long, cost: Double) // to capture user input via JS and JSON (stick to Long to simplify interface with JS)
   case class SelectedProductFeedback(selectedProduct: SelectedProduct, feedback: Feedback)
   case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
 
@@ -141,9 +141,8 @@ class ProductInteraction extends Loggable {
 
             // this info is redundant in DOM to some extent but makes it more convenient to fetch and we're not using JSON here.
             val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"/>
-            val hiddenInvNS = <input type="text" class="hiddenProdInv" value={inventory} hidden="hidden"/>
 
-            val ns: NodeSeq =  <div class="span-8 last">{imgNS}<br/>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}{hiddenInvNS}</div>
+            val ns: NodeSeq =  <div class="span-8 last">{imgNS}<br/>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div>
             ns
           }
 
@@ -194,19 +193,14 @@ class ProductInteraction extends Loggable {
     def consumeProducts(selection: JValue): JsCmd = {
       def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
         def getItem(item: PurchasedProductConfirmation): NodeSeq = {
-          def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Long, missedQty: Long) = {
-            if (missedQty <= 0)
-              s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
-            else
-              s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units; sorry about the unfulfilled $missedQty items out of stock"
-
+          def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Long) = {
+            s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
           }
 
           val formattedCost = formatter format item.selectedProduct.cost
           val liContent = purchaseConfirmationMessage(item.confirmation,
             formattedCost,
-            item.selectedProduct.quantity,
-            item.selectedProduct.missedQty)
+            item.selectedProduct.quantity)
           <li>{liContent}</li> :NodeSeq
         }
 
