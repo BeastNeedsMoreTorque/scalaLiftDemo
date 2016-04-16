@@ -20,17 +20,22 @@ var prodSelection = (function() {
 
   var collectSelectedProductDetails = function() {
     var id = parseInt(this.value) || 0;
-
     var siblings = $(this).parent().siblings();
 
     var quantityEl = $(siblings).find('input.prodQty');
-    var quantity = parseInt($(quantityEl).val()) || 0;
+    var desiredQuantity = parseInt($(quantityEl).val()) || 0;
+
+    var prodRoot = $(this).closest("div.prodIdRoot", id);
+    var inventoryEl = $(prodRoot).find('td[name=' + id + ']');
+    var inventory = parseInt($(inventoryEl).html()) || 0;
+    var quantity = Math.min(desiredQuantity, inventory);
     var transactCost = quantity * getUnitCost($(siblings).parent());
 
     var data = {
       id: id,
       quantity: quantity,
-      cost: transactCost
+      cost: transactCost,
+      missedQty: desiredQuantity - quantity
     };
     selectedItems.push(data);
   };
