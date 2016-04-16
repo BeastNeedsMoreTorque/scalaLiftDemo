@@ -51,7 +51,7 @@ import JSUtilities._
 class ProductInteraction extends Loggable {
   case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product, message is confirmation when successful, error when not
   case class QuantityOfProduct(quantity: Long, product: IProduct)  // quantity available at the current store for a product (store is implied by context)
-  case class SelectedProduct(id: Long, quantity: Long, cost: Double) // to capture user input via JS and JSON (stick to Long to simplify interface with JS)
+  case class SelectedProduct(id: Long, quantity: Long, cost: Double, missedQty: Long) // to capture user input via JS and JSON (stick to Long to simplify interface with JS)
   case class SelectedProductFeedback(selectedProduct: SelectedProduct, feedback: Feedback)
   case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
 
@@ -87,17 +87,14 @@ class ProductInteraction extends Loggable {
           // and to its right (Blueprint classes span-8 last) other data containing img and selection details as selectionMarkup.
           // selectionMarkup is top to bottom: image, then checkbox, quantity and cost input text fields right justified (CSS class prodSelectInput).
           // We also add a hiddenCost, so that the cost per item is always available for our calculation (visible to user in attributes in any event, but harder for us to get at for computation)
-          def attributesMarkup(prod: IProduct, quantityAttr: Attribute, attrs: IndexedSeq[Attribute]): NodeSeq = {
-            def setProdIdName( attr: Attribute) =
-              if (attr == quantityAttr) prod.lcboId.toString else ""
-
+          def attributesMarkup(prod: IProduct, attrs: IndexedSeq[Attribute]): NodeSeq = {
             val tbody = {
               for (attr <- attrs)
                 yield <tr>
                   <td class="prodAttrHead">
                     {attr.key}
                   </td>
-                  <td class="prodAttrContent" name={setProdIdName(attr)}>
+                  <td class={attr.css} name={attr.name}>
                     {attr.value}
                   </td>
                 </tr>
@@ -148,10 +145,12 @@ class ProductInteraction extends Loggable {
 
           val prod = qOfProd.product
           val inventory = qOfProd.quantity.toString
-          val inventoryAttribute = Attribute("Quantity:", inventory)
+          val inventoryAttribute = Attribute(key="Quantity:", value=inventory, css="prodAttrContentInventory", name=prod.lcboId.toString) // label it as prodAttrContentInventory for client to interpret and identify easily
+          // similarly, assigning the prodId to name helps identify it in browser JS.
           val allAttributes = prod.streamAttributes :+ inventoryAttribute
 
-          <div>{attributesMarkup(prod, inventoryAttribute, allAttributes)}{selectionMarkup(prod, inventory)}</div><hr/>
+          // tag the div with misc attributes to facilitate reconciling related data within browser JS
+          <div class="prodIdRoot" name={prod.lcboId.toString}>{attributesMarkup(prod, allAttributes)}{selectionMarkup(prod, inventory)}</div><hr/>
 
         }
 
@@ -193,14 +192,19 @@ class ProductInteraction extends Loggable {
     def consumeProducts(selection: JValue): JsCmd = {
       def transactionsConfirmationJS(user: String, confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
         def getItem(item: PurchasedProductConfirmation): NodeSeq = {
-          def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Long) = {
-            s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
+          def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Long, missedQty: Long) = {
+            if (missedQty <= 0)
+              s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
+            else
+              s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units; sorry about the unfulfilled $missedQty items out of stock"
+
           }
 
           val formattedCost = formatter format item.selectedProduct.cost
           val liContent = purchaseConfirmationMessage(item.confirmation,
             formattedCost,
-            item.selectedProduct.quantity)
+            item.selectedProduct.quantity,
+            item.selectedProduct.missedQty)
           <li>{liContent}</li> :NodeSeq
         }
 
