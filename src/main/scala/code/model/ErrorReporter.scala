@@ -1,7 +1,7 @@
 package code.model
 
 import scala.collection.Iterable
-import net.liftweb.common.{Box, Empty, Full, Loggable}
+import net.liftweb.common.{Box, Full, Loggable}
 
 /**
   * Created by philippederome on 2016-04-03.

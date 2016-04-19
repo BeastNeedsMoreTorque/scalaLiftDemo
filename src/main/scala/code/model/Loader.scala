@@ -17,14 +17,14 @@ trait Loader[T <: Loader[T]] extends Record[T] with Loggable
 
   protected def table(): Table[T]
   protected def cache(): concurrent.Map[P_KEY, T]  // primary cache
-  protected def LcboIdsToDBIds(): concurrent.Map[LCBO_ID, P_KEY]  // secondary cache
+  protected def LcboIdToPK(): concurrent.Map[LCBO_ID, P_KEY]  // secondary cache
 
   protected def pKey: P_KEY
   protected def lcboId: LCBO_ID
 
   protected def cacheItems(items: Iterable[T]): Unit = {
     cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)
-    LcboIdsToDBIds() ++= cache().map { case(pk, item) => item.lcboId -> pk }
+    LcboIdToPK() ++= cache().map { case(pk, item) => item.lcboId -> pk }
   }
 
   def load(): Unit = inTransaction {

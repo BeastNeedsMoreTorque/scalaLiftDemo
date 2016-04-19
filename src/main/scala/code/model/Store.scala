@@ -28,7 +28,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
   // for Loader and LCBOEntity
   override def table(): org.squeryl.Table[Store] = Store.table()
   override def cache() = Store.storesCache
-  override def LcboIdsToDBIds() = Store.LcboIdsToDBIds
+  override def LcboIdToPK() = Store.LcboIdToPK
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
   override def meta = Store
@@ -131,7 +131,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
 
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val cachedStream: Stream[(IProduct, Long)] = Random.shuffle(inStockItems) // type declaration is to prove ourselves we still have a stream, yeah!
+      val cachedStream = Random.shuffle(inStockItems)
       val cached = cachedStream.take(requestSize)
       if (cached.nonEmpty) cached
       else getSerialResult(lcboProdCategory)
@@ -146,15 +146,16 @@ class Store private() extends LCBOEntity[Store] with IStore {
       def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update _
       def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
       // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
+      // we chain errors using flatMap (FP fans apparently like this).
       val box = tryo {
-        val inventories = fetchInventoriesByStore(
+        fetchInventoriesByStore(
           webApiRoute = "/inventories",
           getCachedInventoryItem,
           inventoryByProductId.toMap,
           Seq("store_id" -> lcboId, "where_not" -> "is_dead"))
-
+      } flatMap { inventories =>
         inTransaction {
-          execute[Inventory](inventories.updatedInvs, inventoryTableUpdater)  // bulk update the ones needing an update, having made the change from LCBO input
+          execute[Inventory](inventories.updatedInvs, inventoryTableUpdater) // bulk update the ones needing an update, having made the change from LCBO input
           execute[Inventory](inventories.newInvs, inventoryTableInserter) // bulk insert the ones needing an insert having filtered out duped composite keys
         }
       }
@@ -198,11 +199,13 @@ class Store private() extends LCBOEntity[Store] with IStore {
 }
 
 object Store extends Store with MetaRecord[Store] {
+  def findAll(): Iterable[Store] = storesCache.values
+
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
 
   private val storesCache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
-  override val LcboIdsToDBIds: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache
-  override def table(): org.squeryl.Table[Store] = MainSchema.stores
+  override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache
+  override def table() = MainSchema.stores
 
   override def cacheItems(items: Iterable[Store]): Unit = {
     super.cacheItems(items)
@@ -212,19 +215,15 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
-  def getSeq(masterKey: String, default: String = "")(c: ConfigPairsRepo): Seq[(String, String)] =
-    c.getSeq(masterKey, default)
-
-  // if we were not in a  singleton, we'd use getSeq via self instead
   val queryAllItemsArgs = getSeq("store.query.AllItemsArgs")(ConfigPairsRepo.defaultInstance)
 
   override def getCachedItem: (IStore) => Option[IStore] = s => getItemByLcboId(s.lcboId)
-  def availableStores: Set[P_KEY] = storesCache.keySet
-  def lcboIdToDBId(id: LCBO_ID): Option[P_KEY] = LcboIdsToDBIds.get(id)
+  def availableStores = storesCache.keySet
+  def lcboIdToPK(id: LCBO_ID): Option[P_KEY] = LcboIdToPK.get(id)
   def storeIdToLcboId(s: P_KEY): Option[LCBO_ID] = storesCache.get(s).map(_.lcboId)
-  def getStore(id: P_KEY): Option[IStore] = storesCache.get(id)
-  def getItemByLcboId(id: LCBO_ID): Option[IStore] =
-    for (dbId <- LcboIdsToDBIds.get(id);
+  def getStore(id: P_KEY) = storesCache.get(id)
+  def getItemByLcboId(id: LCBO_ID) =
+    for (dbId <- LcboIdToPK.get(id);
          s <- storesCache.get(dbId)) yield s
 
   val MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
@@ -260,7 +259,4 @@ object Store extends Store with MetaRecord[Store] {
     getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
     logger.info("load end")
   }
-
- def findAll(): Iterable[Store] = storesCache.values
-
 }
