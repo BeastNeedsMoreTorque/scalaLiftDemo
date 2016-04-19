@@ -178,18 +178,10 @@ object Product extends Product with MetaRecord[Product] {
 
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): IndexedSeq[IProduct] = {
-    val box = tryo {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
       val prods = productWebQuery( lcboStoreId, queryAllItemsArgs)
       synchDirtyAndNewItems(prods, getCachedItem, dissimilar) // the side effect
-      prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for cache, now that we refreshed them all
-    }
-    val fullContextErr = { (m: String, err: String) =>
-      s"Problem loading products into cache with message $m and exception error $err"
-    }
-    val (check, err) = checkErrors(box, fullContextErr, error = "Problem loading products into cache" )
-    if (!check) logger.error(err)
-    box.toOption.fold(IndexedSeq[IProduct]()){ identity }
+      prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
   }
 }

@@ -140,7 +140,16 @@ class Store private() extends LCBOEntity[Store] with IStore {
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
-    def fetchProducts() = addToCaches( fetchByStore(lcboId) )
+    def fetchProducts() = {
+      val box = tryo { fetchByStore(lcboId) }
+      val fullContextErr = { (m: String, err: String) =>
+        s"Problem loading products into cache with message $m and exception error $err"
+      }
+      val (allGood, err) = checkErrors(box, fullContextErr, error = "Problem loading products into cache" )
+      if (!allGood) logger.error(err)
+      val theStores = box.toOption.fold(IndexedSeq[IProduct]()){ identity }
+      addToCaches( theStores )
+    }
 
     def fetchInventories() = {
       def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update _
@@ -161,8 +170,8 @@ class Store private() extends LCBOEntity[Store] with IStore {
       }
       val fullContextErr = (m: String, err: String) =>
         s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
-      val (check, err) = checkUnitErrors(box, fullContextErr )
-      if (check) refreshInventories()
+      val (allGood, err) = checkUnitErrors(box, fullContextErr )
+      if (allGood) refreshInventories()
       else logger.error(err)
     }
 
