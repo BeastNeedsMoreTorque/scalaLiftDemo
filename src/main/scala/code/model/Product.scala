@@ -28,7 +28,7 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
   // for Loader and LCBOEntity
   override def table(): org.squeryl.Table[Product] = Product.table()
   override def cache() = Product.productsCache
-  override def LcboIdsToDBIds() = Product.LcboIdsToDBIds
+  override def LcboIdToPK() = Product.LcboIdToPK
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
@@ -139,20 +139,17 @@ object Product extends Product with MetaRecord[Product] {
   private val productsCache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   def getProduct(id: P_KEY): Option[IProduct] = productsCache.get(id)
   def getItemByLcboId(id: LCBO_ID): Option[IProduct] =
-    for (dbId <- LcboIdsToDBIds.get(id);
+    for (dbId <- LcboIdToPK.get(id);
          p <- productsCache.get(dbId)) yield p
 
-  def lcboIdToDBId(id: LCBO_ID): Option[P_KEY] = LcboIdsToDBIds.get(id)
+  def lcboIdToPK(id: LCBO_ID): Option[P_KEY] = LcboIdToPK.get(id)
 
-  override val LcboIdsToDBIds: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
-  override def table(): org.squeryl.Table[Product] = MainSchema.products
+  override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
+  override def table() = MainSchema.products
   val MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   private val sizeFulfilled: (Int) => GotEnough_? =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
   override def getCachedItem: (IProduct) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
-
-  def getSeq(masterKey: String, default: String = "")(c: ConfigPairsRepo): Seq[(String, String)] =
-    c.getSeq(masterKey, default)
 
   val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)  // seems difficult to apply D.I. here, so access global object.
 

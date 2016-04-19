@@ -9,7 +9,7 @@ import net.liftweb.squerylrecord.RecordTypeMode._
   * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,
   * so mitigate with access control on methods, one method is protected.
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor {
+trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor with ErrorReporter {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.
@@ -44,14 +44,19 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
       grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) } // break it down in reasonable size transactions, and then serialize the work.
   }
 
-  private def batchTransactor(items: Iterable[T], ORMTransactor: (Iterable[T]) => Unit) = {
+  private def batchTransactor(items: Iterable[T], ORMTransactor: (Iterable[T]) => Unit): Unit = {
     def feedCache(items: Iterable[T]) = {
       val pkIds = items.map(_.pKey: Long)  // type ascription to integrate with Squeryl below
       // select only what we did and use DB's version of the state of the items.
       val itemsWithPK = from(table())(item => where(item.idField in pkIds) select(item))
       cache() ++= itemsWithPK.map{item => item.pKey -> item } (collection.breakOut)
     }
-    execute[T](items, ORMTransactor)
-    feedCache(items)
+    // Seems high enough to report error to log as it appears a little messy to push it up further.
+    val box = execute[T](items, ORMTransactor)
+    val fullContextErr = (m: String, err: String) =>
+      s"Problem with batchTransactor, message $m and exception error $err"
+    val (allGood, err) = checkUnitErrors(box, fullContextErr)
+    if (allGood) feedCache(items)
+    else logger.error(err)
   }
 }

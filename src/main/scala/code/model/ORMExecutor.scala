@@ -2,15 +2,20 @@ package code.model
 
 import java.sql.SQLException
 
-import net.liftweb.common.Loggable
+import net.liftweb.common.{Box,Loggable}
+import net.liftweb.util.Helpers.tryo
 
 import scala.collection.Iterable
 
 /**
-  * Created by philippederome on 2016-04-03. Just to isolate the verbose try catch block. Please, hide this try catch block from privy eyes.
+  * Created by philippederome on 2016-04-03.
+  * Just to isolate the verbose try catch block.
+  * The only spot we do a catch so far, BECAUSE we need all the diagnostics we can get
+  * and we can identify the error neatly right here. Other error handling is done FP way with tryo/Box playing role of Either/Option.
+  * Please, hide this try catch block from privy eyes.
   */
 trait ORMExecutor extends Loggable {
-  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Unit = {
+  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Box[Unit] = tryo { // captures exception in Box.
     try {
       apply(items) // e.g. insert, update, delete
     } catch {
@@ -20,7 +25,9 @@ trait ORMExecutor extends Loggable {
         logger.error("SqlState: " + se.getSQLState)
         logger.error("Error Message: " + se.getMessage)
         logger.error("NextException:" + se.getNextException)
-      // intentionally skip other errors and let it go higher up.
+        throw se
+      // intentionally skip other errors and let them all be "handled" higher up including SQLException, record more context along the way.
+      // actually typically immediately higher up because of the tryo returning a Box type (similar to Option/Either)
     }
   }
 }

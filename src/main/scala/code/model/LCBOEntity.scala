@@ -1,9 +1,8 @@
 package code.model
 
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.IndexedSeq
-import code.model.pageFetcher.{LCBOPageLoader, LCBOPageFetcherComponentImpl}
-
+import scala.collection.{IndexedSeq, Seq}
+import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 import net.liftweb.json.JsonAST.{JField, JInt}
 /**
   * Created by philippederome on 2016-04-10. Highest level trait to share between Product and Store that have much logic in common.
@@ -29,6 +28,10 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
         recsBuffer
     }.toIndexedSeq
   }
+
+  def getSeq(masterKey: String, default: String = "")(c: ConfigPairsRepo): Seq[(String, String)] =
+    c.getSeq(masterKey, default)
+
 
   // type parameter I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class, and it should not return just anything.
   // Some LCBO entities also have a similar pattern of identifying new info from LCBO (items being provided from a query), reconciling/interpreting as new or dirty (or clean/unchanged)
