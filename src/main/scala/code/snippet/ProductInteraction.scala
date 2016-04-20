@@ -74,7 +74,7 @@ class ProductInteraction extends Loggable {
       "20" -> 20
     )
     val default = Full("1")
-    val options = values.keys.map(p => (p, p)).toList
+    val options = values.keys.map(k => (k, k)).toList
   }
 
   def render = {

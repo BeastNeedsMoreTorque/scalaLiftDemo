@@ -23,7 +23,7 @@ trait Loader[T <: Loader[T]] extends Record[T] with Loggable
   protected def lcboId: LCBO_ID
 
   protected def cacheItems(items: Iterable[T]): Unit = {
-    cache() ++= items.map{x => x.pKey -> x } (collection.breakOut)
+    cache() ++= items.map{item => item.pKey -> item } (collection.breakOut)
     LcboIdToPK() ++= cache().map { case(pk, item) => item.lcboId -> pk }
   }
 

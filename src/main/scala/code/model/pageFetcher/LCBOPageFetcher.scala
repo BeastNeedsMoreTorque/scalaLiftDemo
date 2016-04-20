@@ -87,10 +87,10 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
 
     def buildUrl(urlRoot: String, params: Seq[(String, Any)]) = {
       val encoding = "UTF-8"
-      val paramsAsSuffix = params.map(v =>
-        URLEncoder.encode(v._1, encoding) +
+      val paramsAsSuffix = params.map(param =>
+        URLEncoder.encode(param._1, encoding) +
           "=" +
-          URLEncoder.encode(v._2.toString, encoding)
+          URLEncoder.encode(param._2.toString, encoding)
       ).mkString("&")
       if (paramsAsSuffix.nonEmpty) urlRoot + "?" + paramsAsSuffix
       else urlRoot
