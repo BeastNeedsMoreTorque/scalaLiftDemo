@@ -155,38 +155,41 @@ class ProductInteraction extends Loggable {
         }
 
         // for each element of qOfProds, build a Div as NodeSeq and concatenate them as a NodeSeq for the several divs
-        val divs = qOfProds.map(getDiv).fold(NodeSeq.Empty)( _ ++ _ )
+        val divs = qOfProds.map(getDiv).foldLeft(NodeSeq.Empty)( _ ++ _ )
         SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
       }
 
-      def maySelect(storeId: P_KEY): JsCmd =
-        Store.getStore(storeId).fold {
-          S.error("We need to establish your local store first, please wait for local geo to become available")
-          Noop
-        }{ s =>
-          // validate expected numeric input storeId then access LCBO data
-          val prodQtySeq = s.recommend(theCategory.is, theRecommendCount.is) match {
-            // we want to distinguish error messages to user to provide better diagnostics.
-            case Full(pairs) =>
-              if (pairs.isEmpty) S.error(s"Unable to choose find a product of category ${theCategory.is} that is not out of stock! Looking into it, please try again a little later")
-              // we're reloading into cache to make up for that issue!
-              Full(pairs) // returns prod and quantity in inventory normally, regardless of emptyness)
-            case Failure(m, ex, _) => S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex"); Empty
-            case Empty =>
-              S.error(s"Unable to choose product of category ${theCategory.is}")
-              Empty
-          }
-          prodQtySeq.dmap { Noop } // we gave notice of error already via JS, nothing else to do
-          { pairs => // normal case
-            S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-            prodDisplayJS( pairs.map{case ( p, q) => QuantityOfProduct(q, p)})
-          }
+      def maySelect(s: Store): JsCmd = {
+        val prodQtySeq = s.recommend(theCategory.is, theRecommendCount.is) match {
+          // we want to distinguish error messages to user to provide better diagnostics.
+          case Full(pairs) =>
+            if (pairs.isEmpty) S.error(s"Unable to find a product of category ${theCategory.is}")
+            // we're reloading into cache to make up for that issue!
+            Full(pairs) // returns prod and quantity in inventory normally, regardless of emptyness)
+          case Failure(m, ex, _) =>
+            S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex")
+            Empty
+          case Empty =>
+            S.error(s"Unable to find product of category ${theCategory.is}")
+            Empty
         }
+        prodQtySeq.dmap { Noop } // we gave notice of error already via JS, nothing else to do
+        { pairs => // normal case
+          S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
+          prodDisplayJS( pairs.map{case ( p, q) => QuantityOfProduct(q, p)})
+        }
+      }
 
-      val json = jsStore.extractOpt[String].map( parse)
-      val storeId = P_KEY(json.fold(-1.toLong){ _.extract[Long]})
-      User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop }
-      { user => maySelect(storeId)} // normal processing
+      User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop } { user =>
+        val jsCmd =
+          for (s <- jsStore.extractOpt[String].map(parse); // ExtractOpt avoids MappingException and generates None on failure
+               storeId <- s.extractOpt[Long];
+               s <- Store.getStore(storeId)) yield maySelect(s)
+
+        jsCmd.fold {
+          S.error("We need to establish your local store first, please wait for local geo to become available")
+          Noop } { identity }
+      }
     }
 
     def consumeProducts(selection: JValue): JsCmd = {
@@ -217,20 +220,16 @@ class ProductInteraction extends Loggable {
         showConfirmationJS
       }
 
-      def mayConsume(selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
-        def mayConsumeItem(p: IProduct, quantity: Long): Feedback = {
-          User.currentUser.dmap { Feedback(userName="", success=false, "unable to process transaction, Login first!") }
-          { user =>
-            user.consume(p, quantity) match {
-              case Full((userName, count)) => // the good
-                Feedback(userName, success = true, s"${p.Name} $count unit(s) over the years")
-              case Failure(e, ex, _) =>  // the bad
-                Feedback(userName = "", success = false, s"Unable to sell you product ${p.Name} with error $e and exception '$ex'")
-              case Empty =>  // the ugly
-                Feedback(userName = "", success = false, s"Unable to sell you product ${p.Name}")
-            }
+      def mayConsume(user: User, selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
+        def mayConsumeItem(p: IProduct, quantity: Long): Feedback =
+          user.consume(p, quantity) match {
+            case Full(count) =>
+              Feedback(user.firstName.get, success = true, s"${p.Name} $count unit(s) over the years")
+            case Failure(e, ex, _) =>
+              Feedback(user.firstName.get, success = false, s"Unable to sell you product ${p.Name} with error $e and exception '$ex'")
+            case Empty =>   // ugly: should never happen actually based on user.consume implementation (would be a bug).
+              Feedback(user.firstName.get, success = false, s"Unable to sell you product ${p.Name}")
           }
-        }
 
         // associate primitive browser product details for selected products (SelectedProduct) with full data of same products we should have in cache as pairs
         val feedback =
@@ -238,34 +237,41 @@ class ProductInteraction extends Loggable {
               p <- Product.getItemByLcboId(LCBO_ID(sp.id));
               f = mayConsumeItem(p, sp.quantity)) yield SelectedProductFeedback(sp, f)
         val goodAndBackFeedback = feedback.groupBy(_.feedback.success) // splits into errors (false success) and normal confirmations (true success) as a map keyed by Booleans possibly of size 0, 1 (not 2)
+
+        // Notify users of serious errors for each product (false group), which might be a DB issue.
         goodAndBackFeedback.getOrElse(false, Nil).map( _.feedback.message).foreach(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
+
         val goodFeedback = goodAndBackFeedback.getOrElse(true, Nil) // select those for which we have success and positive message
-        if (goodFeedback.isEmpty) {
-          S.error("Make sure you select a product if you want to consume") // they all failed!
-          Noop
-        }
+        if (goodFeedback.isEmpty) Noop // we already provided bad feedback, here satisfy function signature (and semantics) to return a JsCmd.
         else {
           if (goodFeedback.size == feedback.size) S.error("") // no error, erase old errors no longer applicable.
           val confirmationMessages = goodFeedback.map{ x => PurchasedProductConfirmation(x.selectedProduct, x.feedback.message) } // get some particulars about cost and quantity in addition to message
-          val userName = goodFeedback.head.feedback.userName
-          transactionsConfirmationJS(userName, confirmationMessages) &
+          transactionsConfirmationJS(user.firstName.get, confirmationMessages) &
           hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
         }
       }
+      // Validate and report errors at high level of functionality as much as possible and then get down to business with helper mayConsume.
+      User.currentUser.dmap { S.error("consumeProducts", "unable to process transaction, Login first!"); Noop } { user =>
+        val selectedProducts =
+          for (json <- selection.extractOpt[String].map(parse).toIndexedSeq; // ExtractOpt avoids MappingException and generates None on failure
+               item <- json.children.toVector;
+               prod <- item.extractOpt[SelectedProduct])
+            yield prod
 
-      val jsonOpt = selection.extractOpt[String].map(parse)
-      val selectedProducts = jsonOpt.map(json => {for (p <- json.children.toVector) yield p.extractOpt[SelectedProduct]}.flatten )
-      selectedProducts.fold {
-        S.warning("Select some recommended products before attempting to consume")
-        Noop
-      } { mayConsume }
+        if (selectedProducts.nonEmpty) mayConsume(user, selectedProducts)
+        else {
+          S.warning("Select some recommended products before attempting to consume")
+          Noop
+        }
+      }
     }
 
     def cancel: JsCmd = {
       S.error("")
       hideProdDisplayJS & hideConfirmationJS
     }
-    val actionButtonsContainer = "prodInteractionContainer"
+
+    val actionButtonsContainer = "prodInteractionContainer"  // html markup identifier
 
     theRecommendCount.set(toInt(RecommendCount.default))
     // call to setBorderJS after button activation simply highlights that button was pressed.

@@ -32,10 +32,10 @@ class User extends MegaProtoUser[User] with Loggable {
     *
     * @param p a product representing the Record object that was created after serialization from LCBO.
     * @see Lift in Action, Chapter 10-11 (Mapper and mostly Record), Section 10.3.2 Transactions
-    * @return the user who requested the product and the number of times the user has purchased this product as a pair/tuple.
+    * @return the number of times the user has purchased this product as a pair/tuple.
     *         May throw but would be caught as a Failure within Box to be consumed higher up.
     */
-  def consume(p: IProduct, quantity: Long): Box[(String, Long)] =
+  def consume(p: IProduct, quantity: Long): Box[Long] =
     // update it with new details; we could verify that there is a difference between LCBO and our version first...
     // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
     // tryo captures database provider errors (column size too small for example, reporting it as an Empty Box with Failure)
@@ -45,12 +45,12 @@ class User extends MegaProtoUser[User] with Loggable {
         val updatedCount = Product.getProduct(p.pKey).fold {
           logger.error(s"User.consume on unsaved product $p")
           0.toLong  // this is an error, the product should have been in cache.
-        } { q =>
-          val prodId: Long = q.pKey // coerce type conversion as Squeryl needs a Long to convert to NumericType and P_KEY does not.
+        } { pp =>
+          val prodId: Long = pp.pKey // coerce type conversion as Squeryl needs a Long to convert to NumericType and P_KEY does not.
           val userProd = userProducts.where(u => u.userid === id.get and u.productid === prodId).forUpdate.headOption
           userProd.fold {
             // (Product would be stored in DB with no previous user interest)
-            UserProduct.createRecord.userid(id.get).productid(q.pKey).selectionscount(quantity).save // cascade save dependency using Active Record pattern.
+            UserProduct.createRecord.userid(id.get).productid(pp.pKey).selectionscount(quantity).save // cascade save dependency using Active Record pattern.
             quantity.toLong
           } { up =>
               val updatedQuantity = up.selectionscount.get + quantity
@@ -60,7 +60,7 @@ class User extends MegaProtoUser[User] with Loggable {
               updatedQuantity
           }
         }
-        (firstName.get, updatedCount)
+        updatedCount
       }
     }
 }
