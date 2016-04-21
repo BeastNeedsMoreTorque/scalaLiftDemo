@@ -3,6 +3,8 @@ package code.model
 import scala.collection.{IndexedSeq, Iterable}
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
+import net.liftweb.common.Box
+import net.liftweb.util.Helpers._
 import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
@@ -75,7 +77,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
   def fetchInventoriesByStore(webApiRoute: String,
                               getCachedItem: (Inventory) => Option[Inventory],
                               mapByProductId: Map[P_KEY, Inventory],
-                              params: Seq[(String, Any)]): UpdatedAndNewInventories = {
+                              params: Seq[(String, Any)]): Box[UpdatedAndNewInventories] = tryo {
     // set up some functional transformers first, then get ready for real work.
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
     def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =

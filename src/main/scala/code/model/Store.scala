@@ -141,38 +141,35 @@ class Store private() extends LCBOEntity[Store] with IStore {
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
     def fetchProducts() = {
-      val box = tryo { fetchByStore(lcboId) }
       val fullContextErr = { (m: String, err: String) =>
         s"Problem loading products into cache with message $m and exception error $err"
       }
-      val (allGood, err) = checkErrors(box, fullContextErr, error = "Problem loading products into cache" )
-      if (!allGood) logger.error(err)
-      val theStores = box.toOption.fold(IndexedSeq[IProduct]()){ identity }
-      addToCaches( theStores )
+      val theProducts = fetchByStore(lcboId)
+      lazy val err = checkErrors(theProducts, fullContextErr, error = "Problem loading products into cache" )
+      theProducts.toOption.fold[Unit](logger.error(err))( items => addToCaches _)
     }
 
     def fetchInventories() = {
       def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update _
       def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
+      val fullContextErr = (m: String, err: String) =>
+        s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
       // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
       // we chain errors using flatMap (FP fans apparently like this).
-      val box = tryo {
+      val box =
         fetchInventoriesByStore(
           webApiRoute = "/inventories",
           getCachedInventoryItem,
           inventoryByProductId.toMap,
-          Seq("store_id" -> lcboId, "where_not" -> "is_dead"))
-      } flatMap { inventories =>
+          Seq("store_id" -> lcboId, "where_not" -> "is_dead")).
+      flatMap { inventories =>
         inTransaction {
           execute[Inventory](inventories.updatedInvs, inventoryTableUpdater) // bulk update the ones needing an update, having made the change from LCBO input
           execute[Inventory](inventories.newInvs, inventoryTableInserter) // bulk insert the ones needing an insert having filtered out duped composite keys
         }
       }
-      val fullContextErr = (m: String, err: String) =>
-        s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
-      val (allGood, err) = checkUnitErrors(box, fullContextErr )
-      if (allGood) refreshInventories()
-      else logger.error(err)
+      lazy val err = checkUnitErrors(box, fullContextErr )
+      box.toOption.fold[Unit](logger.error(err))( (Unit) => refreshInventories())
     }
 
     val fetches =
@@ -241,31 +238,27 @@ object Store extends Store with MetaRecord[Store] {
   implicit def toXml(st: Store): Node =
     <store>{Xml.toXml(st.asJValue)}</store>
 
-  private def getStores(): Unit = {
-    def fullContextErr( m: String,  ex: String): String =
-      s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'"
-    def briefContextErr(): String =
-      "Problem loading LCBO stores into cache, none found"
-    val box = tryo {
-      val items =  collectItemsAsWebClient("/stores", extract, MaxPerPage, queryAllItemsArgs)
-      synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate)
-      items // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
+  private def getStores(): Box[IndexedSeq[Store]] = tryo {
+      collectItemsAsWebClient("/stores", extract, MaxPerPage, queryAllItemsArgs) // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
-    val (check, err) = checkErrors(box, fullContextErr, briefContextErr )
-    if (!check) logger.error(err) // try to log at higher level of code to avoid side effects.
-    logger.debug(s"done loading stores from LCBO")
-  }
 
   /**
     * synchronous because once the webapp accepts requests, this load must have completed so that the store collection is not empty.
     * Well... Trend is to do everything asynch these days...
     */
   override def load(): Unit = inTransaction {
+    def fullContextErr( m: String,  ex: String): String =
+      s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'"
+    def briefContextErr(): String =
+      "Problem loading LCBO stores into cache, none found"
+
     logger.info("load start")
-    val items = from(table())(item => select(item))
-    cacheItems(items)
+    val dbStores = from(table())(item => select(item))
+    cacheItems(dbStores)
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
-    getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
+    val refreshed = getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
+    lazy val err = checkErrors(refreshed, fullContextErr, briefContextErr )
+    refreshed.toOption.fold[Unit](logger.error(err))( items => synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate))
     logger.info("load end")
   }
 }
