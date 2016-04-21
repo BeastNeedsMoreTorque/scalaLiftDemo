@@ -127,13 +127,12 @@ class Store private() extends LCBOEntity[Store] with IStore {
       val inStockItems =
       { for ( p <- matchingProds;
               inv <- inventoryByProductId.get(p.pKey);
-              q = inv.quantity if q > 0) yield (p, q)}.toStream
+              q = inv.quantity if q > 0) yield (p, q)}
 
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val cachedStream = Random.shuffle(inStockItems)
-      val cached = cachedStream.take(requestSize)
-      if (cached.nonEmpty) cached
+      val cachedIds = Random.shuffle[Int, IndexedSeq](inStockItems.indices).take(requestSize)  // shuffle only on the indices not full items.
+      if (cachedIds.nonEmpty) cachedIds map inStockItems  // get back the items that the ids have been selected (we don't stream because we know inventory > 0)
       else getSerialResult(lcboProdCategory)
     }
   }
