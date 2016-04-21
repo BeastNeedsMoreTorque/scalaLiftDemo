@@ -15,7 +15,7 @@ import scala.collection.Iterable
   * Please, hide this try catch block from privy eyes.
   */
 trait ORMExecutor extends Loggable {
-  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Box[Unit] = tryo { // captures exception in Box.
+  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Box[Unit] = tryo { // captures exception in Box and force callers to deal with it.
     try {
       apply(items) // e.g. insert, update, delete
     } catch {

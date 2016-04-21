@@ -20,7 +20,7 @@ class errorReporterTest extends FlatSpec with ShouldMatchers {
   }
 
   "checkUnitErrors on exception" should "return false with IllegalArgumentException" in {
-    instance.checkUnitErrors(box1, sweetAndShortErrorLogger) should equal((false, "Dropped the BOMB...Full(java.lang.IllegalArgumentException: Dropped the BOMB)")) // and trace stuff along the way
+    instance.checkUnitErrors(box1, sweetAndShortErrorLogger) should equal("Dropped the BOMB...Full(java.lang.IllegalArgumentException: Dropped the BOMB)") // and trace stuff along the way
   }
 
   val box2 = tryo {
@@ -28,14 +28,14 @@ class errorReporterTest extends FlatSpec with ShouldMatchers {
     val x = 5/nearZero
   }
   "checkUnitErrors on harmless" should "return true" in {
-    instance.checkUnitErrors(box2, sweetAndShortErrorLogger) should equal(true, "")
+    instance.checkUnitErrors(box2, sweetAndShortErrorLogger) should equal( "")
   }
 
   val box3 = tryo {
     val x = 5/0
   }
   "checkUnitErrors on DIV0" should "return false with ArithmeticException" in {
-    instance.checkUnitErrors(box3, sweetAndShortErrorLogger) should equal(false, "/ by zero...Full(java.lang.ArithmeticException: / by zero)")
+    instance.checkUnitErrors(box3, sweetAndShortErrorLogger) should equal("/ by zero...Full(java.lang.ArithmeticException: / by zero)")
   }
 
   def detailedErrorLogger( s: String,  suffix: String): String = s"$s...$suffix"
@@ -44,12 +44,12 @@ class errorReporterTest extends FlatSpec with ShouldMatchers {
     Seq(x, 1,2,3)
   }
   "checkErrors on DIV0 Exception" should "return false with ArithmeticException" in {
-    instance.checkErrors(box4, detailedErrorLogger, "YOUR COLLECTION IS EMPTY, SORRY!") should equal(false, "/ by zero...Full(java.lang.ArithmeticException: / by zero)")
+    instance.checkErrors(box4, detailedErrorLogger, "YOUR COLLECTION IS EMPTY, SORRY!") should equal("/ by zero...Full(java.lang.ArithmeticException: / by zero)")
   }
 
   val m = Map[Int, Iterable[Int]]()
   val box5: Box[Iterable[Int]] = tryo { IndexedSeq()}
   "checkErrors on unexpected empty collection" should "return false with given empty collection message" in {
-    instance.checkErrors(box5, detailedErrorLogger, "YOUR COLLECTION IS EMPTY, SORRY!") should equal(false, "YOUR COLLECTION IS EMPTY, SORRY!")
+    instance.checkErrors(box5, detailedErrorLogger, "YOUR COLLECTION IS EMPTY, SORRY!") should equal("YOUR COLLECTION IS EMPTY, SORRY!")
   }
 }

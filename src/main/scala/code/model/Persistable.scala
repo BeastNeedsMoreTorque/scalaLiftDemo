@@ -52,11 +52,10 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
       cache() ++= itemsWithPK.map{item => item.pKey -> item } (collection.breakOut)
     }
     // Seems high enough to report error to log as it appears a little messy to push it up further.
-    val box = execute[T](items, ORMTransactor)
     val fullContextErr = (m: String, err: String) =>
       s"Problem with batchTransactor, message $m and exception error $err"
-    val (allGood, err) = checkUnitErrors(box, fullContextErr)
-    if (allGood) feedCache(items)
-    else logger.error(err)
+    val box = execute[T](items, ORMTransactor)
+    lazy val err = checkUnitErrors(box, fullContextErr )
+    box.toOption.fold[Unit](logger.error(err))( (Unit) => feedCache(items))
   }
 }
