@@ -21,7 +21,7 @@ product.query.ByCategoryArgs={"where_not":"is_discontinued,is_dead", "order":"in
 # application product designer believes all items of relevance are not discontinued nor dead, so developer allows him to assign this view at run-time to the concept of "all items".
 # In general our policy or interpretation of how we should use the WEB API should be run-time attributes and not hard coded
 # (open question as to end-user having such choice, convention over configuration I often hear them say?).
-product.query.AllItemsArgs={"where_not":"is_discontinued,is_dead"}
+product.query.Filter={"where_not":"is_discontinued,is_dead"}
 
 product.CategoriesMap={"wine":"Wine","spirits":"Spirits","beer":"Beer","ciders":"Ciders","coolers":"Ready-to-Drink/Coolers","non-Alc":"Non-Alc"}
 product.CategoriesImageMap={"wine":"/images/wineGlassPour.jpg","spirits":"/images/brandy.jpg","beer":"/images/beerGlass.jpg","ciders":"/images/ciderGlass.jpg","coolers":"/images/coolerGlass.jpg","non-Alc":"/images/giftBox.jpg"}
@@ -38,6 +38,6 @@ store.maxSampleSize=60
 # implied with LCBO tests as max we can query on a page
 store.lcboMaxPerPage=40
 # careful observer will notice it's not same value as for product.
-store.query.AllItemsArgs={"where_not":"is_dead"}
+store.query.Filter={"where_not":"is_dead"}
 
 inventory.lcboMaxPerPage=50
