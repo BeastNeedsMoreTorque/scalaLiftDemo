@@ -52,6 +52,7 @@ trait LCBOPageLoader {
 trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
   def fetcher = new FetcherImpl
 
+  case class ItemsOnAPageParams[T](xt: JSitemsExtractor[T], urlRoot: String, maxPerPage: Int, params: Seq[(String, Any)], enough: GotEnough_? )
   // this whole class is hidden from clients. So, who needs to worry about private, public, protected here? No one.
   class FetcherImpl extends LCBOPageFetcher with RestClient {
     val LcboDomainURL = Props.get("lcboDomainURL", "http://") // set it!
@@ -61,14 +62,9 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
                                    maxPerPage: Int,
                                    params: Seq[(String, Any)] = Seq())
                                    (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
-      collectItemsOnAPage(
-        IndexedSeq[T](), // union of this page with next page when we are asked for a full sample
-        xt,
-        LcboDomainURL + webApiRoute,
-        maxPerPage,
-        1,
-        params,
-        enough)
+      val itemsOnAPageParams = ItemsOnAPageParams[T](xt, LcboDomainURL + webApiRoute, maxPerPage, params, enough )
+      // union of this page with next page when we are asked for a full sample
+      collectItemsOnAPage( IndexedSeq[T](), 1, itemsOnAPageParams)
     }
 
     implicit val formats = net.liftweb.json.DefaultFormats
@@ -102,11 +98,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
       * @see https://github.com/lift/lift/tree/master/framework/lift-base/lift-json/
       *      Uses tail recursion.
       * @param accumItems    accumulator to facilitate tail recursion
-      * @param urlRoot       a LCBO product query without the details of paging, which we handle here
-      * @param sizeFulfilled a boolean function indicating we have retrieved enough data, defaults to false, meaning exhaust all data unconditionally
-      * @param f             filter on the source data as to what we want to retain on a per item basis
-      * @param params        a collection of key value pairs to build the required uri, excluding paging considerations.
-      * @param pageNo        client calls this with value 1 (initial page), recursion increments it, designates the pageno for LCBO JSON data when data fits on several pages
+      * @param params        a wrapper of all parameter data we need (see case Class)
       * @return an indexed sequence of product items matching the query and size constraint.
       * @throws java.net.SocketTimeoutException            timeout is reached, slow connection
       * @throws java.io.IOException                        I/O issue
@@ -122,30 +114,21 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
     @throws(classOf[TruncatedChunkException]) // that's a brutal one.
     @tailrec
     final def collectItemsOnAPage[T](accumItems: IndexedSeq[T],
-                                     xt: JSitemsExtractor[T],
-                                     urlRoot: String,
-                                     maxPerPage: Int,
-                                     pageNo: Int,
-                                     params: Seq[(String, Any)],
-                                     enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
+                                     currPage: Int,
+                                     params: ItemsOnAPageParams[T]): IndexedSeq[T] = {
 
-      val uri = buildUrlWithPaging(urlRoot, pageNo, maxPerPage, params: _*)
+      val uri = buildUrlWithPaging(params.urlRoot, currPage, params.maxPerPage, params.params: _*)
       val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
-      val items = xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
+      val items = params.xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
       val revisedAccumItems = accumItems ++ items
 
-      if (isFinalPage(jsonRoot, pageNo) || enough(items.size + accumItems.size)) {
+      if (isFinalPage(jsonRoot, currPage) || params.enough(items.size + accumItems.size)) {
         logger.info(uri) // log only last one to be less verbose
         return revisedAccumItems
       }
-      collectItemsOnAPage(
-        revisedAccumItems, // union of this page with next page when we are asked for a full sample
-        xt,
-        urlRoot,
-        maxPerPage,
-        pageNo + 1,
-        params,
-        enough)
+      val revisedParams = ItemsOnAPageParams[T](params.xt, params.urlRoot, params.maxPerPage, params.params, params.enough )
+      // union of this page with next page when we are asked for a full sample
+      collectItemsOnAPage(revisedAccumItems, currPage +1, revisedParams)
     }
   }
 
