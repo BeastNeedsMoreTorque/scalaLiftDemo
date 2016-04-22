@@ -163,7 +163,7 @@ object Product extends Product with MetaRecord[Product] {
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
   // a cross cutting concern or a strategy.
   private def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = neverEnough ) =
-    collectItemsAsWebClient("/products", extract, MaxPerPage, ("store_id" -> lcboStoreId) +: seq)
+    collectItemsAsWebClient("/products", extract, Seq("per_page" -> MaxPerPage, "store_id" -> lcboStoreId) ++ seq)
 
   /*
    * Queries LCBO matching category
