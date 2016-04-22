@@ -220,7 +220,7 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
-  val queryAllItemsArgs = getSeq("store.query.AllItemsArgs")(ConfigPairsRepo.defaultInstance)
+  val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance)
 
   override def getCachedItem: (IStore) => Option[IStore] = s => getItemByLcboId(s.lcboId)
   def availableStores = storesCache.keySet
@@ -238,7 +238,7 @@ object Store extends Store with MetaRecord[Store] {
     <store>{Xml.toXml(st.asJValue)}</store>
 
   private def getStores(): Box[IndexedSeq[Store]] = tryo {
-      collectItemsAsWebClient("/stores", extract, MaxPerPage, queryAllItemsArgs) // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
+      collectItemsAsWebClient("/stores", extract, MaxPerPage, queryFilterArgs) // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
 
   /**
