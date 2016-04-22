@@ -220,7 +220,7 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
-  val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance)
+  val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
 
   override def getCachedItem: (IStore) => Option[IStore] = s => getItemByLcboId(s.lcboId)
   def availableStores = storesCache.keySet
@@ -231,14 +231,13 @@ object Store extends Store with MetaRecord[Store] {
     for (dbId <- LcboIdToPK.get(id);
          s <- storesCache.get(dbId)) yield s
 
-  val MaxPerPage = Props.getInt("store.lcboMaxPerPage", 0)
 
     /* Convert a store to XML, @see Scala in Depth implicit view */
   implicit def toXml(st: Store): Node =
     <store>{Xml.toXml(st.asJValue)}</store>
 
   private def getStores(): Box[IndexedSeq[Store]] = tryo {
-      collectItemsAsWebClient("/stores", extract, MaxPerPage, queryFilterArgs) // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
+      collectItemsAsWebClient("/stores", extract, queryFilterArgs) // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
 
   /**
