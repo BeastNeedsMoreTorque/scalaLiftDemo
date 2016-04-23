@@ -113,8 +113,9 @@ class Store private() extends LCBOEntity[Store] with IStore {
       */
     def getSerialResult(lcboProdCategory: String) = {
       val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
-      val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices).toStream  // stream avoids checking primary category on full collection (the permutation is done though).
-      val stream = for (id <- permutedIndices;
+      val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
+      // stream avoids checking primary category on full collection (the permutation is done though).
+      val stream = for (id <- permutedIndices.toStream;
                         p = prods(id) if p.primaryCategory == lcboProdCategory) yield p
       stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))  // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
       // and then zip with list of zeroes because we are too slow to obtain inventories.
@@ -131,7 +132,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
 
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val cachedIds = Random.shuffle[Int, IndexedSeq](inStockItems.indices).take(requestSize)  // shuffle only on the indices not full items.
+      val cachedIds = Random.shuffle[Int, IndexedSeq](inStockItems.indices).take(requestSize)  // shuffle only on the indices not full items (easier on memory mgmt).
       if (cachedIds.nonEmpty) cachedIds map inStockItems  // get back the items that the ids have been selected (we don't stream because we know inventory > 0)
       else getSerialResult(lcboProdCategory)
     }
