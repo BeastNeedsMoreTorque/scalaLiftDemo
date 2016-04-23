@@ -81,22 +81,21 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
                                    params: Seq[(String, Any)] = Seq())
                                   (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
       val urlRoot = LcboDomainURL + webApiRoute
-      val accumItems = new ArrayBuffer[T]
-
-      @tailrec  // in general it's good to make recursion tailrec to avoid stack overflow.
       // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise for exploiting name scope to avoid passing parameters).
-      def go(currPage: Int): IndexedSeq[T] = {
+      // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same. It has no side effect for sure, other than helpful log.
+      @tailrec // in general it's good to make recursion tailrec to avoid stack overflow.
+      def go(accumItems: IndexedSeq[T], currPage: Int): IndexedSeq[T] = {
         val uri = buildUrlWithPaging(urlRoot, currPage, params: _*)
         val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
-        accumItems ++= xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
-        if (isFinalPage(jsonRoot, currPage) || enough(accumItems.size)) {
+        val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
+        if (isFinalPage(jsonRoot, currPage) || enough(revisedItems.size)) {
           logger.info(uri) // log only last one to be less verbose
-          return accumItems.toIndexedSeq
+          return revisedItems.toIndexedSeq
         }
-        go(currPage + 1)
+        go(revisedItems, currPage + 1)
       }
 
-      go(1)
+      go( IndexedSeq(), 1) // tail recursion with classic accumulator as first parameter
     }
 
     implicit val formats = net.liftweb.json.DefaultFormats
