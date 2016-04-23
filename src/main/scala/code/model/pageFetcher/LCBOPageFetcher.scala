@@ -3,12 +3,12 @@ package code.model.pageFetcher
 import java.net.URLEncoder
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
-
 import net.liftweb.json._
 import net.liftweb.util.Props
 import org.apache.http.TruncatedChunkException
 import code.Rest.RestClient
 
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * Created by philippederome on 2016-03-30.
@@ -50,7 +50,6 @@ trait LCBOPageLoader {
 trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
   def fetcher = new FetcherImpl
 
-  case class ItemsOnAPageParams[T](xt: JSitemsExtractor[T], urlRoot: String, params: Seq[(String, Any)], enough: GotEnough_? )
   // this whole class is hidden from clients. So, who needs to worry about private, public, protected here? No one.
   class FetcherImpl extends LCBOPageFetcher with RestClient {
     val LcboDomainURL = Props.get("lcboDomainURL", "http://")  // set it!
@@ -81,8 +80,23 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
                                    xt: JSitemsExtractor[T],
                                    params: Seq[(String, Any)] = Seq())
                                   (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
-      val itemsOnAPageParams: ItemsOnAPageParams[T] = ItemsOnAPageParams[T](xt, LcboDomainURL + webApiRoute, params, enough)
-      collectItemsOnAPage(IndexedSeq[T](), 1, itemsOnAPageParams)
+      val urlRoot = LcboDomainURL + webApiRoute
+      val accumItems = new ArrayBuffer[T]
+
+      @tailrec  // in general it's good to make recursion tailrec to avoid stack overflow.
+      // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise for exploiting name scope to avoid passing parameters).
+      def go(currPage: Int): IndexedSeq[T] = {
+        val uri = buildUrlWithPaging(urlRoot, currPage, params: _*)
+        val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
+        accumItems ++= xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
+        if (isFinalPage(jsonRoot, currPage) || enough(accumItems.size)) {
+          logger.info(uri) // log only last one to be less verbose
+          return accumItems.toIndexedSeq
+        }
+        go(currPage + 1)
+      }
+
+      go(1)
     }
 
     implicit val formats = net.liftweb.json.DefaultFormats
@@ -108,21 +122,6 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
       ).mkString("&")
       if (paramsAsSuffix.nonEmpty) urlRoot + "?" + paramsAsSuffix
       else urlRoot
-    }
-
-    @tailrec
-    final def collectItemsOnAPage[T](accumItems: IndexedSeq[T], currPage: Int, itemsOnAPageParams: ItemsOnAPageParams[T] ): IndexedSeq[T] = {
-      val uri = buildUrlWithPaging(itemsOnAPageParams.urlRoot, currPage, itemsOnAPageParams.params: _*)   // leaves the pageNo out intentionally so we can append to it
-      val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
-      val items = itemsOnAPageParams.xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
-      val revisedAccumItems = accumItems ++ items
-
-      if (isFinalPage(jsonRoot, currPage) || itemsOnAPageParams.enough(items.size + accumItems.size)) {
-        logger.info(uri) // log only last one to be less verbose
-        return revisedAccumItems
-      }
-      // union of this page with next page when we are asked for a full sample
-      collectItemsOnAPage(revisedAccumItems, currPage + 1, itemsOnAPageParams)
     }
 
   }
