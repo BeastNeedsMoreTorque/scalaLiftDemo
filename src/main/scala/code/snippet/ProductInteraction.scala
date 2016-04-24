@@ -176,7 +176,7 @@ class ProductInteraction extends Loggable {
         prodQtySeq.dmap { Noop } // we gave notice of error already via JS, nothing else to do
         { pairs => // normal case
           S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-          prodDisplayJS( pairs.map{case ( p, q) => QuantityOfProduct(q, p)})
+          prodDisplayJS( pairs.map{case (p, q) => QuantityOfProduct(q, p)})
         }
       }
 
