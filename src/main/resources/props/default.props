@@ -23,7 +23,7 @@ product.query.ByCategoryArgs={"where_not":"is_discontinued,is_dead", "order":"in
 # (open question as to end-user having such choice, convention over configuration I often hear them say?).
 product.query.Filter={"where_not":"is_discontinued,is_dead"}
 
-product.CategoriesMap={"wine":"Wine","spirits":"Spirits","beer":"Beer","ciders":"Ciders","coolers":"Ready-to-Drink/Coolers","non-Alc":"Non-Alc"}
+product.CategoriesMap={"wine":"Wine","spirits":"Spirits","beer":"Beer","ciders":"Ciders","coolers":"Ready-to-Drink/Coolers","non-Alc":"Accessories and Non-Alcohol Items"}
 product.CategoriesImageMap={"wine":"/images/wineGlassPour.jpg","spirits":"/images/brandy.jpg","beer":"/images/beerGlass.jpg","ciders":"/images/ciderGlass.jpg","coolers":"/images/coolerGlass.jpg","non-Alc":"/images/giftBox.jpg"}
 product.interactionsImageMap={"recommend":"/images/recommend.jpg","cancel":"/images/cancel.jpg"}
 
