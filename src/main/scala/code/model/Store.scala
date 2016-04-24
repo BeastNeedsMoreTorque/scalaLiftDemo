@@ -179,9 +179,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
     fetches onComplete {
       case Success(_) => //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
         logger.debug(s"loadCache async work succeeded for $lcboId")
-        if (emptyInventory) {
-          logger.warn(s"got no product inventory for storeId $lcboId !") // No provision for retrying.
-        }
+        if (emptyInventory) logger.warn(s"got no product inventory for storeId $lcboId !") // No provision for retrying.
       case Failure(f) => logger.info(s"loadCache explicitly failed for $lcboId cause ${f.getMessage}")
     }
     logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
@@ -215,7 +213,7 @@ object Store extends Store with MetaRecord[Store] {
 
   override def cacheItems(items: Iterable[Store]): Unit = {
     super.cacheItems(items)
-    storesCache.foreach { case (_, s)  => s.refreshProducts() }  // ensure inventories are refreshed INCLUDING on start up.
+    storesCache.values.foreach( _.refreshProducts())  // ensure inventories are refreshed INCLUDING on start up.
   }
 
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
