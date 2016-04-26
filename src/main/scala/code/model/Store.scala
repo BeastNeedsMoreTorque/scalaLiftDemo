@@ -18,7 +18,6 @@ import org.squeryl.annotations._
 import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.utils.Combinator
 
 class Store private() extends LCBOEntity[Store] with IStore {
 
@@ -114,9 +113,6 @@ class Store private() extends LCBOEntity[Store] with IStore {
       */
     def getSerialResult(lcboProdCategory: String) = {
       val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
-      // we accept to pay price of full shuffle here for two reasons:
-      // 1) we had to pay price for web service so that's magnitudes slower than any in memory shuffling
-      // 2) We already limited the sample size somewhat by choosing not to fetch all matching products immediately (Store.MaxSampleSize is not that big)
       val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
       // stream avoids checking primary category on full collection (the permutation is done though).
       val stream = for (id <- permutedIndices.toStream;
@@ -136,11 +132,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
 
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-
-      // here we try to sample a small subset randomly from a large set fast for the fun of it, nothing else.
-      // Specifically if inStockItems is very large (thousands), we take a random sample of requestSize indices from that
-      // and use those indices to select the random items. So to select up to 20 items out 2000 is fast, rather than shuffling 2000 indices.
-      val cachedIds = Combinator.sampleNonNegativeShorts(inStockItems.indices.size, requestSize)
+      val cachedIds = Random.shuffle[Int, IndexedSeq](inStockItems.indices).take(requestSize)  // shuffle only on the indices not full items (easier on memory mgmt).
       if (cachedIds.nonEmpty) cachedIds map inStockItems  // get back the items that the ids have been selected (we don't stream because we know inventory > 0)
       else getSerialResult(lcboProdCategory)
     }
