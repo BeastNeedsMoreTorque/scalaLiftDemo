@@ -8,21 +8,28 @@ import scala.collection.IndexedSeq
 case class DirtyAndNewSequences[T](dirtys: IndexedSeq[T], news: IndexedSeq[T]) {}
 
 trait ItemStateGrouper {
-  // partition items into 3 lists, clean (no change), new (to insert) and dirty (to update), using neat groupBy, predicated on inputs being indexedseq for efficiency of groupby.
-  // return to user only new and dirty since there is not much to do with clean, at least for now.
-  // We want I to be an interface of T when using getCachedItem.
+  // to denote whether an abstract item T (for example Application Lift Record) requires to be inserted (New), updated (Dirty), or is good as is (Clean)
+  // Client of trait makes such determination. We return an ordered pair of the dirty ones and then the new ones.
+
+  sealed trait EntityRecordState
+  case object New extends EntityRecordState
+  case object Dirty extends EntityRecordState
+  case object Clean extends EntityRecordState
+
+  // We want I to be an interface of T when using get/isDirty as get usage could be more abstract than type T at client side (possibly retrieving from cache).
+  // Returned sequences require to be concrete because that is how our ORM interface is like.
   def itemsByState[I, T <: I](items: IndexedSeq[T],
                               get: I => Option[I],
-                              isDirty: (I, T) => Boolean): DirtyAndNewSequences[T] = {
+                              isDirty: (I, I) => Boolean): DirtyAndNewSequences[T] = {
     val x = items.groupBy {
       latest => (get(latest), latest) match {
-        case (None, _) => EntityRecordState.New
-        case (Some(retrieved), latest) if isDirty(retrieved, latest) => EntityRecordState.Dirty
-        case (_, _) => EntityRecordState.Clean
+        case (None, _) => New
+        case (Some(retrieved), latest) if isDirty(retrieved, latest) => Dirty
+        case (_, _) => Clean
       }
     }
-    val dirtyItems = x.getOrElse(EntityRecordState.Dirty, IndexedSeq[T]())
-    val newItems = x.getOrElse(EntityRecordState.New, IndexedSeq[T]())
-    DirtyAndNewSequences(dirtyItems, newItems)
+    DirtyAndNewSequences(
+      x.getOrElse(Dirty, IndexedSeq[T]()),
+      x.getOrElse(New, IndexedSeq[T]()))
   }
 }

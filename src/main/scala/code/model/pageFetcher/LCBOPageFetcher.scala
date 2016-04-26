@@ -81,7 +81,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
                                    params: Seq[(String, Any)] = Seq())
                                   (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
       val urlRoot = LcboDomainURL + webApiRoute
-      // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise for exploiting name scope to avoid passing parameters).
+      // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise using "closure" as is often found in JS).
       // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same. It has no side effect for sure, other than helpful log.
       @tailrec // in general it's good to make recursion tailrec to avoid stack overflow.
       def go(accumItems: IndexedSeq[T], currPage: Int): IndexedSeq[T] = {

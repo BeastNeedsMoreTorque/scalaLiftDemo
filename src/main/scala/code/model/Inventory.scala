@@ -75,7 +75,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
   }
 
   def fetchInventoriesByStore(webApiRoute: String,
-                              getCachedItem: (Inventory) => Option[Inventory],
+                              get: (Inventory) => Option[Inventory],
                               mapByProductId: Map[P_KEY, Inventory],
                               params: Seq[(String, Any)]): Box[UpdatedAndNewInventories] = tryo {
     // set up some functional transformers first, then get ready for real work.
@@ -91,7 +91,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     val getDBReadyUpdatedInvs: (IndexedSeq[Inventory] => Iterable[Inventory]) = removeCompositeKeyDupes _ compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose.
 
     val items = collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
-    val dirtyAndNewItems = itemsByState[Inventory, Inventory](items, getCachedItem, dirtyPredicate)
+    val dirtyAndNewItems = itemsByState[Inventory, Inventory](items, get, dirtyPredicate)
     val updatedInventories = getDBReadyUpdatedInvs(dirtyAndNewItems.dirtys)
     val newInventories = removeCompositeKeyDupes(dirtyAndNewItems.news)
     UpdatedAndNewInventories(updatedInventories, newInventories)
