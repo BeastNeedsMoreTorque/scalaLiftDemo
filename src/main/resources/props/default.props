@@ -40,4 +40,10 @@ store.lcboMaxPerPage=40
 # careful observer will notice it's not same value as for product.
 store.query.Filter={"where_not":"is_dead"}
 
+# false means we're in charge and will get repeatable predictable samples good for unit testing or proving we can work in "pure functional" way.
+# true means we're getting unpredictable selections, it's more entertaining but not as testable.
+store.useRandomSeed=false
+# in "deterministic or false mode", change this number to get different types of runs.
+store.fixedRNGSeed=411
+
 inventory.lcboMaxPerPage=50
