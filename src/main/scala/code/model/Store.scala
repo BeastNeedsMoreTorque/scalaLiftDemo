@@ -18,6 +18,8 @@ import org.squeryl.annotations._
 import code.model.Product.{fetchByStore, fetchByStoreCategory}
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.utils.RNG
+
 
 class Store private() extends LCBOEntity[Store] with IStore {
 
@@ -86,6 +88,10 @@ class Store private() extends LCBOEntity[Store] with IStore {
   private def productsByCategory: Map[String, IndexedSeq[Product]] =
     storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
 
+  private def getProductsByCategory(lcboCategory: String) =
+    productsCacheByCategory.get(lcboCategory).
+      fold(IndexedSeq[IProduct]()){ identity }
+
   private def getInventories: Map[P_KEY, Inventory] =
     inventories.toIndexedSeq.map { inv => P_KEY(inv.productid) -> inv } (breakOut)  // moderately slow because of iteration
 
@@ -106,36 +112,41 @@ class Store private() extends LCBOEntity[Store] with IStore {
     * @return quantity found in inventory for product and the product
     */
   def recommend(category: String, requestSize: Int): Box[Iterable[(IProduct, Long)]] = {
+    // Note well: this would be a PURE FUNCTION, despite that caller uses randomization and makes use of cached data. ONLY getSerialResult makes it impure.
+    def getShuffledProducts(rngSeed: RNG, initialProducts: IndexedSeq[IProduct],
+                            category: String, lcboProdCategory: String, requestSize: Int) = tryo {
+      val inStockItems =
+      { for ( p <- initialProducts;
+              inv <- inventoryByProductId.get(p.pKey);
+              q = inv.quantity if q > 0) yield (p, q)}
+      // products are loaded before inventories and we might have none
+      asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
+      val (cachedIds, rr) = RNG.sampleElements(inStockItems.indices, requestSize)(rngSeed) //Random.shuffle[Int, IndexedSeq](inStockItems.indices).take(requestSize)  // shuffle only on the indices not full items (easier on memory mgmt).
+      if (cachedIds.nonEmpty) cachedIds.map(inStockItems)  // get back the items that the ids have been selected (we don't stream because we know inventory > 0)
+      else getSerialResult(category, lcboProdCategory, rr)
+    }
     /**
-      *
+      * Only fetchByStoreCategory makes getSerialResult impure.
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO. It's been known that they would send a Wiser's Whiskey on a wine request.
       * @return 0 quantity found in inventory for product (unknown to be resolved in JS) and the product
       */
-    def getSerialResult(lcboProdCategory: String) = {
+    def getSerialResult(category: String, lcboProdCategory: String, r: RNG) = {
       val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
-      val permutedIndices = Random.shuffle[Int, IndexedSeq](prods.indices)
+      val (permutedIndices, rr) = RNG.shuffle(prods.indices)(r) //Random.shuffle[Int, IndexedSeq](prods.indices)
       // stream avoids checking primary category on full collection (the permutation is done though).
       val stream = for (id <- permutedIndices.toStream;
                         p = prods(id) if p.primaryCategory == lcboProdCategory) yield p
-      stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))  // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
+      stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong)) // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
       // and then zip with list of zeroes because we are too slow to obtain inventories.
     }
 
     // we could get errors going to LCBO, this tryo captures those.
-    tryo {
-      val lcboProdCategory = LiquorCategory.toPrimaryCategory(category) // transform to the category LCBO uses on product names in results (more or less upper case such as Beer)
-      val matchingProds = productsCacheByCategory.get(lcboProdCategory).fold(IndexedSeq[IProduct]()){ identity }
-      val inStockItems =
-      { for ( p <- matchingProds;
-              inv <- inventoryByProductId.get(p.pKey);
-              q = inv.quantity if q > 0) yield (p, q)}
+    val rngSeed = RNG.Simple(if (Store.UseRandomSeed) Random.nextInt() else Store.fixedRNGSeed)
+    val lcboProdCategory = LiquorCategory.toPrimaryCategory(category)
+    // the shuffling in getShuffledProducts is predetermined by rngSeed (and not other app calls to random generation routines)
+    // and when cache fails by the actual contents we get from LCBO via getSerialResult.
+    getShuffledProducts(rngSeed, getProductsByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
 
-      // products are loaded before inventories and we might have none
-      asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val cachedIds = Random.shuffle[Int, IndexedSeq](inStockItems.indices).take(requestSize)  // shuffle only on the indices not full items (easier on memory mgmt).
-      if (cachedIds.nonEmpty) cachedIds map inStockItems  // get back the items that the ids have been selected (we don't stream because we know inventory > 0)
-      else getSerialResult(lcboProdCategory)
-    }
   }
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
@@ -206,6 +217,9 @@ object Store extends Store with MetaRecord[Store] {
   def findAll(): Iterable[Store] = storesCache.values
 
   private val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
+  val UseRandomSeed = Props.getBool("store.useRandomSeed", true)
+  val fixedRNGSeed = Props.getInt("store.fixedRNGSeed", 21)
+
 
   private val storesCache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
   override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache
