@@ -8,10 +8,12 @@ package code.model.utils
 
 //THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// Edited and modified by Phil Derome, abiding by above copyright from Manniny Publications, Co. Software is provided "AS IS" as per above as well.
+// Edited and modified by Phil Derome, abiding by above copyright from Manning Publications, Co. Modified Software is provided "AS IS" as per above as well.
 
 
 import State._
+
+import scala.annotation.tailrec
 
 case class State[S, +A](run: S => (A, S)) {
   def map[B](f: A => B): State[S, B] =
@@ -27,6 +29,7 @@ case class State[S, +A](run: S => (A, S)) {
 
 trait RNG {
   def nextInt: (Int, RNG) // Should generate a random `Int`. We'll later define other functions in terms of `nextInt`.
+
 }
 
 object RNG {
@@ -53,7 +56,7 @@ object RNG {
       (f(a), rng2)
     }
 
-  def nonNegativeInt(rng: RNG): (Int, RNG) = {
+  def nonNegativeInt: Rand[Int] = rng => {
     val (i, r) = rng.nextInt
     val ii = if (i >= 0) i else -1 * (i + 1)
     (ii, r)
@@ -106,13 +109,14 @@ object RNG {
   // Consequence of not reversing is that using the same seed on same inputs for k1 < k2 will not necessarily have the same prefix chain of k1
   // for the two calls of k1 and k2. It is still pure function, but subtle in behaviour.
   def sampleElements(s: Seq[Int], k: Int): Rand[Seq[Int]] = {
+    @tailrec
     def go(sel: SelectorState, in_K: Int, r: RNG): (Seq[Int], RNG) = {
       val k = Math.min(in_K, s.size) // effective k
       val (ints, rr) = randomWithRepeats(sel.available.toSeq, k)(r) // expected that there are repeats but when k is small they can be unique (in particular k =1)
       val intsSetSize = ints.toSet.size
-      val transformer = execute(ints) //RNG.execute(ints)
+      val transformer = execute(ints)
       transformer.run(sel) match {
-        // with great luck they'd be distinct
+        // with great luck or very small k they'd be distinct
         case ((newSeq, newSet), newSelector) if intsSetSize == k =>
           (newSelector.chosen, rr)
         case ((newSeq, newSet), newSelector) =>
@@ -124,8 +128,7 @@ object RNG {
 
   def shuffle(s: Seq[Int]): Rand[Seq[Int]] = sampleElements(s, s.size)
 
-
-    // no repeats in sample
+  // no repeats in sample
   def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = rng =>  {
     val (seq, r) = sampleElements(s.indices, k)(rng)
     (seq.map(i => s(i)), r)
@@ -148,6 +151,7 @@ object State {
   // the operations are considered left and right associative (e.g. selecting k elements randomly, we don't care about the reverse
   // being "better" or "worse" than its "conjugate".
   def rawSequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
+    @tailrec
     def go(s: S, actions: List[State[S,A]], acc: List[A]): (List[A],S) =
       actions match {
         case Nil => (acc,s)
