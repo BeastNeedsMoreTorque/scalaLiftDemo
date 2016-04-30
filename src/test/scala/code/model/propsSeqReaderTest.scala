@@ -1,6 +1,6 @@
 package code.model
 
-import code.model.utils.UnitTest
+import code.UnitTest
 
 /**
   * Created by philippederome on 2016-04-11.
@@ -8,12 +8,13 @@ import code.model.utils.UnitTest
   */
 class propsSeqReaderTest extends UnitTest {
 
-  "getSeq" should "return exact sequence of categories (json parsed) keyed by valid masterKey" in {
+  behavior of "getSeq"
+  it should "return exact sequence of categories (json parsed) keyed by valid masterKey" in {
     val keyVals = Seq(("wine","Wine"),("spirits","Spirits"),("beer","Beer"))
     ConfigPairsRepo.defaultInstance.getSeq("product.shortCategories") should equal(keyVals)
   }
 
-  "getSeq" should "return empty sequence when masterKey is invalid" in {
+  it should "return empty sequence when masterKey is invalid" in {
     ConfigPairsRepo.defaultInstance.getSeq("invalidKey") shouldBe empty
   }
 }

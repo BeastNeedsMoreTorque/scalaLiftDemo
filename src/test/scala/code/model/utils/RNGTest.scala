@@ -1,10 +1,12 @@
 package code.model.utils
 
 import scala.util.Random
-
 import org.junit.runner.RunWith
 import RNG._
 import State._
+import code.UnitTest
+import code.SlowTest
+
 
 /**
   * Created by philippederome on 2016-04-28.
@@ -19,7 +21,7 @@ class RNGTest extends UnitTest {
   val r = Simple(seed0)
   val sampleSize = 100
   val (samples, _) = sequence(List.fill(sampleSize)(nonNegativeInt)).run(r)
-  "checkNonNegative" should s"return only actual negatives on 'large' input (size $sampleSize) when setting Simple($seed0)" in {
+  it should s"return only actual negatives on 'large' input (size $sampleSize) when setting Simple($seed0)" in {
     val allNonNegatives = samples.forall(_ >= 0)
     allNonNegatives shouldBe true
   }
@@ -36,7 +38,7 @@ class RNGTest extends UnitTest {
   val shuffleOffset = 100
   val shuffleRange = (0 to 9).map( _ + shuffleOffset)
   val seed1 = 20
-  "checkShuffle" should s"predict correctly permutation of $shuffleRange when setting Simple($seed1)" in {
+  it should s"predict correctly permutation of $shuffleRange when setting Simple($seed1)" in {
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed1))
     val exp_shuffled = List(109, 106, 102, 105, 101, 104, 103, 107, 100, 108)
     shuffled should equal(exp_shuffled)
@@ -66,7 +68,8 @@ class RNGTest extends UnitTest {
 
   // This used to do stack overflow at about 2000-3000 items, which was NOT FUN AT ALL!
   // Still about 4-7 times slower than the official Random.shuffle one on 10000 items (mine is 1.0 sec to 1.7 sec compared to 246 ms)
-  it should s"return sequence with no duplicates on permuting large sequence with random seed" in {
+  // Warning: moderately slow.
+  it should s"return sequence with no duplicates on permuting large sequence with random seed" taggedAs(SlowTest) in {
     val seed = Random.nextInt()
     val N = 10000
     val (shuffled, _) = shuffle(1 to N).run(Simple(seed))
@@ -80,7 +83,7 @@ class RNGTest extends UnitTest {
   val seed3 = 50
   val (selected, newSimple) = collectSample(bigSample, k1).run(Simple(seed3))
   val exp_selected = Seq(3524, 520, 3544, 4675, 3129)
-  "checkCollectSample" should s"predict pick $k1 distinct elements from 1 to 5000 exactly as ($exp_selected, Simple(239178062524073)) on seed Simple($seed3)" in {
+  it should s"predict pick $k1 distinct elements from 1 to 5000 exactly as ($exp_selected, Simple(239178062524073)) on seed Simple($seed3)" in {
     (selected, newSimple) should equal((exp_selected), Simple(239178062524073L))
   }
 
