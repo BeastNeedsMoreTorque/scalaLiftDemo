@@ -63,9 +63,10 @@ class RNGTest extends UnitTest {
     shuffled should equal(exp_shuffled)
   }
 
+  // This used to do stack overflow at about 2000-3000 items, which was NOT FUN AT ALL!
   it should s"return sequence with no duplicates on permuting large sequence with random seed" in {
     val seed = Random.nextInt()
-    val N = 4000
+    val N = 10000
     val (shuffled, _) = shuffle(1 to N).run(Simple(seed))
     shuffled should have size N
   }
