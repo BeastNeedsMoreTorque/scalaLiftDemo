@@ -12,14 +12,11 @@ import State._
 @RunWith(classOf[org.scalatest.junit.JUnitRunner])
 class RNGTest extends UnitTest {
 
+  behavior of "NonNegative"
   val seed0 = 10
   val r = Simple(seed0)
   val sampleSize = 100
   val (samples, _) = sequence(List.fill(sampleSize)(nonNegativeInt)).run(r)
-
-
-  behavior of "checkNonNegative"
-
   "checkNonNegative" should s"return only actual negatives on 'large' input (size $sampleSize) when setting Simple($seed0)" in {
     val allNonNegatives = samples.forall(_ >= 0)
     allNonNegatives shouldBe true
@@ -30,8 +27,10 @@ class RNGTest extends UnitTest {
     sampleResSize shouldBe sampleSize
   }
 
-  behavior of "checkShuffle"
-
+  behavior of "Shuffle"
+  // Actual values of Expected Shuffled values (exp_shuffled) are more to show the deterministic nature of the tests (pure functions using fixed seed)
+  // In actual fact, a different implementation of the shuffle with same inputs could well be expected to yield different outputs.
+  // So the check is more of a solution/function check than a BEHAVIOUR one.
   val shuffleOffset = 100
   val shuffleRange = (0 to 9).map( _ + shuffleOffset)
   val seed1 = 20
@@ -71,7 +70,7 @@ class RNGTest extends UnitTest {
     shuffled should have size N
   }
 
-  behavior of "checkCollectSample"
+  behavior of "CollectSample"
 
   val bigSample = 1 to 5000
   val k1 = 5
