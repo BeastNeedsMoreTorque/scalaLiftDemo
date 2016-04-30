@@ -24,7 +24,7 @@ trait ItemStateGrouper {
     val x = items.groupBy {
       latest => (get(latest), latest) match {
         case (None, _) => New
-        case (Some(retrieved), latest) if isDirty(retrieved, latest) => Dirty
+        case (Some(retrieved), item) if isDirty(retrieved, item) => Dirty
         case (_, _) => Clean
       }
     }

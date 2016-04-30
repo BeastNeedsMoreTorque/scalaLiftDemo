@@ -100,7 +100,7 @@ object RNG {
   case class SelectorState(chosen: Seq[Int], available: Set[Int])
 
   def update = (i: Int) => (s: SelectorState) =>
-    if (s.chosen.exists(_ == i)) s  // failed to improve
+    if (s.chosen.contains(i)) s  // failed to improve
     else SelectorState(s.chosen ++ Seq(i), s.available - i) // succeeded
 
   def execute(inputs: List[Int]): State[SelectorState, (Seq[Int], Set[Int])] = for {
