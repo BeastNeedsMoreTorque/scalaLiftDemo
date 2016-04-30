@@ -78,7 +78,7 @@ class errorReporterTest extends UnitTest {
 
   behavior of "Box monad"
 
-  it should "return numbers as sequence of size 1 on normal Iterable[Int] after successful checkErrors" in {
+  it should "return numbers as sequence of size 1 via for comprehension after successful checkErrors as not being empty (error case)" in {
     def ints = {
       val nearZeroInt = 1
       val x = 5/nearZeroInt
@@ -87,8 +87,8 @@ class errorReporterTest extends UnitTest {
     val monad = intsBox(ints)
     val appContextError = "YOUR Integer COLLECTION IS EMPTY BECAUSE OF USER TRAINING ISSUE, TERRIBLY SORRY! ErrNo:223344, Sev: 1024" // this is hobby project, not corporate, professional, I have license for irony.
     val errCheck = instance.checkErrors(monad, errorFormatter, appContextError)
-    assert(errCheck.isEmpty)
+    assert(errCheck.isEmpty)  // many ways to skin a cat (e.g. errCheck shouldBe empty)
     val numbers = for (x <- monad) yield x  // Monad usage (flatMap)
-    numbers.map(identity).getOrElse(1 to 10) should have size 1  // not 10!
+    numbers.map(identity).getOrElse(Seq()) should contain (5)
   }
 }
