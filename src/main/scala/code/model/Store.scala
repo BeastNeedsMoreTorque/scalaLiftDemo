@@ -161,8 +161,8 @@ class Store private() extends LCBOEntity[Store] with IStore {
     }
 
     def fetchInventories() = {
-      def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update _
-      def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert _
+      def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update
+      def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert
       val fullContextErr = (m: String, err: String) =>
         s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
       // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
@@ -184,8 +184,8 @@ class Store private() extends LCBOEntity[Store] with IStore {
     }
 
     val fetches =
-      for (p <- Future(fetchProducts); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
-           i <- Future(fetchInventories)) yield i // similarly for inventories and serialize intentionally because of Ref.Integrity  if no exception was thrown
+      for (p <- Future(fetchProducts()); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
+           i <- Future(fetchInventories())) yield i // similarly for inventories and serialize intentionally because of Ref.Integrity  if no exception was thrown
 
     fetches onComplete {
       case Success(_) => //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
@@ -260,8 +260,7 @@ object Store extends Store with MetaRecord[Store] {
   override def load(): Unit = inTransaction {
     def fullContextErr( m: String,  ex: String): String =
       s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'"
-    def briefContextErr(): String =
-      "Problem loading LCBO stores into cache, none found"
+    val briefContextErr = "Problem loading LCBO stores into cache, none found"
 
     logger.info("load start")
     val dbStores = from(table())(item => select(item))

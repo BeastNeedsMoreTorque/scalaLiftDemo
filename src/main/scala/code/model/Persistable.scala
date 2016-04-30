@@ -48,7 +48,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     def feedCache(items: Iterable[T]) = {
       val pkIds = items.map(_.pKey: Long)  // type ascription to integrate with Squeryl below
       // select only what we did and use DB's version of the state of the items.
-      val itemsWithPK = from(table())(item => where(item.idField in pkIds) select(item))
+      val itemsWithPK = from(table())(item => where(item.idField in pkIds) select item)
       cache() ++= itemsWithPK.map{item => item.pKey -> item } (collection.breakOut)
     }
     // Seems high enough to report error to log as it appears a little messy to push it up further.
