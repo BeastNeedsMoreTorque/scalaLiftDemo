@@ -8,6 +8,8 @@ import State._
 
 /**
   * Created by philippederome on 2016-04-28.
+  * Unit testing is useful: it helped me identify stack overflow on shuffle for large N and later on rather egregious performance in my original
+  * greedy, naive algorithm.
   */
 @RunWith(classOf[org.scalatest.junit.JUnitRunner])
 class RNGTest extends UnitTest {
@@ -36,14 +38,14 @@ class RNGTest extends UnitTest {
   val seed1 = 20
   "checkShuffle" should s"predict correctly permutation of $shuffleRange when setting Simple($seed1)" in {
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed1))
-    val exp_shuffled = List(107, 106, 108, 101, 105, 104, 103, 102, 109, 100)
+    val exp_shuffled = List(109, 106, 102, 105, 101, 104, 103, 107, 100, 108)
     shuffled should equal(exp_shuffled)
   }
 
   val seed2 = 10
   it should s"predict correctly permutation of $shuffleRange when setting with other seed Simple($seed2)" in {
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed2))
-    val exp_shuffled = List(100, 108, 101, 105, 107, 109, 102, 106, 103, 104)
+    val exp_shuffled = List(105, 106, 101, 109, 102, 100, 107, 104, 108, 103)
     shuffled should equal(exp_shuffled)
   }
 
@@ -63,6 +65,7 @@ class RNGTest extends UnitTest {
   }
 
   // This used to do stack overflow at about 2000-3000 items, which was NOT FUN AT ALL!
+  // Still about 4-7 times slower than the official Random.shuffle one on 10000 items (mine is 1.0 sec to 1.7 sec compared to 246 ms)
   it should s"return sequence with no duplicates on permuting large sequence with random seed" in {
     val seed = Random.nextInt()
     val N = 10000
