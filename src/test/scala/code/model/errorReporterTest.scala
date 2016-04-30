@@ -1,11 +1,12 @@
 package code.model
 
-import code.model.utils.UnitTest
+import code.UnitTest
 import net.liftweb.util.Helpers.tryo
 import net.liftweb.common.Box
 
 /**
   * Created by philippederome on 2016-04-11. Look down for "monad" at the end to understand Box.
+  * Note we don't use intercept on exceptions here because we capture them functionally (there's only ONE throw in whole app, at ORMExecutor).
   */
 
 class errorReporterTest extends UnitTest {
@@ -15,7 +16,7 @@ class errorReporterTest extends UnitTest {
   def errorFormatter( s: String,  suffix: String): String = s"$s...$suffix"
 
   behavior of "checkUnitErrors"
-  "checkUnitErrors" should "return error string including some nefarious java.lang.IllegalArgumentException substring" in {
+  it should "return error string including some nefarious java.lang.IllegalArgumentException substring" in {
     val box: Box[Unit] =  tryo {
       throw new IllegalArgumentException("Dropped the BOMB or some pleasant/useful IT/Product context") // you poor chap!
     }
@@ -38,7 +39,7 @@ class errorReporterTest extends UnitTest {
   }
 
   behavior of "checkErrors"
-  "checkErrors" should "return empty on normal Iterable[Int]" in {
+  it should "return empty on normal Iterable[Int]" in {
     val box: Box[Iterable[Int]] = tryo {
       val nearZeroInt = 1
       val x = 5/nearZeroInt
@@ -65,7 +66,7 @@ class errorReporterTest extends UnitTest {
   }
 
   behavior of "Box monad"
-  "monad demo" should "return numbers as sequence of size 1 on normal Iterable[Int] after successful checkErrors" in {
+  it should "return numbers as sequence of size 1 on normal Iterable[Int] after successful checkErrors" in {
     val box: Box[Iterable[Int]] = tryo {
       val nearZeroInt = 1
       val x = 5/nearZeroInt

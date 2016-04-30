@@ -12,7 +12,7 @@ import scala.collection.Iterable
   * Just to isolate the verbose try catch block.
   * The only spot we do a catch so far, BECAUSE we need all the diagnostics we can get
   * and we can identify the error neatly right here. Other error handling is done FP way with tryo/Box playing role of Either/Option.
-  * Please, hide this try catch block from privy eyes.
+  * Please, please, please: hide this try catch block from privy eyes. It makes me noxious. ;-)
   */
 trait ORMExecutor extends Loggable {
   def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Box[Unit] = tryo { // captures exception in Box and force callers to deal with it.
