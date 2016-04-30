@@ -10,6 +10,7 @@ package code.model.utils
 
 // Edited and modified by Phil Derome, abiding by above copyright from Manning Publications, Co. Modified Software is provided "AS IS" as per above as well.
 
+// Apparently, this is in line of thought of Scalaz (authors probably contributed to Scalaz).
 
 import State._
 
