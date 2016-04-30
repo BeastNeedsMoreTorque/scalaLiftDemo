@@ -75,6 +75,6 @@ class errorReporterTest extends UnitTest {
     val errCheck = instance.checkErrors(box, errorFormatter, appContextError)
     errCheck shouldBe empty
     val numbers = for (x <- box) yield x  // Monad usage (flatMap)
-    numbers.map(identity).getOrElse(1 to 10) should have size 1
+    numbers.map(identity).getOrElse(1 to 10) should have size 1  // not 10!
   }
 }
