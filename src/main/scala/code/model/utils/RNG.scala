@@ -110,21 +110,29 @@ object RNG {
   // Consequence of not reversing is that using the same seed on same inputs for k1 < k2 will not necessarily have the same prefix chain of k1
   // for the two calls of k1 and k2. It is still pure function, but subtle in behaviour.
   def sampleElements(s: Seq[Int], k: Int): Rand[Seq[Int]] = {
-    @tailrec
-    def go(sel: SelectorState, in_K: Int, r: RNG): (Seq[Int], RNG) = {
-      val k = Math.min(in_K, s.size) // effective k
-      val (ints, rr) = randomWithRepeats(sel.available.toSeq, k)(r) // expected that there are repeats but when k is small they can be unique (in particular k =1)
-      val intsSetSize = ints.toSet.size
-      val transformer = execute(ints)
-      transformer.run(sel) match {
-        // with great luck or very small k they'd be distinct
-        case ((newSeq, newSet), newSelector) if intsSetSize == k =>
-          (newSelector.chosen, rr)
-        case ((newSeq, newSet), newSelector) =>
-          go(newSelector, k - intsSetSize,rr) // this should improve each time because we're forced to select something new
+    // cannot do @tailrec simply because of divide and conquer into 2 parts.
+    // Conceivably, go could use par; would require experiments to validate if thread overhead justifies it.
+    def go(sel: SelectorState, k: Int, r: RNG): (Seq[Int], RNG) = {
+      if (k < sel.available.size / 2 || k <= 8) { // experiments showed 8 to 32 not too bad. Would require deeper analysis.
+        val (ints, rr) = randomWithRepeats(sel.available.toSeq, k)(r) // expected that there are repeats but when k is small they can be unique (in particular k =1)
+        val intsSetSize = ints.toSet.size
+        val transformer = execute(ints)
+        transformer.run(sel) match {
+          // for small k this may match
+          case ((newSeq, newSet), newSelector) if intsSetSize == k =>
+            (newSelector.chosen, rr)
+          case ((newSeq, newSet), newSelector) =>
+            go(newSelector, k - intsSetSize, rr) // this should improve each time because we're forced to select something new
+        }
+      }
+      else {
+        val (seq1, seq2) = sel.available.splitAt(sel.available.size/2)
+        val x1 = go(SelectorState(sel.chosen, seq1), k/2, r)
+        val x2 = go(SelectorState(sel.chosen, seq2), k - k/2, x1._2)
+        (x1._1 ++ x2._1, x2._2)
       }
     }
-    State(rng => go (SelectorState(Seq(), s.toSet), k, rng))
+    State(rng => go (SelectorState(Seq(), s.toSet), Math.min(k, s.size), rng))
   }
 
   def shuffle(s: Seq[Int]): Rand[Seq[Int]] = sampleElements(s, s.size)
