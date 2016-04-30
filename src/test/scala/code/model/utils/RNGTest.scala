@@ -14,7 +14,9 @@ import scala.language.reflectiveCalls
   */
 class RNGTest extends UnitTest {
 
-  // technique normally used to localize side effects to single test cases.
+  // @see http://www.scalatest.org/user_guide/sharing_fixtures (Instantiating fixture objects)
+  // technique normally used to localize side effects to single test cases. A little overkill for what's done here, but demonstrates the technique
+  // for more complex scenarios. Fixtures allow side effect clean up, not used here.
   trait randomRNG {
     val seed = Simple(Random.nextInt())
   }
@@ -26,11 +28,10 @@ class RNGTest extends UnitTest {
   behavior of "NonNegative"
   val seed0 = 10
   val r0 = Simple(seed0)
-  val sampleSize = 100
+  val sampleSize = 5000
   val (samples, _) = sequence(List.fill(sampleSize)(nonNegativeInt)).run(r0)
-  it should s"return only actual negatives on 'large' input when setting specific Simple" in {
-    val allNonNegatives = samples.forall(_ >= 0)
-    allNonNegatives shouldBe true
+  it should s"return only actual non-negatives on 'large' input when setting specific Simple" in {
+    every(samples) should be >= 0  // uses Scalatest matchers (every)
   }
 
   it should s"check that sample size of results has no repeats (same as sampleSize $sampleSize)" in {
@@ -64,9 +65,8 @@ class RNGTest extends UnitTest {
   }
 
   it should s"return empty sequence on permuting 0 element when setting with random seed" in new randomRNG {
-    val expected_shuffled = List()
-    val (shuffled, _) = shuffle(expected_shuffled).run(seed)
-    shuffled should equal(expected_shuffled)
+    val (shuffled, _) = shuffle(Nil).run(seed)
+    shuffled shouldBe empty
   }
 
   // This used to do stack overflow at about 2000-3000 items, which was NOT FUN AT ALL!
