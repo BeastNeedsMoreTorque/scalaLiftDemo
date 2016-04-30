@@ -26,6 +26,15 @@ class RNGTest extends UnitTest {
   }
 
   behavior of "NonNegative"
+  private def testCornerCases(test: Int => Unit) = {
+    val tests = Table(
+      ("n: Int"),
+      (0), (1), (-1), (Int.MaxValue), (Int.MinValue))
+    forAll(tests)(test)
+  }
+  private def testNonNegativeInt(n: Int) = nonNegativeInt.run(Simple(n))._1 should be >= 0
+  it should "work for corner cases" in testCornerCases(testNonNegativeInt)
+
   val seed0 = 10
   val r0 = Simple(seed0)
   val sampleSize = 5000
