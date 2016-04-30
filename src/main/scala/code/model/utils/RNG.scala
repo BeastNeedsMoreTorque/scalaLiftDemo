@@ -43,67 +43,54 @@ object RNG {
     }
   }
 
-  type Rand[+A] = RNG => (A, RNG)
-
-  val int: Rand[Int] = _.nextInt
+  val int: Rand[Int] = State(_.nextInt)
 
   def unit[A](a: A): Rand[A] =
-    rng => (a, rng)
+   State( rng => (a, rng))
 
   def map[A,B](s: Rand[A])(f: A => B): Rand[B] =
-    rng => {
-      val (a, rng2) = s(rng)
+    State(rng => {
+      val (a, rng2) = s.run(rng)
       (f(a), rng2)
-    }
+    })
 
-  def nonNegativeInt: Rand[Int] = rng => {
+  def nonNegativeInt: Rand[Int] = State(rng => {
     val (i, r) = rng.nextInt
     val ii = if (i >= 0) i else -1 * (i + 1)
     (ii, r)
-  }
+  })
 
-  def flatMap[A, B](f: Rand[A])(g: A => Rand[B]): Rand[B] = rng => {
-    val (a, ra) = f(rng)
-    g(a)(ra)
-  }
+  def flatMap[A, B](f: Rand[A])(g: A => Rand[B]): Rand[B] = State(rng => {
+    val (a, ra) = f.run(rng)
+    g(a).run(ra)
+  })
 
   def map2[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
-    rng => {
-      val (a, raa) = ra(rng)
-      val (b, rc) = rb(raa)
+    State(rng => {
+      val (a, raa) = ra.run(rng)
+      val (b, rc) = rb.run(raa)
       (f(a, b), rc)
-    }
+    })
 
-  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = rng => {
-    @tailrec
-    def go(fs: List[Rand[A]], acc: List[A])(rng: RNG): (List[A], RNG) = fs match {
-      case Nil => (acc, rng)
-      case (h :: t)  =>
-        val (a, r) = h(rng)
-        go(t, a :: acc )(r)
-    }
-    val emp: List[A] = List()
-    go(fs, emp)(rng)
-  }
 
   def ints(n: Int)(rng: RNG): (List[Int], RNG) =
-    sequence(List.fill(n)(int))(rng)
+    sequence(List.fill(n)(int)).run(rng)
 
-  def nonNegativeLessThan(n: Int): Rand[Int] = rng => {
-    val (a, ra) = nonNegativeInt(rng)
+  def nonNegativeLessThan(n: Int): Rand[Int] = State(rng => {
+    val (a, ra) = nonNegativeInt.run(rng)
     @tailrec
     def go(i: Int)(rng: RNG): (Int, RNG) = {
       val mod = i % n
       if (i + (n - 1) - mod >= 0) (mod, rng) else go(n)(rng)
     }
     go(a)(ra)
-  }
+  })
 
   def randomElement(s: Seq[Int]): Rand[Seq[Int]] =
     flatMap(nonNegativeLessThan(s.size)) { i => unit(Seq(s(i))) }
 
   protected def randomWithRepeats(s: Seq[Int], k: Int)(rng: RNG): (List[Int], RNG) = {
-    val (ints, r) = sequence(List.fill(k)(nonNegativeLessThan(s.size)))(rng)
+    val (ints, r) = sequence(List.fill(k)(nonNegativeLessThan(s.size))).run(rng)
     (ints.map(i => s(i)), r)
   }
 
@@ -136,53 +123,54 @@ object RNG {
           go(newSelector, k - intsSetSize,rr) // this should improve each time because we're forced to select something new
       }
     }
-    rng => go (SelectorState(Seq(), s.toSet), k, rng)
+    State(rng => go (SelectorState(Seq(), s.toSet), k, rng))
   }
 
   def shuffle(s: Seq[Int]): Rand[Seq[Int]] = sampleElements(s, s.size)
 
   // no repeats in sample
-  def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = rng =>  {
-    val (seq, r) = sampleElements(s.indices, k)(rng)
+  def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = State(rng =>  {
+    val (seq, r) = sampleElements(s.indices, k).run(rng)
     (seq.map(i => s(i)), r)
-  }
+  })
 
 }
 
 object State {
-  type Rand[A] = State[RNG, A]
+type Rand[A] = State[RNG, A]
 
-  def unit[S, A](a: A): State[S, A] =
-    State(s => (a, s))
+def unit[S, A](a: A): State[S, A] =
+State(s => (a, s))
 
 
-  // This implementation uses a loop internally and is the same recursion
-  // pattern as a left fold. It is quite common with left folds to build
-  // up a list in reverse order, then reverse it at the end.
-  //
-  // Here, we defined intermediate rawSequence not to reverse for clients interested in lower latency and for which
-  // the operations are considered left and right associative (e.g. selecting k elements randomly, we don't care about the reverse
-  // being "better" or "worse" than its "conjugate".
-  def rawSequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
-    @tailrec
-    def go(s: S, actions: List[State[S,A]], acc: List[A]): (List[A],S) =
-      actions match {
-        case Nil => (acc,s)
-        case h :: t => h.run(s) match { case (a,s2) => go(s2, t, a :: acc) }
-      }
-    State((s: S) => go(s,sas,List()))
-  }
-  // the preferred interface by far as it preserves associativity rules
-  def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
-    rawSequence(sas).map( _.reverse)
-  }
+// This implementation uses a loop internally and is the same recursion
+// pattern as a left fold. It is quite common with left folds to build
+// up a list in reverse order, then reverse it at the end.
+//
+// Here, we defined intermediate rawSequence not to reverse for clients interested in lower latency and for which
+// the operations are considered left and right associative (e.g. selecting k elements randomly, we don't care about the reverse
+// being "better" or "worse" than its "conjugate".
+def rawSequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
+@tailrec
+def go(s: S, actions: List[State[S,A]], acc: List[A]): (List[A],S) =
+ actions match {
+   case Nil => (acc,s)
+   case h :: t => h.run(s) match { case (a,s2) => go(s2, t, a :: acc) }
+ }
+State((s: S) => go(s,sas,List()))
+}
+// the preferred interface by far as it preserves associativity rules
+def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
+rawSequence(sas).map( _.reverse)
+}
 
-  def modify[S](f: S => S): State[S, Unit] = for {
-    s <- get // Gets the current state and assigns it to `s`.
-    _ <- set(f(s)) // Sets the new state to `f` applied to `s`.
-  } yield ()
 
-  def get[S]: State[S, S] = State(s => (s, s))
+def modify[S](f: S => S): State[S, Unit] = for {
+s <- get // Gets the current state and assigns it to `s`.
+_ <- set(f(s)) // Sets the new state to `f` applied to `s`.
+} yield ()
 
-  def set[S](s: S): State[S, Unit] = State(_ => ((), s))
+def get[S]: State[S, S] = State(s => (s, s))
+
+def set[S](s: S): State[S, Unit] = State(_ => ((), s))
 }
