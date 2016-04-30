@@ -74,17 +74,30 @@ object RNG {
       (f(a, b), rc)
     }
 
-  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] =
-    fs.foldRight(unit(List[A]()))((f, acc) => map2(f, acc)(_ :: _))
+  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = rng => {
+    @tailrec
+    def go(fs: List[Rand[A]], acc: List[A])(rng: RNG): (List[A], RNG) = fs match {
+      case Nil => (acc, rng)
+      case (h :: t)  =>
+        val (a, r) = h(rng)
+        go(t, a :: acc )(r)
+    }
+    val emp: List[A] = List()
+    go(fs, emp)(rng)
+  }
 
   def ints(n: Int)(rng: RNG): (List[Int], RNG) =
     sequence(List.fill(n)(int))(rng)
 
-  def nonNegativeLessThan(n: Int): Rand[Int] =
-    flatMap(nonNegativeInt) { i =>
+  def nonNegativeLessThan(n: Int): Rand[Int] = rng => {
+    val (a, ra) = nonNegativeInt(rng)
+    @tailrec
+    def go(i: Int)(rng: RNG): (Int, RNG) = {
       val mod = i % n
-      if (i + (n - 1) - mod >= 0) unit(mod) else nonNegativeLessThan(n)
+      if (i + (n - 1) - mod >= 0) (mod, rng) else go(n)(rng)
     }
+    go(a)(ra)
+  }
 
   def randomElement(s: Seq[Int]): Rand[Seq[Int]] =
     flatMap(nonNegativeLessThan(s.size)) { i => unit(Seq(s(i))) }
