@@ -1,22 +1,20 @@
 package code.model
 
-import org.scalatest.{FlatSpec,ShouldMatchers}
+import code.model.utils.UnitTest
 
 /**
   * Created by philippederome on 2016-04-11. It shows I prefer coding to testing... But code had to stabilize first too.
+  * Uses main/resources/test.default.props for Properties content.
   */
-class propsSeqReaderTest extends FlatSpec with ShouldMatchers {
+class propsSeqReaderTest extends UnitTest {
 
-  var masterKey = "product.shortCategories"
-  var keyVals = Seq(("wine","Wine"),("spirits","Spirits"),("beer","Beer"))
-  "getSeq" should "return sequence of categories" in {
-    ConfigPairsRepo.defaultInstance.getSeq(masterKey) should equal(keyVals)
+  "getSeq" should "return exact sequence of categories (json parsed) keyed by masterKey" in {
+    val keyVals = Seq(("wine","Wine"),("spirits","Spirits"),("beer","Beer"))
+    ConfigPairsRepo.defaultInstance.getSeq("product.shortCategories") should equal(keyVals)
   }
 
-  masterKey = "invalidKey"
-  keyVals = Seq()
-  "getSeq" should "return empty sequence" in {
-    ConfigPairsRepo.defaultInstance.getSeq(masterKey) should equal(keyVals)
+  "getSeq" should "return empty sequence when masterKey is not found in Props" in {
+    ConfigPairsRepo.defaultInstance.getSeq("invalidKey") shouldBe empty
   }
 }
 
