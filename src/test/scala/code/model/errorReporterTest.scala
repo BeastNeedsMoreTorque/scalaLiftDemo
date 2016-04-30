@@ -55,7 +55,7 @@ class errorReporterTest extends UnitTest {
       val x = 5/nearZeroInt
       Seq(x, 1,2,3)
     }
-    val appContxtError = "YOUR Integer COLLECTION IS EMPTY BECAUSE of too tight of a filter perhaps? TERRIBLY SORRY! ErrNo:654321, Sev:16" // this is hobby project, not corporate, professional, I have license for irony.
+    val appContxtError = "YOUR Integer COLLECTION IS EMPTY BECAUSE of too tight of a filter perhaps? TERRIBLY SORRY! ErrNo:654321, Sev:16" //
     val errCheck = instance.checkErrors(intsBox(ints), errorFormatter, appContxtError)
     errCheck shouldBe empty
   }
@@ -65,12 +65,12 @@ class errorReporterTest extends UnitTest {
       val x: Int = 5/0
       Seq(x, 1,2,3)
     }
-    val appContxtError = "YOUR Integer COLLECTION IS EMPTY BECAUSE of too tight of a filter perhaps? TERRIBLY SORRY! ErrNo:123456, Sev: 18" // this is hobby project, not corporate, professional, I have license for irony.
-    instance.checkErrors(intsBox(ints), errorFormatter, appContxtError) should equal("/ by zero...Full(java.lang.ArithmeticException: / by zero)") // Ouch!!
+    val appContxtError = "YOUR Integer COLLECTION IS EMPTY BECAUSE of too tight of a filter perhaps? TERRIBLY SORRY! ErrNo:123456, Sev: 18"
+    instance.checkErrors(intsBox(ints), errorFormatter, appContxtError) should startWith("/ by zero...Full(java.lang.Arithmetic")  // Ouch!!
   }
 
   it should "return app context message on unexpected empty collection" in {
-    val appContxtError = "YOUR Integer COLLECTION IS EMPTY BECAUSE OF USER TRAINING ISSUE, TERRIBLY SORRY! ErrNo:911, Sev: 4S"
+    val appContxtError = "YOUR Integer COLLECTION IS EMPTY BECAUSE OF USER TRAINING ISSUE, TERRIBLY SORRY! ErrNo:911, Sev: 4"
     instance.checkErrors(intsBox{ IndexedSeq()}, errorFormatter, appContxtError) should equal(appContxtError)
   }
 

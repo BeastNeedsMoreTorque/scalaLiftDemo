@@ -2,9 +2,6 @@ package code
 
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
-import org.scalacheck.Gen
-import org.scalacheck.Commands
-import org.scalatest.prop.Checkers
 /**
   * Created by philippederome on 2016-04-29.
   */
