@@ -60,14 +60,14 @@ class RNGTest extends UnitTest {
   it should s"predict correctly permutation of $shuffleRange when setting specific Simple" in {
     val seed1 = 20
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed1))
-    val expected_shuffled = Array(100, 105, 109, 102, 108, 104, 103, 106, 107, 101)
+    val expected_shuffled = Array(101, 109, 100, 107, 106, 103, 108, 104, 102, 105)
     shuffled should equal(expected_shuffled)
   }
 
   it should s"predict correctly permutation of $shuffleRange when setting with other specific Simple" in {
     val seed2 = 10
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed2))
-    val expected_shuffled = Array(100, 104, 109, 107, 102, 105, 103, 108, 106, 101)
+    val expected_shuffled = Array(109, 100, 103, 105, 106, 104, 108, 102, 101, 107)
     shuffled should equal(expected_shuffled)
   }
 
