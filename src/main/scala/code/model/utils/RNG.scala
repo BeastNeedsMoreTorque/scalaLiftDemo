@@ -61,6 +61,9 @@ object RNG {
     (ii, r)
   })
 
+  val double: Rand[Double] =
+    map(nonNegativeInt)(_ / (Int.MaxValue.toDouble + 1))
+
   def flatMap[A, B](f: Rand[A])(g: A => Rand[B]): Rand[B] = State(rng => {
     val (a, ra) = f.run(rng)
     g(a).run(ra)
@@ -89,6 +92,28 @@ object RNG {
 
   def randomElement(s: Seq[Int]): Rand[Seq[Int]] =
     flatMap(nonNegativeLessThan(s.size)) { i => unit(Seq(s(i))) }
+
+  // Don Knuth: Algorithm S (Selection sampling technique) N: total size, t visited (visiting item t+1), m selected, n requested/desired.
+  // avail is assumed to be the numbers we select from randomly
+  def sampleIter(N: Int, n: Int, m: Int, t: Int, avail: Vector[Int], selected: Seq[Int], rng: RNG): (Seq[Int], RNG) =  {
+    val (u,y) = double.run(rng)
+    if ((N-t)* u > n-m) {
+      // sample failed (we may succeed next and last ones with certainty, nothing to test, it's when we succeed on last one that we're done)
+      sampleIter(N, n, m, t+1, avail, selected, y )
+    }  // sample succeeded
+    else if (m + 1 == n) {
+      // final success
+      (selected ++ Seq(avail(t)), y)
+    }
+    else {
+      sampleIter(N, n, m+1, t+1, avail, selected ++ Seq(avail(t)), y )
+    }
+  }
+
+
+  def KnuthShuffle(s: Seq[Int]): Rand[Seq[Int]] = { // Would require Algorith P Shuffling by KnuthBOGUS
+    sys.error("todo")
+  }
 
   protected def randomWithRepeats(s: Seq[Int], k: Int)(rng: RNG): (List[Int], RNG) = {
     val (ints, r) = sequence(List.fill(k)(nonNegativeLessThan(s.size))).run(rng)

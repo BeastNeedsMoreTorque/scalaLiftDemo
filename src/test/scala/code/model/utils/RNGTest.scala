@@ -11,9 +11,7 @@ import scala.language.reflectiveCalls
   * Created by philippederome on 2016-04-28.
   * Unit testing is useful: it helped me identify stack overflow on shuffle for large N and later on rather egregious performance in my original
   * greedy, naive algorithm.
-  * If performance is really very important, go imperative as per below:
-  * @see Reservoir Sampling in Scala done by Spark: https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/util/random/SamplingUtils.scala
-  * It is proof enough that it's far from trivial and that ultimately when it comes to performance, what matters is proper algorithm (and data structures).
+  * If performance is really very important, follow Don Knuth Book 2 on Numerical Analysis methods Section 3.4.
   *
   * The point of this exercise is practice FP, state, action handling to convert side-effect API to FP and use Scalatest.
   */
@@ -84,7 +82,7 @@ class RNGTest extends UnitTest {
   }
 
   // This used to do stack overflow at about 2000-3000 items, which was NOT FUN AT ALL!
-  // Still about 15-30 times slower than the official Random.shuffle one on 5000 items (mine is about 1.0 sec compared to 25-70 ms)
+  // Still about 15 times slower than the official Random.shuffle one on 10000 items (mine is about 632-772-878 ms compared to 31-60-64 ms)
   // Warning: moderately slow.
   it should s"return sequence with no duplicates on permuting large sequence with random seed" taggedAs(SlowTest) in new randomRNG {
     val N = 10000
