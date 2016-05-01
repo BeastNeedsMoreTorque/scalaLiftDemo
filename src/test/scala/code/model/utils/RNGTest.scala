@@ -13,7 +13,7 @@ import scala.language.reflectiveCalls
   * greedy, naive algorithm.
   * If performance is really very important, go imperative as per below:
   * @see Reservoir Sampling in Scala done by Spark: https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/util/random/SamplingUtils.scala
-  * It is proof enough that it's far from trivial.
+  * It is proof enough that it's far from trivial and that ultimately when it comes to performance, what matters is proper algorithm (and data structures).
   *
   * The point of this exercise is practice FP, state, action handling to convert side-effect API to FP and use Scalatest.
   */
