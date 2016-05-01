@@ -115,23 +115,26 @@ object RNG {
     })
   }
 
-  // Algorithm P Shuffling by Knuth (Volume 2, Section 3.4.2)
+
+  // Algorithm P Shuffling by Knuth (Volume 2, Section 3.4.2). Attributed to Fisher-Yates
+  // View the permutation selection as deck of cards shuffling game, which is how it got discovered in the 1930s.
+  // Shuffle from last card to first in N steps by selecting another card lower in deck randomly to swap with.
   def shuffle( s: Seq[Int]): Rand[Seq[Int]] = {
-    @tailrec
-    def go[T](j: Int, X: Array[T], rng: RNG): (Seq[T], RNG) = {
-      if (j == 0 ) return (X, rng)
-      val (u,y) = double.run(rng)
-      val k = Math.floor((j+1)*u).toInt + 1 // Knuth's original uses 1-based indices, here we use 0-based to fit collections indexing.
-      val tmp = X(k)
-      X(k) = X(j)
-      X(j) = tmp
-      go(j-1, X, y)
+    def swap[T](xs: Array[T], i: Int, j: Int) = {
+      val t = xs(i)
+      xs(i) = xs(j)
+      xs(j) = t
     }
-    if (s.isEmpty) return State(rng => (Seq[Int](), rng) )
+
     State(rng => {
-      val a = s.toArray
-      go(a.size - 1, a, rng) // View the permutation selection as deck of cards shuffling game, which is how it got discovered in the 1930s.
-      // shuffle from last card to first in N steps by selecting another card lower in deck randomly to swap with.
+        val a = s.toArray
+        var rr = rng
+        for (j <- a.indices.reverse.dropRight(1)) {
+          val (k, y) = nonNegativeLessThan(j).run(rng)
+          rr = y
+          swap(a, k, j)
+        }
+        (a, rr)
     })
   }
 
