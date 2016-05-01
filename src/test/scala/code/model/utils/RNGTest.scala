@@ -5,6 +5,8 @@ import RNG._
 import State._
 import code.UnitTest
 import code.SlowTest
+
+import scala.collection.mutable.ArrayBuffer
 import scala.language.reflectiveCalls
 
 /**
@@ -90,8 +92,25 @@ class RNGTest extends UnitTest {
     shuffled should have size N
   }
 
+  it should s"return sequence with no duplicates on permuting large sequence with random seed (Knuth style)" taggedAs(SlowTest) in new randomRNG {
+    val N = 10000
+    val buffer = new ArrayBuffer[Int]()
+    (1 to N).foreach(i => buffer += i )
+    val (shuffled, _) = KnuthShuffle(buffer).run(seed)
+    shuffled should have size N
+  }
+
   behavior of "CollectSample"
   val bigSample = 1 to 5000
+
+  it should s"predict pick 20 distinct elements from 1 to 5000 exactly on specific seed Simple Knuths style" in {
+    val k1 = 20
+    val seed3 = 50
+    val (selected, newSimple) = collectSampleKnuth(bigSample, k1).run(Simple(seed3))
+    val expected_shuffled = List(107, 288, 472, 844, 867, 885, 1515, 1696, 1905, 2080, 2300, 2453, 2841, 3329, 3422, 3788, 4150, 4416, 4552, 4775)
+    (selected, newSimple) should equal(expected_shuffled, Simple(281348911128875L))
+  }
+
   it should s"predict pick 20 distinct elements from 1 to 5000 exactly on specific seed Simple" in {
     val k1 = 20
     val seed3 = 50
