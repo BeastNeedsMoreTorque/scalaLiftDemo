@@ -13,10 +13,8 @@ package code.model.utils
 // Apparently, this State,Action and combinator idea is in line of thought of Scalaz (authors probably contributed to Scalaz).
 
 // This code is more of a showcase of State, Action, Combinator then being real pragmatic alternative to scala Random class/trait (no such aim to outdo it).
-
-import State._
-
 import scala.annotation.tailrec
+import State._
 
 case class State[S, +A](run: S => (A, S)) {
   def map[B](f: A => B): State[S, B] =
@@ -108,7 +106,7 @@ object RNG {
     s <- get
   } yield (s.chosen, s.available)
 
-  // no repeats in sample
+  // no repeats in sample. Assumes input sequence has no duplicates.
   // Consequence of not reversing is that using the same seed on same inputs for k1 < k2 will not necessarily have the same prefix chain of k1
   // for the two calls of k1 and k2. It is still pure function, but subtle in behaviour.
   def sampleElements(s: Seq[Int], k: Int): Rand[Seq[Int]] = {
@@ -137,7 +135,7 @@ object RNG {
     State(rng => go (SelectorState(Seq(), s.toSet), Math.min(k, s.size), rng))
   }
 
-  def shuffle(s: Seq[Int]): Rand[Seq[Int]] = sampleElements(s, s.size)
+  def shuffle(s: Seq[Int]): Rand[Seq[Int]] = collectSample(s, s.size)
 
   // no repeats in sample
   def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = State(rng =>  {
