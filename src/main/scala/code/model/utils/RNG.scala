@@ -16,6 +16,8 @@ package code.model.utils
 import scala.annotation.tailrec
 import State._
 
+import scala.collection.mutable.ArrayBuffer
+
 case class State[S, +A](run: S => (A, S)) {
   def map[B](f: A => B): State[S, B] =
     flatMap(a => unit(f(a)))
@@ -95,7 +97,7 @@ object RNG {
 
   // Don Knuth: Algorithm S (Selection sampling technique) N: total size, t visited (visiting item t+1), m selected, n requested/desired.
   // avail is assumed to be the numbers we select from randomly
-  def sampleIter(N: Int, n: Int, m: Int, t: Int, avail: Vector[Int], selected: Seq[Int], rng: RNG): (Seq[Int], RNG) =  {
+  def sampleIter[T](N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (Seq[T], RNG) =  {
     val (u,y) = double.run(rng)
     if ((N-t)* u > n-m) {
       // sample failed (we may succeed next and last ones with certainty, nothing to test, it's when we succeed on last one that we're done)
@@ -110,10 +112,26 @@ object RNG {
     }
   }
 
+  def collectSampleKnuth[T](s: Seq[T], k: Int): Rand[Seq[T]] = State(rng =>  {
+    if (s.isEmpty) (Seq(), rng)
+    else sampleIter(s.size, k, 0, 0, s.toVector, Seq(), rng )
+  })
 
-  def KnuthShuffle(s: Seq[Int]): Rand[Seq[Int]] = { // Would require Algorith P Shuffling by KnuthBOGUS
-    sys.error("todo")
+  def KnuthShuffleInner[T](j: Int, X: ArrayBuffer[T], rng: RNG): (Seq[T], RNG) = { // Algorithm P Shuffling by Knuth
+    val (u,y) = double.run(rng)
+    val k = Math.floor(j*u).toInt + 1
+    // shift by 1 indices from Knuth to be 0-based.
+    val tmp = X(k-1)
+    X(k-1) = X(j-1)
+    X(j-1) = tmp
+    // no longer shift by 1. Resume Knuth's indices.
+    if (j ==1 ) (X, y)
+    else KnuthShuffleInner(j-1, X, y)
   }
+
+  def KnuthShuffle[T]( s: ArrayBuffer[T]): Rand[Seq[T]] = State( rng => { // Algorithm P Shuffling by Knuth
+    KnuthShuffleInner(s.size, s, rng) // shuffle from last card to first in N steps.
+  })
 
   protected def randomWithRepeats(s: Seq[Int], k: Int)(rng: RNG): (List[Int], RNG) = {
     val (ints, r) = sequence(List.fill(k)(nonNegativeLessThan(s.size))).run(rng)
