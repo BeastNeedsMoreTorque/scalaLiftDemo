@@ -8,8 +8,6 @@ import net.liftweb.util.Props
 import org.apache.http.TruncatedChunkException
 import code.Rest.RestClient
 
-import scala.collection.mutable.ArrayBuffer
-
 /**
   * Created by philippederome on 2016-03-30.
   * An excuse to exercise myself in Cake Pattern as per example found at
