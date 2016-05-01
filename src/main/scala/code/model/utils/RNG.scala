@@ -16,8 +16,6 @@ package code.model.utils
 import scala.annotation.tailrec
 import State._
 
-import scala.collection.mutable.ArrayBuffer
-
 case class State[S, +A](run: S => (A, S)) {
   def map[B](f: A => B): State[S, B] =
     flatMap(a => unit(f(a)))
@@ -95,47 +93,46 @@ object RNG {
   def randomElement(s: Seq[Int]): Rand[Seq[Int]] =
     flatMap(nonNegativeLessThan(s.size)) { i => unit(Seq(s(i))) }
 
-  // Don Knuth: Algorithm S (Selection sampling technique) N: total size, t visited (visiting item t+1), m selected, n requested/desired.
-  // avail is assumed to be the numbers we select from randomly
-  def sampleIter[T](N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (Seq[T], RNG) =  {
-    val (u,y) = double.run(rng)
-    if ((N-t)* u > n-m) {
-      // sample failed (we may succeed next and last ones with certainty, nothing to test, it's when we succeed on last one that we're done)
-      sampleIter(N, n, m, t+1, avail, selected, y )
-    }  // sample succeeded
-    else if (m + 1 == n) {
-      // final success
-      (selected ++ Seq(avail(t)), y)
+
+  // Algorithm S Sampling by Knuth (Volume 2, Section 3.4.2)
+  def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = {
+    // Don Knuth: Algorithm S (Selection sampling technique) N: total size, t visited (visiting item t+1), m selected, n requested/desired.
+    // avail is assumed to be the numbers we select from randomly
+    @tailrec
+    def sampleIter[T](N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (Seq[T], RNG) =  {
+      val (u,y) = double.run(rng) // Knuth's method is not "functional" here (does not return a state capturing RNG) otherwise it's conceptually the same
+      val sampleSuccess = (N-t)* u <= n-m
+      if (sampleSuccess && m+1 == n) return (selected ++ Seq(avail(t)), y)
+      // do this "trick" to satisfy tailrec.
+      val (newSel, newM) = if (sampleSuccess) (selected ++ Seq(avail(t)), m+1) else (selected, m)
+
+      sampleIter(N, n, newM, t+1, avail, newSel, y )
     }
-    else {
-      sampleIter(N, n, m+1, t+1, avail, selected ++ Seq(avail(t)), y )
-    }
+
+    State(rng => {
+      if (s.isEmpty || k <= 0) (Seq(), rng)  // allow client not to check for empty sequence (or specify k <= 0), robust and flexible.
+      else sampleIter(s.size, k, 0, 0, s.toVector, Seq(), rng)
+    })
   }
 
-  def collectSampleKnuth[T](s: Seq[T], k: Int): Rand[Seq[T]] = State(rng =>  {
-    if (s.isEmpty) (Seq(), rng)
-    else sampleIter(s.size, k, 0, 0, s.toVector, Seq(), rng )
-  })
-
-  def KnuthShuffleInner[T](j: Int, X: ArrayBuffer[T], rng: RNG): (Seq[T], RNG) = { // Algorithm P Shuffling by Knuth
-    val (u,y) = double.run(rng)
-    val k = Math.floor(j*u).toInt + 1
-    // shift by 1 indices from Knuth to be 0-based.
-    val tmp = X(k-1)
-    X(k-1) = X(j-1)
-    X(j-1) = tmp
-    // no longer shift by 1. Resume Knuth's indices.
-    if (j ==1 ) (X, y)
-    else KnuthShuffleInner(j-1, X, y)
-  }
-
-  def KnuthShuffle[T]( s: ArrayBuffer[T]): Rand[Seq[T]] = State( rng => { // Algorithm P Shuffling by Knuth
-    KnuthShuffleInner(s.size, s, rng) // shuffle from last card to first in N steps.
-  })
-
-  protected def randomWithRepeats(s: Seq[Int], k: Int)(rng: RNG): (List[Int], RNG) = {
-    val (ints, r) = sequence(List.fill(k)(nonNegativeLessThan(s.size))).run(rng)
-    (ints.map(i => s(i)), r)
+  // Algorithm P Shuffling by Knuth (Volume 2, Section 3.4.2)
+  def shuffle( s: Seq[Int]): Rand[Seq[Int]] = {
+    @tailrec
+    def go[T](j: Int, X: Array[T], rng: RNG): (Seq[T], RNG) = {
+      if (j == 0 ) return (X, rng)
+      val (u,y) = double.run(rng)
+      val k = Math.floor((j+1)*u).toInt + 1 // Knuth's original uses 1-based indices, here we use 0-based to fit collections indexing.
+      val tmp = X(k)
+      X(k) = X(j)
+      X(j) = tmp
+      go(j-1, X, y)
+    }
+    if (s.isEmpty) return State(rng => (Seq[Int](), rng) )
+    State(rng => {
+      val a = s.toArray
+      go(a.size - 1, a, rng) // View the permutation selection as deck of cards shuffling game, which is how it got discovered in the 1930s.
+      // shuffle from last card to first in N steps by selecting another card lower in deck randomly to swap with.
+    })
   }
 
   case class SelectorState(chosen: Seq[Int], available: Set[Int])
@@ -149,42 +146,6 @@ object RNG {
     s <- get
   } yield (s.chosen, s.available)
 
-  // no repeats in sample. Assumes input sequence has no duplicates.
-  // Consequence of not reversing is that using the same seed on same inputs for k1 < k2 will not necessarily have the same prefix chain of k1
-  // for the two calls of k1 and k2. It is still pure function, but subtle in behaviour.
-  def sampleElements(s: Seq[Int], k: Int): Rand[Seq[Int]] = {
-    // cannot do @tailrec simply because of divide and conquer into 2 parts.
-    // Conceivably, go could use par; would require experiments to validate if thread overhead justifies it.
-    def go(sel: SelectorState, k: Int, r: RNG): (Seq[Int], RNG) = {
-      if (k < sel.available.size / 2 || k <= 8) { // experiments showed 8 to 32 not too bad. Would require deeper analysis.
-        val (ints, rr) = randomWithRepeats(sel.available.toSeq, k)(r) // expected that there are repeats but when k is small they can be unique (in particular k =1)
-        val intsSetSize = ints.toSet.size
-        val transformer = execute(ints)
-        transformer.run(sel) match {
-          // for small k this may match
-          case ((newSeq, newSet), newSelector) if intsSetSize == k =>
-            (newSelector.chosen, rr)
-          case ((newSeq, newSet), newSelector) =>
-            go(newSelector, k - intsSetSize, rr) // this should improve each time because we're forced to select something new
-        }
-      }
-      else {
-        val (seq1, seq2) = sel.available.splitAt(sel.available.size/2)
-        val x1 = go(SelectorState(sel.chosen, seq1), k/2, r)
-        val x2 = go(SelectorState(sel.chosen, seq2), k - k/2, x1._2)
-        (x1._1 ++ x2._1, x2._2)
-      }
-    }
-    State(rng => go (SelectorState(Seq(), s.toSet), Math.min(k, s.size), rng))
-  }
-
-  def shuffle(s: Seq[Int]): Rand[Seq[Int]] = collectSample(s, s.size)
-
-  // no repeats in sample
-  def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = State(rng =>  {
-    val (seq, r) = sampleElements(s.indices, k).run(rng)
-    (seq.map(i => s(i)), r)
-  })
 
 }
 

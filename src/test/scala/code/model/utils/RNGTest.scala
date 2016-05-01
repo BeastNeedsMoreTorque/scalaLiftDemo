@@ -6,14 +6,13 @@ import State._
 import code.UnitTest
 import code.SlowTest
 
-import scala.collection.mutable.ArrayBuffer
 import scala.language.reflectiveCalls
 
 /**
   * Created by philippederome on 2016-04-28.
   * Unit testing is useful: it helped me identify stack overflow on shuffle for large N and later on rather egregious performance in my original
-  * greedy, naive algorithm.
-  * If performance is really very important, follow Don Knuth Book 2 on Numerical Analysis methods Section 3.4.
+  * greedy, naive algorithm. It also helped optimize and refactor correctly.
+  * Since performance is typically important, follow Don Knuth Book 2 on Numerical Analysis methods Section 3.4.
   *
   * The point of this exercise is practice FP, state, action handling to convert side-effect API to FP and use Scalatest.
   */
@@ -61,14 +60,14 @@ class RNGTest extends UnitTest {
   it should s"predict correctly permutation of $shuffleRange when setting specific Simple" in {
     val seed1 = 20
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed1))
-    val expected_shuffled = List(106, 105, 101, 109, 100, 103, 102, 108, 104, 107)
+    val expected_shuffled = Array(100, 105, 109, 102, 108, 104, 103, 106, 107, 101)
     shuffled should equal(expected_shuffled)
   }
 
   it should s"predict correctly permutation of $shuffleRange when setting with other specific Simple" in {
     val seed2 = 10
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed2))
-    val expected_shuffled = List(109, 105, 100, 106, 101, 104, 108, 103, 107, 102)
+    val expected_shuffled = Array(100, 104, 109, 107, 102, 105, 103, 108, 106, 101)
     shuffled should equal(expected_shuffled)
   }
 
@@ -82,41 +81,23 @@ class RNGTest extends UnitTest {
     val (shuffled, _) = shuffle(Nil).run(seed)
     shuffled shouldBe empty
   }
-
-  // This used to do stack overflow at about 2000-3000 items, which was NOT FUN AT ALL!
-  // Still about 15 times slower than the official Random.shuffle one on 10000 items (mine is about 632-772-878 ms compared to 31-60-64 ms)
-  // Warning: moderately slow.
+  
+  // Warning: very moderately slow.
   it should s"return sequence with no duplicates on permuting large sequence with random seed" taggedAs(SlowTest) in new randomRNG {
     val N = 10000
     val (shuffled, _) = shuffle(1 to N).run(seed)
     shuffled should have size N
   }
 
-  it should s"return sequence with no duplicates on permuting large sequence with random seed (Knuth style)" taggedAs(SlowTest) in new randomRNG {
-    val N = 10000
-    val buffer = new ArrayBuffer[Int]()
-    (1 to N).foreach(i => buffer += i )
-    val (shuffled, _) = KnuthShuffle(buffer).run(seed)
-    shuffled should have size N
-  }
-
   behavior of "CollectSample"
   val bigSample = 1 to 5000
-
-  it should s"predict pick 20 distinct elements from 1 to 5000 exactly on specific seed Simple Knuths style" in {
-    val k1 = 20
-    val seed3 = 50
-    val (selected, newSimple) = collectSampleKnuth(bigSample, k1).run(Simple(seed3))
-    val expected_shuffled = List(107, 288, 472, 844, 867, 885, 1515, 1696, 1905, 2080, 2300, 2453, 2841, 3329, 3422, 3788, 4150, 4416, 4552, 4775)
-    (selected, newSimple) should equal(expected_shuffled, Simple(281348911128875L))
-  }
 
   it should s"predict pick 20 distinct elements from 1 to 5000 exactly on specific seed Simple" in {
     val k1 = 20
     val seed3 = 50
     val (selected, newSimple) = collectSample(bigSample, k1).run(Simple(seed3))
-    val expected_shuffled = List(3524, 520, 3544, 4675, 3129, 121, 2005, 736, 3879, 3519, 3602, 3640, 2800, 2914, 2664, 4496, 4779, 4682, 895, 3121)
-    (selected, newSimple) should equal(expected_shuffled, Simple(209042601209190L))
+    val expected_shuffled = List(107, 288, 472, 844, 867, 885, 1515, 1696, 1905, 2080, 2300, 2453, 2841, 3329, 3422, 3788, 4150, 4416, 4552, 4775)
+    (selected, newSimple) should equal(expected_shuffled, Simple(281348911128875L))
   }
 
   it should "get empty Sequence on choosing 0 item from non empty list with any random input" in new randomRNG {

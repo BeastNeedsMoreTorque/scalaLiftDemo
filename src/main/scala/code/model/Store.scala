@@ -123,7 +123,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
               q = inv.quantity if q > 0) yield (p, q)}
       // products are loaded before inventories and we might have none
       asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-      val (cachedIds, rr) = RNG.collectSampleKnuth(inStockItems.indices, requestSize).run(rngSeed)  // shuffle only on the indices not full items (easier on memory mgmt).
+      val (cachedIds, rr) = RNG.collectSample(inStockItems.indices, requestSize).run(rngSeed)  // shuffle only on the indices not full items (easier on memory mgmt).
       if (cachedIds.nonEmpty) cachedIds.map(inStockItems)  // get back the items that the ids have been selected (we don't stream because we know inventory > 0)
       else getSerialResult(category, lcboProdCategory, rr)
     }
@@ -135,8 +135,7 @@ class Store private() extends LCBOEntity[Store] with IStore {
     def getSerialResult(category: String, lcboProdCategory: String, r: RNG) = {
       val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
       val buffer = new ArrayBuffer[Int]()
-      prods.indices.foreach(i => buffer += i )
-      val (permutedIndices, rr) = RNG.KnuthShuffle(buffer).run(r)
+      val (permutedIndices, rr) = RNG.shuffle(prods.indices).run(r)
       // stream avoids checking primary category on full collection (the permutation is done though).
       val stream = for (id <- permutedIndices.toStream;
                         p = prods(id) if p.primaryCategory == lcboProdCategory) yield p
