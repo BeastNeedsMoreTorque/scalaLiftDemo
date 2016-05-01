@@ -11,6 +11,11 @@ import scala.language.reflectiveCalls
   * Created by philippederome on 2016-04-28.
   * Unit testing is useful: it helped me identify stack overflow on shuffle for large N and later on rather egregious performance in my original
   * greedy, naive algorithm.
+  * If performance is really very important, go imperative as per below:
+  * @see Reservoir Sampling in Scala done by Spark: https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/util/random/SamplingUtils.scala
+  * It is proof enough that it's far from trivial.
+  *
+  * The point of this exercise is practice FP, state, action handling to convert side-effect API to FP and use Scalatest.
   */
 class RNGTest extends UnitTest {
 
@@ -56,14 +61,14 @@ class RNGTest extends UnitTest {
   it should s"predict correctly permutation of $shuffleRange when setting specific Simple" in {
     val seed1 = 20
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed1))
-    val expected_shuffled = List(109, 106, 102, 105, 101, 104, 103, 107, 100, 108)
+    val expected_shuffled = List(106, 105, 101, 109, 100, 103, 102, 108, 104, 107)
     shuffled should equal(expected_shuffled)
   }
 
   it should s"predict correctly permutation of $shuffleRange when setting with other specific Simple" in {
     val seed2 = 10
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed2))
-    val expected_shuffled = List(105, 106, 101, 109, 102, 100, 107, 104, 108, 103)
+    val expected_shuffled = List(109, 105, 100, 106, 101, 104, 108, 103, 107, 102)
     shuffled should equal(expected_shuffled)
   }
 
@@ -79,7 +84,7 @@ class RNGTest extends UnitTest {
   }
 
   // This used to do stack overflow at about 2000-3000 items, which was NOT FUN AT ALL!
-  // Still about 4-7 times slower than the official Random.shuffle one on 10000 items (mine is 1.0 sec to 1.7 sec compared to 246 ms)
+  // Still about 15-30 times slower than the official Random.shuffle one on 5000 items (mine is about 1.0 sec compared to 25-70 ms)
   // Warning: moderately slow.
   it should s"return sequence with no duplicates on permuting large sequence with random seed" taggedAs(SlowTest) in new randomRNG {
     val N = 10000
@@ -89,12 +94,12 @@ class RNGTest extends UnitTest {
 
   behavior of "CollectSample"
   val bigSample = 1 to 5000
-  it should s"predict pick 5 distinct elements from 1 to 5000 exactly on specific seed Simple" in {
-    val k1 = 5
+  it should s"predict pick 20 distinct elements from 1 to 5000 exactly on specific seed Simple" in {
+    val k1 = 20
     val seed3 = 50
     val (selected, newSimple) = collectSample(bigSample, k1).run(Simple(seed3))
-    val expected_shuffled = Seq(3524, 520, 3544, 4675, 3129)
-    (selected, newSimple) should equal(expected_shuffled, Simple(239178062524073L))
+    val expected_shuffled = List(3524, 520, 3544, 4675, 3129, 121, 2005, 736, 3879, 3519, 3602, 3640, 2800, 2914, 2664, 4496, 4779, 4682, 895, 3121)
+    (selected, newSimple) should equal(expected_shuffled, Simple(209042601209190L))
   }
 
   it should "get empty Sequence on choosing 0 item from non empty list with any random input" in new randomRNG {
