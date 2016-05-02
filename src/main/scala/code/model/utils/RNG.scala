@@ -130,7 +130,7 @@ object RNG {
         val a = s.toArray
         var rr = rng
         for (j <- a.indices.reverse.dropRight(1)) { // without the reverse, we'd need a function to select in range [j N] for index k
-          val (k, y) = nonNegativeLessThan(j).run(rng)
+          val (k, y) = nonNegativeLessThan(j).run(rr)
           rr = y
           swap(a, k, j)
         }
