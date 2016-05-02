@@ -134,7 +134,6 @@ class Store private() extends LCBOEntity[Store] with IStore {
       */
     def getSerialResult(category: String, lcboProdCategory: String, r: RNG) = {
       val prods = fetchByStoreCategory(lcboId, category, Store.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
-      val buffer = new ArrayBuffer[Int]()
       val (permutedIndices, rr) = RNG.shuffle(prods.indices).run(r)
       // stream avoids checking primary category on full collection (the permutation is done though).
       val stream = for (id <- permutedIndices.toStream;
