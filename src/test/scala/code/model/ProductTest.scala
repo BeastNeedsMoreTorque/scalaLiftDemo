@@ -7,7 +7,7 @@ import scala.collection.IndexedSeq
   */
 class ProductTest {
 
-  object MockProduct extends MetaProduct with ProductFetcher {
+  object MockProduct extends MetaProduct with ProductRunner {
     // Mock it
     override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct]  = IndexedSeq[Product]()
   }

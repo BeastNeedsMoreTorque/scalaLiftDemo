@@ -1,7 +1,7 @@
 package code.model.prodAdvisor
 
 import code.model.utils.RNG
-import code.model.{IProduct, IStore, LiquorCategory, ProductFetcher}
+import code.model.{IProduct, InventoryService, LiquorCategory, ProductRunner}
 import net.liftweb.common.Box
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
@@ -10,18 +10,20 @@ import scala.collection.{IndexedSeq, Iterable, Seq}
 import scala.util.Random
 
 /**
-  * Created by philippederome on 2016-05-02. Abstracted out in May from Store so that pieces of functionality can be testable from a unit perspective.
-  * First cut of ShufflingProductRecommender is indeed almost testable! In its original form, it was impossible to test well with side effects and concrete
+  * Created by philippederome on 2016-05-02. Cake Pattern style. Note that objects of type RNG are always called on methods that return objects and the meaningful
+  * return a new RNG (pattern state transformations, apparently common in Scalaz). This is inspired by Functional Programming in Scala Chapter 6.
+  * Abstracted out in May from Store so that pieces of functionality can be testable from a unit perspective.
+  * First cut of MonteCarloAdvisor is indeed almost testable! In its original form, it was impossible to test well with side effects and concrete
   * classes standing in the way.
   */
 trait ProductAdvisorComponent {
   def agent: ProductAdvisor
 
   trait ProductAdvisor {
-    def recommend(theStore: IStore,
+    def advise(invService: InventoryService,
                   category: String,
                   requestSize: Int,
-                  runner: ProductFetcher): Box[Iterable[(IProduct, Long)]]
+                  runner: ProductRunner): Box[Iterable[(IProduct, Long)]]
   }
 
 }
@@ -29,18 +31,19 @@ trait ProductAdvisorComponent {
 trait ProductAdvisorDispatcher   {
   this: ProductAdvisorComponent =>
 
-  def recommend(theStore: IStore,
+  def advise(invService: InventoryService,
                 category: String,
                 requestSize: Int,
-                runner: ProductFetcher): Box[Iterable[(IProduct, Long)]] =
-    agent.recommend(theStore, category, requestSize, runner)
+                runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
+    agent.advise(invService, category, requestSize, runner)
 }
 
 // the suggested implementation below is for fun. A more realistic/commercial one would use proper analytics instead.
-trait ShufflingProductRecommender extends ProductAdvisorComponent {
-  def agent = new ProductAdvisorImpl
+trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
+  def agent = new MonteCarloAdvisor
 
-  class ProductAdvisorImpl  extends ProductAdvisor {
+  // beware: this advisor could be hammered! To do: Find a more practical, corporate alternative instead.
+  class MonteCarloAdvisor  extends ProductAdvisor {
 
     object Shuffler  {
       val UseRandomSeed = Props.getBool("store.useRandomSeed", true)
@@ -52,30 +55,37 @@ trait ShufflingProductRecommender extends ProductAdvisorComponent {
       * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
       * Select a random product that matches the parameters subject to a max sample size.
       *
+      * @param invService    a InventoryService trait that has a few abstract methods about inventory in stock or ability to sync cache from LCBO Web API (theoretically inventory update or provisioning).
       * @param category    a String such as beer, wine, mostly matching primary_category at LCBO, or an asset category (for query only not to compare results and filter!).
-      * @param requestSize a number representing how many items we need to sample
+      * @param requestSize a number representing how many items we need to propose as recommendation
+      * @param runner a ProductRunner, responsible to obtain products in a store for a given vategory.
       * @return quantity found in inventory for product and the product
       */
-    def recommend(theStore: IStore,
-                           category: String,
-                           requestSize: Int,
-                           fetcher: ProductFetcher): Box[Iterable[(IProduct, Long)]] = {
+    def advise(invService: InventoryService,
+                 category: String,
+                 requestSize: Int,
+                 runner: ProductRunner): Box[Iterable[(IProduct, Long)]] = {
 
       def UseRandomSeed: Boolean = Shuffler.UseRandomSeed
-
       def FixedRNGSeed: Int = Shuffler.FixedRNGSeed
 
       /**
+        * @param invService an inventory service instance
+        * @param runner a ProductRunner instance
+        * @param requestSize amount of items the client is requesting for a recommendation/advice
+        * @param category the category of the product
         * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO. It's been known that they would send a Wiser's Whiskey on a wine request.
+        * @param r a Random Number Generator state item.
         * @return 0 quantity found in inventory for product (unknown to be resolved in JS) and the product
         */
-      def getSerialResult(theStore: IStore,
-                          fetcher: ProductFetcher,
+      def getSerialResult(invService: InventoryService,
+                          runner: ProductRunner,
                           requestSize: Int,
                           category: String,
-                          lcboProdCategory: String, r: RNG) = {
+                          lcboProdCategory: String,
+                          r: RNG) = {
 
-        val prods = fetcher.fetchByStoreCategory(theStore.lcboId, category, Shuffler.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
+        val prods = runner.fetchByStoreCategory(invService.lcboId, category, Shuffler.MaxSampleSize) // take a hit of one go to LCBO, querying by category, no more.
         val (permutedIndices, rr) = RNG.shuffle(prods.indices).run(r)
         // stream avoids checking primary category on full collection (the permutation is done though).
         val stream = for (id <- permutedIndices.toStream;
@@ -84,28 +94,43 @@ trait ShufflingProductRecommender extends ProductAdvisorComponent {
         // and then zip with list of zeroes because we are too slow to obtain inventories.
       }
 
-      // Note well: this would be a PURE FUNCTION, despite that caller uses randomization and makes use of cached data.
-      // Randomization can be made deterministic by configuration (UseRandomSeed being false). Caching can be a no-op by providing an implementation of IStore that does not cache
-      // and has no side effect (by default it caches).
-      // So this is "pure" relative to implementations of IStore and ProductFetcher making guarantees to being pure on the methods we use here.
-      // That guarantee can be provided in a unit test environment.
-      def getShuffledProducts(theStore: IStore,
-                              fetcher: ProductFetcher,
-                              rngSeed: RNG,
+      /**
+        * Note well: this would be a PURE FUNCTION, despite that caller uses randomization and makes use of cached data.
+        * Randomization can be made deterministic by configuration (UseRandomSeed being false). Caching can be a no-op by providing an implementation of invService that does not cache
+        * and has no side effect (by default it caches).
+        * So this is "pure" relative to implementations of InventoryService and ProductRunner making guarantees to being pure on the methods we use here.
+        * That guarantee could be provided in a unit test environment.
+        * @param invService an inventory service instance
+        * @param runner a ProductRunner instance
+        * @param rng a Random Number Generator state item.
+        * @param initialProducts a tentative collection of products that would satisfy user request. If it does, we random sample from it,
+        *                        otherwise we go to LCBO to get some fresh ones synchronously and shuffle them.
+        * @param category the category of the product
+        * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO. It's been known that they would send a Wiser's Whiskey on a wine request.
+        * @param requestSize amount of items the client is requesting for a recommendation/advice
+        * @return Box[Iterable[(IProduct,Long)] ]  captures exceptions as errors in Box if any, otherwise an Iterable of IProducts with their quantities.
+        */
+      def getShuffledProducts(invService: InventoryService,
+                              runner: ProductRunner,
+                              rng: RNG,
                               initialProducts: IndexedSeq[IProduct],
                               category: String,
                               lcboProdCategory: String,
                               requestSize: Int) = tryo {
         val inStockItems = {
           for (p <- initialProducts;
-               inv <- theStore.inventoryByProductIdMap(p.pKey);
+               inv <- invService.inventoryByProductIdMap(p.pKey);
                q = inv.quantity if q > 0) yield (p, q)
         }
-        // products are loaded before inventories and we might have none
-        theStore.asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
-        val (cachedIds, rr) = RNG.collectSample(inStockItems.indices, requestSize).run(rngSeed) // shuffle only on the indices not full items (easier on memory mgmt).
+        // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
+
+        invService.asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
+        // Ideally this asyncLoadCache could be a metaphor for a just in time restocking request given that our cache could be empty with cache representing
+        // "real inventory".
+
+        val (cachedIds, rr) = RNG.collectSample(inStockItems.indices, requestSize).run(rng) // shuffle only on the indices not full items (easier on memory mgmt).
         if (cachedIds.nonEmpty) cachedIds.map(inStockItems) // get back the items that the ids have been selected (we don't stream because we know inventory > 0)
-        else getSerialResult(theStore, fetcher, requestSize, category, lcboProdCategory, rr)
+        else getSerialResult(invService, runner, requestSize, category, lcboProdCategory, rr)
       }
 
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category)
@@ -113,7 +138,7 @@ trait ShufflingProductRecommender extends ProductAdvisorComponent {
       // and when cache fails, it is predetermined by the actual contents we get from LCBO via getSerialResult.
       val rng = RNG.Simple(if (UseRandomSeed) Random.nextInt() else FixedRNGSeed)
 
-      getShuffledProducts(theStore, fetcher, rng, theStore.getProductsByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
+      getShuffledProducts(invService, runner, rng, invService.getProductsByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
 
     }
   }
