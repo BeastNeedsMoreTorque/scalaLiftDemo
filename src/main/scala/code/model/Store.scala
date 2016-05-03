@@ -123,7 +123,11 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
 
     def fetchInventories() = {
       def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update
-      def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert
+      def inventoryTableInserter (items: Iterable[Inventory]): Unit = {
+        // LCBO is "entitled" to send repeats about a given product across distinct pages, however unpleasant that may be for referential integrity.
+        val noDupes = items.groupBy {x => (x.storeid, x.productid)}.flatMap { case (_, ids) => ids.headOption }  // remove duplicates
+        MainSchema.inventories.insert(noDupes)
+      }
       val fullContextErr = (m: String, err: String) =>
         s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
       // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.

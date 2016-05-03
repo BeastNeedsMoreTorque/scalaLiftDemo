@@ -25,7 +25,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     def ORMUpdater: Iterable[T] => Unit = table().forceUpdate _  // @see http://squeryl.org/occ.html. Regular call as update throws because of possibility of multiple updates on same record.
     items.grouped(batchSize).
       foreach {
-        batchTransactor(_, ORMUpdater)
+        batchTransactor(isUpdate = true, _, ORMUpdater)
       }
   }
 
@@ -41,21 +41,31 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     items.
       filterNot { p => LcboIDs.contains(p.lcboId) }.  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
       groupBy {_.lcboId}.map { case (_, ids) => ids(0) }.  // remove duplicate lcboid keys from within our own input, selecting first representative among dupes!
-      grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) } // break it down in reasonable size transactions, and then serialize the work.
+      grouped(batchSize).foreach { batchTransactor(isUpdate = false, _ , ORMInserter) } // break it down in reasonable size transactions, and then serialize the work.
   }
 
-  private def batchTransactor(items: Iterable[T], ORMTransactor: (Iterable[T]) => Unit): Unit = {
-    def feedCache(items: Iterable[T]) = {
+  private def batchTransactor(isUpdate: Boolean, items: Iterable[T], ORMTransactor: (Iterable[T]) => Unit): Unit = {
+    def feedCacheOnUpdate(items: Iterable[T]) = {
       val pkIds = items.map(_.pKey: Long)  // type ascription to integrate with Squeryl below
       // select only what we did and use DB's version of the state of the items.
       val itemsWithPK = from(table())(item => where(item.idField in pkIds) select item)
+      if (itemsWithPK.size < pkIds.size) logger.error(s"feedCacheOnUpdate got only ${itemsWithPK.size} inserted items for expected ${pkIds.size}")
       cache() ++= itemsWithPK.map{item => item.pKey -> item } (collection.breakOut)
     }
+    def feedCacheOnInsert(items: Iterable[T]) = {
+      val akIds = items.map(_.lcboId: Long) // alternate key ids, which are a proxy for our primary key IDs to be evaluated from DB.
+      // select only those we just inserted, hopefully the same set.
+      val itemsWithAK = from(table())(item => where(item.lcboId.underlying in akIds) select item)
+      if (itemsWithAK.size < akIds.size) logger.error(s"feedCacheOnInsert got only ${itemsWithAK.size} inserted items for expected ${akIds.size}")
+      cache() ++= itemsWithAK.map { item => item.pKey -> item }(collection.breakOut)  // we only find out about the pKey value now by going to DB.
+    }
+
     // Seems high enough to report error to log as it appears a little messy to push it up further.
     val fullContextErr = (m: String, err: String) =>
       s"Problem with batchTransactor, message $m and exception error $err"
     val box = execute[T](items, ORMTransactor)
     lazy val err = checkUnitErrors(box, fullContextErr )
+    val feedCache = if(isUpdate) feedCacheOnUpdate _ else feedCacheOnInsert _
     box.toOption.fold[Unit](logger.error(err))( (Unit) => feedCache(items))
   }
 }
