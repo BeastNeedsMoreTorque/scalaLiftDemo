@@ -3,7 +3,7 @@ package code.model
 import java.text.NumberFormat
 
 import scala.collection.concurrent.TrieMap
-import scala.collection._
+import scala.collection.{Seq, _}
 import scala.language.implicitConversions
 import scala.xml.Node
 import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField}
@@ -18,8 +18,10 @@ import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
+  * In Lift's style Product should have private constructor. But how can you get different implementations
+  * of Object that inherit from it? Only the companion gets the privileges.
   */
-class Product private() extends LCBOEntity[Product] with IProduct   {
+class Product protected extends LCBOEntity[Product] with IProduct   {
   def meta = Product
 
   @Column(name="pkid")
@@ -132,12 +134,19 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
 
 }
 
+trait ProductFetcher { // artificial trait to facilitate separation of functionality for testing. The natural implementation of this method is harder to (unit) test.
+  def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct]
+}
+
+
 /**
   *
   */
-object Product extends Product with MetaRecord[Product] {
+trait MetaProduct extends Product with MetaRecord[Product] with ProductFetcher {
+  override type GotEnough_? = (Int) => Boolean
+
   // thread-safe lock free objects
-  private val productsCache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
+  val productsCache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
   def getProduct(id: P_KEY): Option[IProduct] = productsCache.get(id)
   def getItemByLcboId(id: LCBO_ID): Option[IProduct] =
     for (dbId <- LcboIdToPK.get(id);
@@ -148,7 +157,7 @@ object Product extends Product with MetaRecord[Product] {
   override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
   override def table() = MainSchema.products
   val MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
-  private val sizeFulfilled: (Int) => GotEnough_? =
+  protected val sizeFulfilled: (Int) => GotEnough_? =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
   override def getCachedItem: (IProduct) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
@@ -162,19 +171,8 @@ object Product extends Product with MetaRecord[Product] {
   // the implicit isEnough parameter is strictly to play around with the concept as in this case, implicit is not particularly compelling.
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
   // a cross cutting concern or a strategy.
-  private def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = neverEnough ) =
+  protected def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = neverEnough ) =
     collectItemsAsWebClient("/products", extract, Seq("per_page" -> MaxPerPage, "store_id" -> lcboStoreId) ++ seq)
-
-  /*
-   * Queries LCBO matching category
-   * URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage> (+ details on where_not and order)
-   * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
-   */
-  def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
-    implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize)
-    // don't fetch more than required size.
-    productWebQuery(lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs)
-  }
 
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): Box[IndexedSeq[IProduct]] = tryo {
@@ -185,3 +183,20 @@ object Product extends Product with MetaRecord[Product] {
       prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
   }
 }
+
+object Product extends MetaProduct with ProductFetcher {
+  // Since fetchByStoreCategory is impure because of productWebQuery or hard to test, isolate it, so that a test object can ignore this functionality
+  // and focus on the rest that might be testable.
+
+  /*
+   * Queries LCBO matching category
+   * URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage> (+ details on where_not and order)
+   * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
+   */
+  override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
+    implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize)
+    // don't fetch more than required size.
+    productWebQuery(lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs)
+  }
+}
+

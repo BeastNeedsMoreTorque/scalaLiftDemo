@@ -159,7 +159,7 @@ class ProductInteraction extends Loggable {
       }
 
       def maySelect(s: Store): JsCmd = {
-        val prodQtySeq = s.recommend(theCategory.is, theRecommendCount.is) match {
+        val prodQtySeq = s.recommend(theCategory.is, theRecommendCount.is, Product) match {
           // we want to distinguish error messages to user to provide better diagnostics.
           case Full(pairs) =>
             if (pairs.isEmpty) S.error(s"Unable to find a product of category ${theCategory.is}")
