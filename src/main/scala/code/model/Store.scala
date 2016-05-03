@@ -18,9 +18,9 @@ import org.squeryl.annotations._
 import code.model.Product.fetchByStore
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.prodAdvisor.{ProductAdvisorDispatcher, ShufflingProductRecommender}
+import code.model.prodAdvisor.{ProductAdvisorDispatcher, ProductAdvisorComponentImpl}
 
-class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorDispatcher with ShufflingProductRecommender {
+class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -107,8 +107,8 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   private def emptyInventory =
     inventories.toIndexedSeq.forall(_.quantity == 0)
 
-  def recommend(category: String, requestSize: Int, fetcher: ProductFetcher): Box[Iterable[(IProduct, Long)]] =
-    super.recommend(this, category, requestSize, fetcher)
+  def advise(category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
+    super.advise(this, category, requestSize, runner)
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {

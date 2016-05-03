@@ -77,7 +77,7 @@ class ProductInteraction extends Loggable {
   }
 
   def render = {
-    def recommend(jsStore: JValue): JsCmd = {
+    def advise(jsStore: JValue): JsCmd = {
       def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd = {
         def getDiv(qOfProd: QuantityOfProduct): NodeSeq = {
           import code.model.Attribute
@@ -159,7 +159,7 @@ class ProductInteraction extends Loggable {
       }
 
       def maySelect(s: Store): JsCmd = {
-        val prodQtySeq = s.recommend(theCategory.is, theRecommendCount.is, Product) match {
+        val prodQtySeq = s.advise(theCategory.is, theRecommendCount.is, Product) match {
           // we want to distinguish error messages to user to provide better diagnostics.
           case Full(pairs) =>
             if (pairs.isEmpty) S.error(s"Unable to find a product of category ${theCategory.is}")
@@ -179,7 +179,7 @@ class ProductInteraction extends Loggable {
         }
       }
 
-      User.currentUser.dmap { S.error("recommend", "recommend feature unavailable, Login first!"); Noop } { user =>
+      User.currentUser.dmap { S.error("advise", "advise feature unavailable, Login first!"); Noop } { user =>
         val jsCmd =
           for (s <- jsStore.extractOpt[String].map(parse); // ExtractOpt avoids MappingException and generates None on failure
                storeId <- s.extractOpt[Long];
@@ -283,6 +283,6 @@ class ProductInteraction extends Loggable {
       { selected: String => theRecommendCount.set(toInt(selected)); Noop }) andThen // always before recommend so it takes effect so that we know how many products to recommend.
     "@recommend [onclick]" #>
       jsonCall( JE.Call("storeFinder.getTheSelectedStore"),
-        { j: JValue => recommend(j) & setBorderJS(actionButtonsContainer, "recommend")})
+        { j: JValue => advise(j) & setBorderJS(actionButtonsContainer, "recommend")})
   }
 }

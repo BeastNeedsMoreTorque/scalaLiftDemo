@@ -134,15 +134,11 @@ class Product protected extends LCBOEntity[Product] with IProduct   {
 
 }
 
-trait ProductFetcher { // artificial trait to facilitate separation of functionality for testing. The natural implementation of this method is harder to (unit) test.
-  def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct]
-}
-
 
 /**
   *
   */
-trait MetaProduct extends Product with MetaRecord[Product] with ProductFetcher {
+trait MetaProduct extends Product with MetaRecord[Product] with ProductRunner {
   override type GotEnough_? = (Int) => Boolean
 
   // thread-safe lock free objects
@@ -184,7 +180,7 @@ trait MetaProduct extends Product with MetaRecord[Product] with ProductFetcher {
   }
 }
 
-object Product extends MetaProduct with ProductFetcher {
+object Product extends MetaProduct with ProductRunner {
   // Since fetchByStoreCategory is impure because of productWebQuery or hard to test, isolate it, so that a test object can ignore this functionality
   // and focus on the rest that might be testable.
 
