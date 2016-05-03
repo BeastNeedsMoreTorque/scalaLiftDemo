@@ -18,8 +18,9 @@ import org.squeryl.annotations._
 import code.model.Product.fetchByStore
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.prodAdvisor.{ProductAdvisorDispatcher, ShufflingProductRecommender}
 
-class Store private() extends LCBOEntity[Store] with IStore with ShufflingProductRecommender {
+class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorDispatcher with ShufflingProductRecommender {
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -82,8 +83,8 @@ class Store private() extends LCBOEntity[Store] with IStore with ShufflingProduc
 
   private val getCachedInventoryItem: (Inventory) => Option[Inventory] = { (inv: Inventory) => inventoryByProductId.get(P_KEY(inv.productid)) }
 
-  override def UseRandomSeed: Boolean = Store.PropsUseRandomSeed
-  override def FixedRNGSeed: Int = Store.PropsFixedRNGSeed
+  //override def UseRandomSeed: Boolean = Store.PropsUseRandomSeed
+  //override def FixedRNGSeed: Int = Store.PropsFixedRNGSeed
 
   private def productsByLcboId: Map[LCBO_ID, Product] =
     storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
@@ -175,10 +176,6 @@ class Store private() extends LCBOEntity[Store] with IStore with ShufflingProduc
 
 object Store extends Store with MetaRecord[Store] {
   def findAll(): Iterable[Store] = storesCache.values
-
-  val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
-  val PropsUseRandomSeed: Boolean = Props.getBool("store.useRandomSeed", true)
-  val PropsFixedRNGSeed: Int = Props.getInt("store.fixedRNGSeed", 21)
 
   private val storesCache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
   override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache
