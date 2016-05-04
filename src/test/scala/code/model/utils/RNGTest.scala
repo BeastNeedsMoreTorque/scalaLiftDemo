@@ -15,6 +15,7 @@ import scala.language.reflectiveCalls
   * Since performance is typically important, follow Don Knuth Book 2 on Numerical Analysis methods Section 3.4.
   *
   * The point of this exercise is practice FP, state, action handling to convert side-effect API to FP and use Scalatest.
+  * Need more practice with Scalatest and writing test cases much more concisely.
   */
 class RNGTest extends UnitTest {
 
@@ -55,6 +56,7 @@ class RNGTest extends UnitTest {
   // Actual values of Expected Shuffled values (exp_shuffled) are more to show the deterministic nature of the tests (pure functions using fixed seed)
   // In actual fact, a different implementation of the shuffle with same inputs could well be expected to yield different outputs.
   // So the check is more of a solution/function check than a BEHAVIOUR one.
+  // It'd be better to use "properties" and generators instead as per ScalaCheck
   val shuffleOffset = 100
   val shuffleRange = (0 to 9).map( _ + shuffleOffset)
   it should s"predict correctly permutation of $shuffleRange when setting specific Simple" in {
@@ -64,6 +66,7 @@ class RNGTest extends UnitTest {
     shuffled should equal(expected_shuffled)
   }
 
+  // this one is not truly "behaviour". It's better to use "properties" and generators instead as per ScalaCheck
   it should s"predict correctly permutation of $shuffleRange when setting with other specific Simple" in {
     val seed2 = 10
     val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed2))
@@ -92,6 +95,7 @@ class RNGTest extends UnitTest {
   behavior of "CollectSample"
   val bigSample = 1 to 5000
 
+  // this one is not truly "behaviour". It's better to use "properties" and generators instead as per ScalaCheck
   it should s"predict pick 20 distinct elements from 1 to 5000 exactly on specific seed Simple" in {
     val k1 = 20
     val seed3 = 50
