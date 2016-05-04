@@ -83,9 +83,6 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
 
   private val getCachedInventoryItem: (Inventory) => Option[Inventory] = { (inv: Inventory) => inventoryByProductId.get(P_KEY(inv.productid)) }
 
-  //override def UseRandomSeed: Boolean = Store.PropsUseRandomSeed
-  //override def FixedRNGSeed: Int = Store.PropsFixedRNGSeed
-
   private def productsByLcboId: Map[LCBO_ID, Product] =
     storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
 
