@@ -138,7 +138,7 @@ class Product protected extends LCBOEntity[Product] with IProduct   {
 /**
   *
   */
-trait MetaProduct extends Product with MetaRecord[Product]  {
+object Product extends Product with MetaRecord[Product] with ProductRunner  {
   override type GotEnough_? = (Int) => Boolean
 
   // thread-safe lock free objects
@@ -164,6 +164,16 @@ trait MetaProduct extends Product with MetaRecord[Product]  {
   implicit def toXml(p: Product): Node =
     <product>{Xml.toXml(p.asJValue)}</product>
 
+  /*
+  * Queries LCBO matching category
+  * URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage> (+ details on where_not and order)
+  * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
+  */
+  override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
+    implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize)
+    // don't fetch more than required size.
+    productWebQuery(lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs)
+  }
   // the implicit isEnough parameter is strictly to play around with the concept as in this case, implicit is not particularly compelling.
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
   // a cross cutting concern or a strategy.
@@ -177,22 +187,6 @@ trait MetaProduct extends Product with MetaRecord[Product]  {
       val prods = productWebQuery( lcboStoreId, queryFilterArgs).toIndexedSeq // take them all from Stream
       synchDirtyAndNewItems(prods, getCachedItem, dissimilar) // the side effect
       prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
-  }
-}
-
-object Product extends MetaProduct with ProductRunner {
-  // Since fetchByStoreCategory is impure because of productWebQuery or hard to test, isolate it, so that a test object can ignore this functionality
-  // and focus on the rest that might be testable.
-
-  /*
-   * Queries LCBO matching category
-   * URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage> (+ details on where_not and order)
-   * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
-   */
-  override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
-    implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize)
-    // don't fetch more than required size.
-    productWebQuery(lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs)
   }
 }
 
