@@ -3,8 +3,9 @@ package code.model
 import code.UnitTest
 import code.model.GlobalLCBO_IDs.P_KEY
 import code.model.prodAdvisor.ProductAdvisorComponentImpl
+import net.liftweb.common.Full
 
-import scala.collection.{IndexedSeq, Iterable}
+import scala.collection.IndexedSeq
 
 /**
   * Created by philippederome on 2016-05-04.
@@ -25,9 +26,9 @@ class ProductAdvisorComponentImplTest extends UnitTest {
 
   }
 
-  // THIS FAILS! Actually, celebrate the virtue of unit testing more than anything, as it un-covers some vulnerabilities in code!
   behavior of "No input"
-  it should s"advise an empty list of products when no products of category can be found" in {
-    drunkShuffler.advise(MockProduct, "wine", 5, MockProduct) shouldBe empty
+  it should s"advise an empty Stream of products when no products of category can be found" in {
+    drunkShuffler.advise(MockProduct, "wine", 5, MockProduct) should equal(Full(Stream()))
+
   }
 }

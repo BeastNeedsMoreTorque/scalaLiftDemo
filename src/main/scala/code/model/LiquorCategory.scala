@@ -10,7 +10,11 @@ object LiquorCategory {
   private def getMap(k: String): Map[String, String] =
     ConfigPairsRepo.ConfigPairsRepoPropsImpl.getSeq(k).toMap
 
-  val toPrimaryCategory = getMap("product.CategoriesMap")
+  def toPrimaryCategory(category: String): String = {
+    val x = getMap("product.CategoriesMap")
+    x.get(category).fold(category)(identity)
+  }
+
   val toImg = getMap("product.CategoriesImageMap")
   val categoriesSeq = Props.get("product.Categories", "wine:beer").split(":").toSeq // give wine and beer at a minimum, provides iterable sequence of categories users can select from.
 }
