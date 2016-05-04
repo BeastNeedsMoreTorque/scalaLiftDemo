@@ -138,7 +138,7 @@ class Product protected extends LCBOEntity[Product] with IProduct   {
 /**
   *
   */
-trait MetaProduct extends Product with MetaRecord[Product] with ProductRunner {
+trait MetaProduct extends Product with MetaRecord[Product]  {
   override type GotEnough_? = (Int) => Boolean
 
   // thread-safe lock free objects

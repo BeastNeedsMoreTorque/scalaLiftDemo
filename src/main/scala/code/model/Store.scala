@@ -228,6 +228,6 @@ object Store extends Store with MetaRecord[Store] {
     val refreshed = getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
     lazy val err = checkErrors(refreshed, fullContextErr, briefContextErr )
     refreshed.toOption.fold[Unit](logger.error(err))( items => synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate))
-    logger.info("load end")
+    logger.info("load end") // trace because it takes a long time.
   }
 }
