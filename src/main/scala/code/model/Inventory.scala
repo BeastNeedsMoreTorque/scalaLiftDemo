@@ -67,7 +67,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
 
   val extract: JSitemsExtractor[Inventory] =  { jVal =>
     for (p <- jVal.children.toIndexedSeq;
-         inv = p.extract[InventoryAsLCBOJson];
+         inv <- p.extractOpt[InventoryAsLCBOJson];
          sKey <- Store.lcboIdToPK(LCBO_ID(inv.store_id));
          pKey <- Product.lcboIdToPK(LCBO_ID(inv.product_id));
          newInv = Inventory.apply(sKey, pKey, inv)
