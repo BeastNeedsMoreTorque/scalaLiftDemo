@@ -31,7 +31,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   }
 
 
-  behavior of "No input"
+  behavior of "No product available empty list"
   val outOfStockRunner = new ProductRunner {
     override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = IndexedSeq[Product]()
   }
@@ -131,7 +131,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     }
   }
 
-  behavior of "Single product"
+  behavior of "Single product match by category once list of 1 and once empty list"
   it should s"get a Heineken name in first selection for beer when it is the only product" in {
     drunkShuffler.advise(NullInventoryService, "beer", 1, singleBeerRunner) match {
       case Full(x) => x.headOption.foreach(_._1.Name should equal("Heineken"))
