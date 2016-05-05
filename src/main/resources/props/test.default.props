@@ -45,5 +45,8 @@ store.maxSampleSize=60
 store.lcboMaxPerPage=40
 # careful observer will notice it's not same value as for product.
 store.query.AllItemsArgs={"where_not":"is_dead"}
-
+store.useRandomSeed=false
+# in "deterministic or false mode", change this number to get different types of runs.
+# for unit test set to 411
+store.fixedRNGSeed=411
 inventory.lcboMaxPerPage=50
