@@ -135,23 +135,22 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   it should s"get a Heineken name in first selection for beer when it is the only product" in {
     drunkShuffler.advise(NullInventoryService, "beer", 1, singleBeerRunner) match {
       case Full(x) => x.headOption.foreach(_._1.Name should equal("Heineken"))
-      case _ =>  1 should equal(2) // we don't care about this.
+      case _ =>  true should equal(false) // we don't care about this.
     }
   }
   // following is more to validate previous test. This is not particularly interesting.
   it should s"NOT get a Heineken name in first selection for wine when Heineken is the only (beer) product" in {
     drunkShuffler.advise(NullInventoryService, "wine", 1, singleBeerRunner) match {
       case Full(Nil) => // success: wine != beer, no match.
-      case _ =>  1 should equal(2) // we should not get here.
+      case _ =>  true should equal(false) // we should not get here.
     }
   }
 
   def validateSelectedName(runner: ProductRunner, name: String): Unit = {
     // store.fixedRNGSeed=411
     drunkShuffler.advise(NullInventoryService, "beer", 1, runner) match {
-      case Full(x) => x.headOption.foreach{y =>
-        y._1.Name should equal(name)}
-      case _ =>  1 should equal(2) // we should not get here, so fail it.
+      case Full(x) => x.headOption.foreach{ _._1.Name should equal(name)}
+      case _ =>  true should equal(false) // we should not get here, so fail it.
     }
   }
   behavior of "Deterministic random selection of single item among 101 beers: 1 Mill Street among 100 Heinekens fixed seed"
