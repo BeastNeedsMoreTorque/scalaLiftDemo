@@ -152,24 +152,25 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     }
   }
 
+  // following tests depend on a shuffle of collection indices (post category filter) and normal Scala collection take as selection strategy.
   behavior of "Deterministic random selection of single item among 101 beers: 1 Mill Street among 100 Heinekens fixed seed"
-  val rng = RNG.Simple(411)
-  def validateSelectedName(runner: ProductRunner, name: String): Unit = {
-    //val rng = RNG.Simple(411)
+  val rng411 = RNG.Simple(411)
+  def validateSelectedName(runner: ProductRunner, rng: RNG, name: String): Unit = {
     drunkShuffler.advise(rng, NullInventoryService, "beer", 1, runner) match {
       case Full(x) => x.headOption.foreach{ _._1.Name should equal(name)}
-      case _ =>  true should equal(false) // we should not get here, so fail it.
+      case _ =>  assert(false) // we should not get here, so fail it.
     }
   }
+  // this more primitive test on shuffling indices motivates the next two material examples that do shuffling on products.
   it should s"predict take 1st element from 0 to 100 randomly permuted exactly on specific seed Simple at 63" in {
-    val (shuffled, _) = shuffle((0 to 100)).run(rng)
+    val (shuffled, _) = shuffle((0 to 100)).run(rng411)
     shuffled.take(1) should equal(Seq(63))
   }
 
   it should s"get Mill Street Lager or really #63 out of 0 to 100 (64th position in 0-index system, literally 63) if seed is set to 411 with 100 Heinekens out of 101!!!" in
-    validateSelectedName(HeinekensBut63Runner, "Mill Street Lager")
+    validateSelectedName(HeinekensBut63Runner, rng411, "Mill Street Lager")
 
   it should s"get Heineken as Mill Street Lager is not in special spot of index value 63 among 101, 100 of which are Heineken!" in
-    validateSelectedName(HeinekensBut62Runner, "Heineken")
+    validateSelectedName(HeinekensBut62Runner, rng411, "Heineken")
 
 }
