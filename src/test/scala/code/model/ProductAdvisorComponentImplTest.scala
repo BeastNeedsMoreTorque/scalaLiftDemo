@@ -4,7 +4,7 @@ import code.UnitTest
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.ProductAdvisorComponentImpl
 import code.model.utils.RNG
-import code.model.utils.RNG.{Simple, _}
+import code.model.utils.RNG._
 import net.liftweb.common.Full
 
 import scala.collection.IndexedSeq
