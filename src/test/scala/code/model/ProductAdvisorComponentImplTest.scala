@@ -3,6 +3,8 @@ package code.model
 import code.UnitTest
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.ProductAdvisorComponentImpl
+import code.model.utils.RNG
+import code.model.utils.RNG.{Simple, _}
 import net.liftweb.common.Full
 
 import scala.collection.IndexedSeq
@@ -36,7 +38,8 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = IndexedSeq[Product]()
   }
   it should s"advise an empty list of products when using dummy InventoryService and ProductRunner when no products of category can be found" in {
-    drunkShuffler.advise(NullInventoryService, "wine", 5, outOfStockRunner) match {
+    val rng = RNG.Simple(411)
+    drunkShuffler.advise(rng, NullInventoryService, "wine", 5, outOfStockRunner) match {
       case Full(x) => x.toList shouldBe empty
       case _ => 1 should equal(2) // we should never get here
     }
@@ -44,7 +47,8 @@ class ProductAdvisorComponentImplTest extends UnitTest {
 
   it should s"advise an empty list of products when no products of category can be found" in {
     val categories = Seq("wine", "spirits", "beer", "ciders", "coolers", "non-Alc")
-    categories.foreach(cat => drunkShuffler.advise(Store, cat, 5, outOfStockRunner) match {
+    val rng = RNG.Simple(411)
+    categories.foreach(cat => drunkShuffler.advise(rng, Store, cat, 5, outOfStockRunner) match {
       case Full(x) => x.toList shouldBe empty
       case _ => true should equal(false) // we should never get here
     })
@@ -133,31 +137,39 @@ class ProductAdvisorComponentImplTest extends UnitTest {
 
   behavior of "Single product match by category once list of 1 and once empty list"
   it should s"get a Heineken name in first selection for beer when it is the only product" in {
-    drunkShuffler.advise(NullInventoryService, "beer", 1, singleBeerRunner) match {
+    val rng = RNG.Simple(411)
+    drunkShuffler.advise(rng, NullInventoryService, "beer", 1, singleBeerRunner) match {
       case Full(x) => x.headOption.foreach(_._1.Name should equal("Heineken"))
       case _ =>  true should equal(false) // we don't care about this.
     }
   }
   // following is more to validate previous test. This is not particularly interesting.
   it should s"NOT get a Heineken name in first selection for wine when Heineken is the only (beer) product" in {
-    drunkShuffler.advise(NullInventoryService, "wine", 1, singleBeerRunner) match {
+    val rng = RNG.Simple(411)
+    drunkShuffler.advise(rng, NullInventoryService, "wine", 1, singleBeerRunner) match {
       case Full(Nil) => // success: wine != beer, no match.
       case _ =>  true should equal(false) // we should not get here.
     }
   }
 
+  behavior of "Deterministic random selection of single item among 101 beers: 1 Mill Street among 100 Heinekens fixed seed"
+  val rng = RNG.Simple(411)
   def validateSelectedName(runner: ProductRunner, name: String): Unit = {
-    // store.fixedRNGSeed=411
-    drunkShuffler.advise(NullInventoryService, "beer", 1, runner) match {
+    //val rng = RNG.Simple(411)
+    drunkShuffler.advise(rng, NullInventoryService, "beer", 1, runner) match {
       case Full(x) => x.headOption.foreach{ _._1.Name should equal(name)}
       case _ =>  true should equal(false) // we should not get here, so fail it.
     }
   }
-  behavior of "Deterministic random selection of single item among 101 beers: 1 Mill Street among 100 Heinekens fixed seed"
-  it should s"get Mill Street Lager or really 63rd out of 101 if seed is set to 411 with 100 Heinekens out of 101!!!" in
+  it should s"predict take 1st element from 0 to 100 randomly permuted exactly on specific seed Simple at 63" in {
+    val (shuffled, _) = shuffle((0 to 100)).run(rng)
+    shuffled.take(1) should equal(Seq(63))
+  }
+
+  it should s"get Mill Street Lager or really #63 out of 0 to 100 (64th position in 0-index system, literally 63) if seed is set to 411 with 100 Heinekens out of 101!!!" in
     validateSelectedName(HeinekensBut63Runner, "Mill Street Lager")
 
-  it should s"get Heineken as Mill Street Lager is not in special spot of 63rd among 101, 100 of which are Heineken!" in
+  it should s"get Heineken as Mill Street Lager is not in special spot of index value 63 among 101, 100 of which are Heineken!" in
     validateSelectedName(HeinekensBut62Runner, "Heineken")
 
 }

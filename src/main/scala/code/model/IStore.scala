@@ -3,6 +3,7 @@ package code.model
 import scala.collection.Iterable
 import net.liftweb.common.Box
 import code.model.GlobalLCBO_IDs.P_KEY
+import code.model.utils.RNG
 
 trait InventoryService extends KeyKeeper {
   val inventoryByProductIdMap: P_KEY => Option[Inventory]
@@ -17,7 +18,7 @@ trait IStore extends Equals with InventoryService {
   def isDead: Boolean
   def addressLine1: String
 
-  def advise(category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]]
+  def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]]
 
   // @see Scala in Depth
   override def canEqual(other: Any) =
