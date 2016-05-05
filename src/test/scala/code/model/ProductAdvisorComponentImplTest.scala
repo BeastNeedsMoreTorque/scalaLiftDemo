@@ -4,7 +4,6 @@ import code.UnitTest
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.ProductAdvisorComponentImpl
 import code.model.utils.RNG
-import code.model.utils.RNG._
 import net.liftweb.common.Full
 
 import scala.collection.IndexedSeq
@@ -163,7 +162,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   }
   // this more primitive test on shuffling indices motivates the next two material examples that do shuffling on products.
   it should s"predict take 1st element from 0 to 100 randomly permuted exactly on specific seed Simple at 63" in {
-    val (shuffled, _) = shuffle((0 to 100)).run(rng411)
+    val (shuffled, _) = RNG.shuffle((0 to 100)).run(rng411)
     shuffled.take(1) should equal(Seq(63))
   }
 
