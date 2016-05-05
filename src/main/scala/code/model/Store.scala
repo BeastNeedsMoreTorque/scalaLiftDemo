@@ -18,7 +18,8 @@ import org.squeryl.annotations._
 import code.model.Product.fetchByStore
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.prodAdvisor.{ProductAdvisorDispatcher, ProductAdvisorComponentImpl}
+import code.model.prodAdvisor.{ProductAdvisorComponentImpl, ProductAdvisorDispatcher}
+import code.model.utils.RNG
 
 class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
 
@@ -104,8 +105,8 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   private def emptyInventory =
     inventories.toIndexedSeq.forall(_.quantity == 0)
 
-  def advise(category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
-    super.advise(this, category, requestSize, runner)
+  def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
+    super.advise(rng, this, category, requestSize, runner)
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {

@@ -16,6 +16,10 @@ import code.model.{Attribute => _, _}
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.snippet.SessionCache._
 import JSUtilities._
+import code.model.utils.RNG
+import net.liftweb.util.Props
+
+import scala.util.Random
 
 /**
   * This is a Lift Snippet: it plays the equivalent of a controller and a view with render being responsible to render to client (a bit like a PLAY! Action)
@@ -74,6 +78,11 @@ class ProductInteraction extends Loggable {
     )
     val default = Full("1")
     val options = values.keys.map(k => (k, k)).toList
+  }
+  object Shuffler  {
+    val UseRandomSeed = Props.getBool("store.useRandomSeed", true)
+    val FixedRNGSeed = Props.getInt("store.fixedRNGSeed", 21)
+    val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
   }
 
   def render = {
@@ -159,7 +168,9 @@ class ProductInteraction extends Loggable {
       }
 
       def maySelect(s: Store): JsCmd = {
-        val prodQtySeq = s.advise(theCategory.is, theRecommendCount.is, Product) match {
+        val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
+
+        val prodQtySeq = s.advise(rng, theCategory.is, theRecommendCount.is, Product) match {
           // we want to distinguish error messages to user to provide better diagnostics.
           case Full(pairs) =>
             if (pairs.isEmpty) S.error(s"Unable to find a product of category ${theCategory.is}")

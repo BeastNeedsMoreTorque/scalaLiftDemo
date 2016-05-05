@@ -20,10 +20,11 @@ trait ProductAdvisorComponent {
   def agent: ProductAdvisor
 
   trait ProductAdvisor {
-    def advise(invService: InventoryService,
-                  category: String,
-                  requestSize: Int,
-                  runner: ProductRunner): Box[Iterable[(IProduct, Long)]]
+    def advise(rng: RNG,
+               invService: InventoryService,
+               category: String,
+               requestSize: Int,
+               runner: ProductRunner): Box[Iterable[(IProduct, Long)]]
   }
 
 }
@@ -31,11 +32,12 @@ trait ProductAdvisorComponent {
 trait ProductAdvisorDispatcher   {
   this: ProductAdvisorComponent =>
 
-  def advise(invService: InventoryService,
-                category: String,
-                requestSize: Int,
-                runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
-    agent.advise(invService, category, requestSize, runner)
+  def advise(rng: RNG,
+             invService: InventoryService,
+             category: String,
+             requestSize: Int,
+             runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
+    agent.advise(rng, invService, category, requestSize, runner)
 }
 
 // the suggested implementation below is for fun. A more realistic/commercial one would use proper analytics instead.
@@ -61,13 +63,11 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       * @param runner a ProductRunner, responsible to obtain products in a store for a given vategory.
       * @return quantity found in inventory for product and the product
       */
-    def advise(invService: InventoryService,
-                 category: String,
-                 requestSize: Int,
-                 runner: ProductRunner): Box[Iterable[(IProduct, Long)]] = {
-
-      def UseRandomSeed: Boolean = Shuffler.UseRandomSeed
-      def FixedRNGSeed: Int = Shuffler.FixedRNGSeed
+    def advise(rng: RNG,
+               invService: InventoryService,
+               category: String,
+               requestSize: Int,
+               runner: ProductRunner): Box[Iterable[(IProduct, Long)]] = {
 
       /**
         * @param invService an inventory service instance
@@ -134,10 +134,8 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       }
 
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category)
-      // the shuffling in getShuffledProducts is predetermined by rngSeed (and not other class calls to random generation routines),
+      // the shuffling in getShuffledProducts is predetermined by rng (and not other class calls to random generation routines),
       // and when cache fails, it is predetermined by the actual contents we get from LCBO via getSerialResult.
-      val rng = RNG.Simple(if (UseRandomSeed) Random.nextInt() else FixedRNGSeed)
-
       getShuffledProducts(invService, runner, rng, invService.getProductsByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
 
     }
