@@ -139,7 +139,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     val rng = RNG.Simple(411)
     drunkShuffler.advise(rng, NullInventoryService, "beer", 1, singleBeerRunner) match {
       case Full(x) => x.headOption.foreach(_._1.Name should equal("Heineken"))
-      case _ =>  true should equal(false) // we don't care about this.
+      case _ =>  assert(false) // we don't care about this.
     }
   }
   // following is more to validate previous test. This is not particularly interesting.
@@ -147,7 +147,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     val rng = RNG.Simple(411)
     drunkShuffler.advise(rng, NullInventoryService, "wine", 1, singleBeerRunner) match {
       case Full(Nil) => // success: wine != beer, no match.
-      case _ =>  true should equal(false) // we should not get here.
+      case _ =>  assert(false) // we should not get here.
     }
   }
 
