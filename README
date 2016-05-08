@@ -12,6 +12,8 @@ Scala: 2.11.7
 JVM SDK: 1.8
 
 Lift framework: 2.6.2 but taken care by SBT
+Squeryl, a Scala ORM ((taken care by SBT)
+Apache common for httpclient (taken care by SBT)
 
 Install PostgresSQL. I use 9.4.5.0
 
@@ -26,3 +28,10 @@ Once obtained, use it in webapp/index.html at following replacing GET_A_KEY with
 
 Install initial SQL tables using POSTGRES_SCHEMA_INIT.SQL. What may cause portability issues for other databases in that file are:
 Usage of sequences to generate IDs.
+Usage of SERIAL in users table for primary key (auto increment in other RDBMSs).
+Table "Inventory" is double quoted. It's managed by Squeryl outside of LIFT's Record control and useful to represent stateful many-to-many relations between store and product.
+
+Security:
+None. In particular, there is none planned in database and none on web side of things with registration of users not enforcing any password complexity
+
+HA/fail-over: none

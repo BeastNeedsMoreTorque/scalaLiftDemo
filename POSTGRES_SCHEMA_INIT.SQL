@@ -1,4 +1,4 @@
--- also seen from printDdl
+-- also seen from printDdl. You may paste following in a psql shell.
 CREATE TABLE users (id SERIAL,
 firstname VARCHAR(32) ,
 lastname VARCHAR(32) ,
