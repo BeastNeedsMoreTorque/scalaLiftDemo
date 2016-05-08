@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<!-- Some Liftweb templates start below, but they contain no code and no business logic, equivalent of MVC routes do not need to be set up
+     Just bind the required div with class/function with data-lift attribute-->
+<body data-lift-content-id="centre">
+<div id="centre" data-lift="surround?with=main;at=content">
+    <head>
+        <script src="scripts/togglebutton.js"></script>
+        <script src="scripts/prodselection.js"></script>
+        <script src="scripts/storefinder.js"></script>
+        <script async defer src="https://maps.googleapis.com/maps/api/js?key=GET_A_KEY&callback=storeFinder.initMap"
+                type="text/javascript"></script>
+        <script src="scripts/inventory.js"></script>
+        <link rel="stylesheet" type="text/css" href="index.css">
+    </head>
+    You will be presented with a random selection of available LCBO products available for a store and category of your choice.
+    <br><hr>
+    <div data-lift="CategorySelect">
+      <div id="prodCategoryContainer" class="box">
+          <span class="options">
+            <input type="radio" value="Option 1">
+          </span>
+          <span class="f1">wine</span ><span class="f1"> spirits</span ><span class="f1">beer</span><span class="f1">ciders</span><span class="f1">coolers</span><span class="f1">gifts</span>
+      </div>
+    </div>
+    <div data-lift="ProductInteraction">
+      <div id="prodInteractionContainer" class="span-7">
+          #Products to recommend:
+          <select>
+              <option value="1">1</option>
+          </select>
+          <div class="box">
+            <input type="image" class="thinBorder" name="recommend" title="recommend" src="/images/recommend.jpg">
+            <input type="image" class="thinBorder" name="cancel" title="cancel" src="/images/cancel.jpg">
+            <input type="image" class="thinBorder" name="consume" title="consume" src="/images/winesmall.jpg">
+            <br>
+          <span class="f2">recommend</span><span class="f2">cancel</span><span class="f2">consume</span><!-- should probably be generated -->
+          </div>
+      </div>
+      <div class="span-9 last"></div> <!-- filler to ensure box for prodInteractionContainer does not go too far to the right -->
+
+        <hr> <!--Need enough spacing beneath the buttons-->
+        <div id="prodDisplay" hidden >
+            <div id="prodContainer" class="prodContainer">
+                <!-- There will be several of these that would be generated for each product-->
+                <div name="prodId"> <!-- a container for layout, tag it with prodId at run-time-->
+                <!-- attributesMarkup -->
+                <div class="span-8">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Attribute</th>
+                            <th>Value</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <td class="prodAttrHead">
+                                Some attribute's name
+                            </td>
+                            <td class="prodAttrContent" name={setProdIdName(attr)}>
+                                Some attribute's value
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <!-- selectionMarkup -->
+                <div class="span-8 last"> <!-- generate img with URL inside this div on the fly-->
+                    <img src="#"/><br> <!-- img of product here -->
+                    <label>
+                        <input type="checkbox" class="prodSelectInput" value="prod.lcbo_id.get.toString"/>
+                        product name
+                    </label><br/>
+                    <label>Item Quantity:
+                        <input type="text" class="prodQty prodSelectInput" onchange="prodSelection.updateQtyItem(this);" value="1"/>
+                    </label><br/>
+                    <label>Cost:
+                        <input type="text" class="prodCost prodSelectInput" value="prod.price" readonly="readonly"/>
+                    </label>
+                    <input type="text" class="hiddenProdCost" value="prod.price" hidden="hidden"/>
+                </div>
+
+                </div><hr/>
+            </div>
+        </div>
+
+      <div id="confirmationDiv" hidden>
+        <p><span id="transactionsConfirmationUser"></span>, you have now purchased&nbsp<span id="purchaseAmount"></span>&nbspworth of liquor, be sober and kind to your guests!</p>
+        <div id="transactionsConfirmation">
+          <li>a selected product</li>
+        </div>
+      </div>
+    </div>
+</div>
+
+<script src="/ajax_request/liftAjax.js" type="text/javascript"></script>
+</body>
+</html>

@@ -4,7 +4,7 @@ User interacts with browser for LCBO product selection given a category, a store
 
 User registration is as per mechanism of Lift Framework, with whole framework distributed under Apache 2.0 License.
 
-The store selection is by usage of Google MAPS API and user's geolocaction being volunteered.
+The store selection is by usage of Google MAPS API and user's geolocation being volunteered.
 The choice of category is by selection of 6 icons representing each a category, with the set acting as radio buttons.
 The choice of required count of product recommendation is a drop down menu offering numbers of 1,5,10, and 20.
 
