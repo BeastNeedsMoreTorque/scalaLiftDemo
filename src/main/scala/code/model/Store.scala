@@ -177,7 +177,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
 }
 
 object Store extends Store with MetaRecord[Store] {
-  def findAll(): Iterable[Store] = storesCache.values
+  def findAll: Iterable[Store] = storesCache.values
 
   private val storesCache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
   override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache
