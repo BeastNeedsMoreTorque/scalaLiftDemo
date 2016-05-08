@@ -39,6 +39,8 @@ class Product protected extends LCBOEntity[Product] with IProduct   {
 
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+    override def optional_? : Boolean = true  // tolerates null in JSON input
+    override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val total_package_units = new IntField(this)
@@ -49,22 +51,35 @@ class Product protected extends LCBOEntity[Product] with IProduct   {
     override def setFilter = notNull _ :: crop _  :: super.setFilter
   }
   val image_thumb_url = new StringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+    override def optional_? : Boolean = true  // tolerates null in JSON input
+    override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val origin = new StringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+    override def optional_? : Boolean = true  // tolerates null in JSON input
+    override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val price_in_cents = new IntField(this)
   val alcohol_content = new IntField(this)
   val volume_in_milliliters = new IntField(this)
-  val secondary_category = new StringField(this, 80)
+  val secondary_category = new StringField(this, 80) {
+    override def optional_? : Boolean = true  // tolerates null in JSON input
+    override def defaultValue = ""
+  }
   val varietal = new StringField(this, 100) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
+    override def optional_? : Boolean = true  // tolerates null in JSON input
+    override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val description = new StringField(this, 2000) {// allow dropping some data in order to store/copy without SQL error
+    override def optional_? : Boolean = true  // tolerates null in JSON input
+    override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
   val serving_suggestion = new StringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
+    override def optional_? : Boolean = true  // tolerates null in JSON input
+    override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 
