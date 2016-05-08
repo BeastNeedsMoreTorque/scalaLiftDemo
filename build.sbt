@@ -8,6 +8,8 @@ resolvers ++= Seq("snapshots"     at "https://oss.sonatype.org/content/repositor
                  )
 unmanagedResourceDirectories in Test <+= baseDirectory { _ / "src/main/webapp" }
 scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked", "-Xfatal-warnings", "-Dusejavacp=true")
+ideaExcludeFolders += ".idea"
+ideaExcludeFolders += ".idea_modules"
 
 javaOptions in run += "-Xmn2G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+PrintGC -XX:+PrintGCTimeStamps"
 // log4j/slf4j is not standard for liftweb so we use ch.qos.logback (https://www.assembla.com/wiki/show/liftweb/Logging)
