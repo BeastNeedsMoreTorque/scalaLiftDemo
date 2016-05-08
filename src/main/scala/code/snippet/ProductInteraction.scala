@@ -252,7 +252,13 @@ class ProductInteraction extends Loggable {
         goodAndBackFeedback.getOrElse(false, Nil).map( _.feedback.message).foreach(S.error) // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
 
         val goodFeedback = goodAndBackFeedback.getOrElse(true, Nil) // select those for which we have success and positive message
-        if (goodFeedback.isEmpty) Noop // we already provided bad feedback, here satisfy function signature (and semantics) to return a JsCmd.
+        if (goodFeedback.isEmpty) {
+          if (feedback.isEmpty) {
+            S.error("None of the selected products exist in database, wait a minute or two") // that means web server should warm up quite a few at first. Not better than Twitter Fail Whale...
+          } else {
+            Noop // we already provided bad feedback, here satisfy function signature (and semantics) to return a JsCmd.
+          }
+        }
         else {
           if (goodFeedback.size == feedback.size) S.error("") // no error, erase old errors no longer applicable.
           val confirmationMessages = goodFeedback.map{ x => PurchasedProductConfirmation(x.selectedProduct, x.feedback.message) } // get some particulars about cost and quantity in addition to message
