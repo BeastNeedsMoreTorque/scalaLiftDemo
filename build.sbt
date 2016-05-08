@@ -1,7 +1,7 @@
 name := "lcboViewer"
 version := "1.0"
 scalaVersion := "2.11.7"
-organization := "deromefintech"
+organization := "ORG"
 resolvers ++= Seq("snapshots"     at "https://oss.sonatype.org/content/repositories/snapshots",
                   "staging"       at "https://oss.sonatype.org/content/repositories/staging",
                   "releases"      at "https://oss.sonatype.org/content/repositories/releases"

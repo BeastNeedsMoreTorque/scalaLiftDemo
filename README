@@ -1,10 +1,28 @@
+Runs on localhost:8080
+
+Run modes: dev and test (src/main/resources/props: default.props and test.default.props whose names are chosen as per Lift framework)
+
+Logging: ch.qos.logback
+
+Dependencies:
+SBT: 0.13.1
+
+Scala: 2.11.7
+
+JVM SDK: 1.8
+
+Lift framework: 2.6.2 but taken care by SBT
+
+Install PostgresSQL. I use 9.4.5.0
+
 See https://lcboapi.com/docs/v1 about setting a LCBO token, which is required if used from a public website as queries are limited.
 
 My home private usage qualifies for following:
 When LCBO API is accessed from a web server or private script, these keys are not rate-limited, and they do not support CORS or JSONP.
 
-You need a Google MAPS API key as per following: https://developers.google.com/maps/documentation/javascript/get-api-key
+You need a Google MAPS API key as per following (JS API): https://developers.google.com/maps/documentation/javascript/get-api-key
 Once obtained, use it in webapp/index.html at following replacing GET_A_KEY with your API key.
         <script async defer src="https://maps.googleapis.com/maps/api/js?key=GET_A_KEY&callback=storeFinder.initMap"
 
-
+Install initial SQL tables using POSTGRES_SCHEMA_INIT.SQL. What may cause portability issues for other databases in that file are:
+Usage of sequences to generate IDs.
