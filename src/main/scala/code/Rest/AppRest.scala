@@ -27,12 +27,12 @@ object AppRest extends RestHelper with Loggable {
    */
   serve {
     case "stores" :: Nil JsonGet _ =>
-      val stores = Store.findAll().map{_.asJValue}
+      val stores = Store.findAll.map{_.asJValue}
       logger.info(s"stores request size is ${stores.size}")
       Extraction.decompose(stores) // a JValue, allowing servlet to return some JSon, this is a collection.
 
     case "stores" :: Nil XmlGet _ =>
-      val stores = Store.findAll()
+      val stores = Store.findAll
       <stores>{stores.map(s => {s:Node})}</stores>
   }
 

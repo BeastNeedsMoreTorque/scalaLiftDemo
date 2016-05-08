@@ -33,8 +33,6 @@ product.Category=wine
 product.DBBatchSize=512
 product.cacheSize=20000
 
-# When going synchronously to select products of a category, we'll request no more than store.maxSampleSize from LCBO
-store.maxSampleSize=60
 # implied with LCBO tests as max we can query on a page
 store.lcboMaxPerPage=40
 # careful observer will notice it's not same value as for product.
@@ -42,8 +40,10 @@ store.query.Filter={"where_not":"is_dead"}
 
 # false means we're in charge and will get repeatable predictable samples good for unit testing or proving we can work in "pure functional" way.
 # true means we're getting unpredictable selections, it's more entertaining but not as testable.
-store.useRandomSeed=true
+advisor.useRandomSeed=true
 # in "deterministic or false mode", change this number to get different types of runs.
-store.fixedRNGSeed=411
+advisor.fixedRNGSeed=411
+# When going synchronously to select products of a category, we'll request no more than store.maxSampleSize from LCBO
+advisor.maxSampleSize=60
 
 inventory.lcboMaxPerPage=50
