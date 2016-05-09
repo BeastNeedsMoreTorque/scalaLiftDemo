@@ -7,7 +7,8 @@ resolvers ++= Seq("snapshots"     at "https://oss.sonatype.org/content/repositor
                   "releases"      at "https://oss.sonatype.org/content/repositories/releases"
                  )
 unmanagedResourceDirectories in Test <+= baseDirectory { _ / "src/main/webapp" }
-scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked", "-Xfatal-warnings", "-Dusejavacp=true")
+// Xcheckinit should be off in prod builds (too much run-time overhead).
+scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked", "-Xfatal-warnings", "-Xcheckinit", "-Dusejavacp=true")
 ideaExcludeFolders += ".idea"
 ideaExcludeFolders += ".idea_modules"
 

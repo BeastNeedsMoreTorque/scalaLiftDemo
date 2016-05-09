@@ -50,7 +50,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
       // select only those we just inserted, hopefully the same set.
       val itemsWithAK = from(table())(item => where(item.lcboId.underlying in akIds) select item)
       if (itemsWithAK.size < akIds.size) logger.error(s"feedCache got only ${itemsWithAK.size} items for expected ${akIds.size}")
-      cache() ++= itemsWithAK.map { item => item.pKey -> item }(collection.breakOut)  // we only find out about the pKey value now by going to DB.
+      cacheItems(itemsWithAK)
     }
 
     // Seems high enough to report error to log as it appears a little messy to push it up further.
