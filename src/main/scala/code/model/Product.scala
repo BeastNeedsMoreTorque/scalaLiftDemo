@@ -199,7 +199,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   def fetchByStore(lcboStoreId: Long): Box[IndexedSeq[IProduct]] = tryo {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
-      val prods = productWebQuery( lcboStoreId, queryFilterArgs).toIndexedSeq // take them all from Stream
+      val prods = productWebQuery( lcboStoreId, queryFilterArgs) // take them all from Stream
       synchDirtyAndNewItems(prods, getCachedItem, dissimilar) // the side effect
       prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
   }

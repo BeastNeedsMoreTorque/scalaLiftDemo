@@ -95,7 +95,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
       fold(IndexedSeq[IProduct]()){ identity }
 
   private def getInventories: Map[P_KEY, Inventory] =
-    inventories.toIndexedSeq.map { inv => P_KEY(inv.productid) -> inv } (breakOut)  // moderately slow because of iteration
+    inventories.toIndexedSeq.map { inv => P_KEY(inv.productid) -> inv } (breakOut)
 
   private def addToCaches(items: IndexedSeq[IProduct]) = {
     productsCache ++= items.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products

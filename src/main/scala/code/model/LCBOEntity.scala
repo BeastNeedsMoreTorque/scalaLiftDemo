@@ -20,10 +20,10 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
       case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
     }
     val nodes = idFix.children
-    nodes.foldLeft(ArrayBuffer[T]()) {
+    nodes.foldLeft(ArrayBuffer.empty[T]) {
       (recsBuffer, node) =>
         for (rec <- meta.fromJValue(node)) { // a lcbo_id can be set here, but not an id (it's kind of "reserved" word by Squeryl while this call is Lift Record).
-          recsBuffer.append(rec)
+          recsBuffer += rec
         }
         recsBuffer
     }.toIndexedSeq

@@ -23,7 +23,7 @@ import code.Rest.RestClient
   */
 trait LCBOPageFetcherComponent  {
   def fetcher: LCBOPageFetcher
-  type JSitemsExtractor[T] = JValue => Iterable[T]
+  type JSitemsExtractor[T] = JValue => IndexedSeq[T]
   type GotEnough_? = (Int) => Boolean
   val neverEnough: GotEnough_? = { x => false }
 
@@ -88,7 +88,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
         val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
         if (isFinalPage(jsonRoot, currPage) || enough(revisedItems.size)) {
           logger.info(uri) // log only last one to be less verbose
-          return revisedItems.toIndexedSeq
+          return revisedItems
         }
         go(revisedItems, currPage + 1)
       }
