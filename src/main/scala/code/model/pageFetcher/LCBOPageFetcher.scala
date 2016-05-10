@@ -88,9 +88,9 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
         val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
         if (isFinalPage(jsonRoot, currPage) || enough(revisedItems.size)) {
           logger.info(uri) // log only last one to be less verbose
-          return revisedItems
+          revisedItems
         }
-        go(revisedItems, currPage + 1)
+        else go(revisedItems, currPage + 1)
       }
 
       go( IndexedSeq(), 1) // tail recursion with classic accumulator as first parameter

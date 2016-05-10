@@ -102,11 +102,12 @@ object RNG {
     def sampleIter[T](N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (Seq[T], RNG) =  {
       val (u,y) = double.run(rng) // Knuth's method is not "functional" here (does not return a state capturing RNG) otherwise it's conceptually the same
       val sampleSuccess = (N-t)* u <= n-m
-      if (sampleSuccess && m+1 == n) return (selected ++ Seq(avail(t)), y)
-      // do this "trick" to satisfy tailrec.
-      val (newSel, newM) = if (sampleSuccess) (selected ++ Seq(avail(t)), m+1) else (selected, m)
-
-      sampleIter(N, n, newM, t+1, avail, newSel, y )
+      if (sampleSuccess && m+1 == n)  (selected ++ Seq(avail(t)), y)
+      else {
+        // do this "trick" to satisfy tailrec.
+        val (newSel, newM) = if (sampleSuccess) (selected ++ Seq(avail(t)), m + 1) else (selected, m)
+        sampleIter(N, n, newM, t + 1, avail, newSel, y)
+      }
     }
 
     State(rng => {
@@ -144,49 +145,50 @@ object RNG {
     if (s.chosen.contains(i)) s  // failed to improve
     else SelectorState(s.chosen ++ Seq(i), s.available - i) // succeeded
 
-  def execute(inputs: List[Int]): State[SelectorState, (Seq[Int], Set[Int])] = for {
-    _ <- State.rawSequence(inputs map (modify[SelectorState] _ compose update))
-    s <- get
-  } yield (s.chosen, s.available)
-
+  def execute(inputs: List[Int]): State[SelectorState, (Seq[Int], Set[Int])] =
+    for {
+      _ <- State.rawSequence(inputs map (modify[SelectorState] _ compose update))
+      s <- get
+    } yield (s.chosen, s.available)
 
 }
 
 object State {
-type Rand[A] = State[RNG, A]
+  type Rand[A] = State[RNG, A]
 
-def unit[S, A](a: A): State[S, A] =
-State(s => (a, s))
-
-
-// This implementation uses a loop internally and is the same recursion
-// pattern as a left fold. It is quite common with left folds to build
-// up a list in reverse order, then reverse it at the end.
-//
-// Here, we defined intermediate rawSequence not to reverse for clients interested in lower latency and for which
-// the operations are considered left and right associative (e.g. selecting k elements randomly, we don't care about the reverse
-// being "better" or "worse" than its "conjugate".
-def rawSequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
-@tailrec
-def go(s: S, actions: List[State[S,A]], acc: List[A]): (List[A],S) =
- actions match {
-   case Nil => (acc,s)
-   case h :: t => h.run(s) match { case (a,s2) => go(s2, t, a :: acc) }
- }
-State((s: S) => go(s,sas,List()))
-}
-// the preferred interface by far as it preserves associativity rules
-def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
-rawSequence(sas).map( _.reverse)
-}
+  def unit[S, A](a: A): State[S, A] =
+    State(s => (a, s))
 
 
-def modify[S](f: S => S): State[S, Unit] = for {
-s <- get // Gets the current state and assigns it to `s`.
-_ <- set(f(s)) // Sets the new state to `f` applied to `s`.
-} yield ()
+  // This implementation uses a loop internally and is the same recursion
+  // pattern as a left fold. It is quite common with left folds to build
+  // up a list in reverse order, then reverse it at the end.
+  //
+  // Here, we defined intermediate rawSequence not to reverse for clients interested in lower latency and for which
+  // the operations are considered left and right associative (e.g. selecting k elements randomly, we don't care about the reverse
+  // being "better" or "worse" than its "conjugate".
+  def rawSequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
+    @tailrec
+    def go(s: S, actions: List[State[S,A]], acc: List[A]): (List[A],S) =
+      actions match {
+        case Nil => (acc,s)
+        case h :: t => h.run(s) match { case (a,s2) => go(s2, t, a :: acc) }
+      }
 
-def get[S]: State[S, S] = State(s => (s, s))
+    State((s: S) => go(s,sas,List()))
+  }
 
-def set[S](s: S): State[S, Unit] = State(_ => ((), s))
+  // the preferred interface by far as it preserves associativity rules
+  def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] =
+    rawSequence(sas).map( _.reverse)
+
+  def modify[S](f: S => S): State[S, Unit] =
+    for {
+      s <- get // Gets the current state and assigns it to `s`.
+      _ <- set(f(s)) // Sets the new state to `f` applied to `s`.
+    } yield ()
+
+  def get[S]: State[S, S] = State(s => (s, s))
+
+  def set[S](s: S): State[S, Unit] = State(_ => ((), s))
 }
