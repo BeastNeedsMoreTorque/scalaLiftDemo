@@ -85,7 +85,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   private val getCachedInventoryItem: (Inventory) => Option[Inventory] = { (inv: Inventory) => inventoryByProductId.get(P_KEY(inv.productid)) }
 
   private def productsByLcboId: Map[LCBO_ID, Product] =
-    storeProducts.toIndexedSeq.groupBy(_.lcboId).mapValues(_.head)
+    storeProducts.toIndexedSeq.map {item => item.lcboId -> item } (breakOut)
 
   private def productsByCategory: Map[String, IndexedSeq[Product]] =
     storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
@@ -98,7 +98,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     inventories.toIndexedSeq.map { inv => P_KEY(inv.productid) -> inv } (breakOut)
 
   private def addToCaches(items: IndexedSeq[IProduct]) = {
-    productsCache ++= items.groupBy(_.lcboId).mapValues(_.head) // update local store specific caches after having updated global cache for all products
+    productsCache ++= items.map {item => item.lcboId -> item } (breakOut) // update local store specific caches after having updated global cache for all products
     productsCacheByCategory ++= items.groupBy(_.primaryCategory)
   }
 
@@ -121,11 +121,8 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
 
     def fetchInventories() = {
       def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update
-      def inventoryTableInserter (items: Iterable[Inventory]): Unit = {
-        // LCBO is "entitled" to send repeats about a given product across distinct pages, however unpleasant that may be for referential integrity.
-        val noDupes = items.groupBy {x => (x.storeid, x.productid)}.flatMap { case (_, ids) => ids.headOption }  // remove duplicates
-        MainSchema.inventories.insert(noDupes)
-      }
+      def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert
+
       val fullContextErr = (m: String, err: String) =>
         s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
       // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.

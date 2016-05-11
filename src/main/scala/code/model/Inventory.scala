@@ -80,12 +80,15 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
                               params: Seq[(String, Any)]): Box[UpdatedAndNewInventories] = tryo {
     // set up some functional transformers first, then get ready for real work.
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
-    def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) =
-      invs.groupBy(inv => (inv.productid, inv.storeid)).map { case (_, idxSeq) => idxSeq(0) }
+
     def getUpdatedInvs(items: IndexedSeq[Inventory]) = {
       { for (freshInv <- items;
              cachedInv <- mapByProductId.get(P_KEY(freshInv.productid));
              dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
+    }
+    def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) = {
+      val m: Map[(Long, Long), Inventory] = invs.toIndexedSeq.map { inv => (inv.productid, inv.storeid) -> inv }(collection.breakOut)
+      m.values
     }
 
     val getDBReadyUpdatedInvs: (IndexedSeq[Inventory] => Iterable[Inventory]) = removeCompositeKeyDupes _ compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose.

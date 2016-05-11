@@ -1,5 +1,7 @@
 package code.model
 
+import code.model.GlobalLCBO_IDs.LCBO_ID
+
 import scala.collection.{IndexedSeq, Iterable}
 import net.liftweb.util.Props
 import net.liftweb.squerylrecord.KeyedRecord
@@ -38,10 +40,10 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     // (in fact, a surprising error occurred when trusting cache! Possibly a very subtle bug)
 
     // you never know... Our input could have the same item twice in the collection with the same lcbo_id and we have unique index in DB against that.
-    items.
+    val m: Map[LCBO_ID, T] = items.
       filterNot { p => LcboIDs.contains(p.lcboId) }.  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
-      groupBy {_.lcboId}.map { case (_, ids) => ids(0) }.  // remove duplicate lcboid keys from within our own input, selecting first representative among dupes!
-      grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) } // break it down in reasonable size transactions, and then serialize the work.
+      map { item => item.lcboId -> item }(collection.breakOut) // building a map on lcboId removes any duplicate keys from input, selecting last item among duped keys.
+    m.values.grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) } // break it down in reasonable size transactions, and then serialize the work.
   }
 
   private def batchTransactor(items: Iterable[T], ORMTransactor: (Iterable[T]) => Unit): Unit = {
