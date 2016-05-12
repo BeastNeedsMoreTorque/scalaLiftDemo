@@ -18,10 +18,8 @@ import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
-  * In Lift's style Product should have private constructor. But how can you get different implementations
-  * of Object that inherit from it? Only the companion gets the privileges.
   */
-class Product protected extends LCBOEntity[Product] with IProduct   {
+class Product private() extends LCBOEntity[Product] with IProduct   {
   def meta = Product
 
   @Column(name="pkid")
