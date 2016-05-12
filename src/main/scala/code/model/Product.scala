@@ -28,7 +28,7 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
 
   // for Loader and LCBOEntity
   override def table(): org.squeryl.Table[Product] = Product.table()
-  override def cache() = Product.productsCache
+  override def cache() = Product.cache
   override def LcboIdToPK() = Product.LcboIdToPK
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
@@ -155,11 +155,11 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   override type GotEnough_? = (Int) => Boolean
 
   // thread-safe lock free objects
-  val productsCache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB! Keyed by id (not lcboId)
-  def getProduct(id: P_KEY): Option[IProduct] = productsCache.get(id)
+  override val cache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB!
+  def getProduct(id: P_KEY): Option[IProduct] = cache.get(id)
   def getItemByLcboId(id: LCBO_ID): Option[IProduct] =
     for (dbId <- LcboIdToPK.get(id);
-         p <- productsCache.get(dbId)) yield p
+         p <- cache.get(dbId)) yield p
 
   def lcboIdToPK(id: LCBO_ID): Option[P_KEY] = LcboIdToPK.get(id)
 

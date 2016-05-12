@@ -9,6 +9,7 @@ import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
+import code.model.utils.RetainSingles
 
 /**
   * Created by philippederome on 2016-03-26.
@@ -86,17 +87,13 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
              cachedInv <- mapByProductId.get(P_KEY(freshInv.productid));
              dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
     }
-    def removeCompositeKeyDupes(invs: IndexedSeq[Inventory]) = {
-      val m: Map[(Long, Long), Inventory] = invs.toIndexedSeq.map { inv => (inv.productid, inv.storeid) -> inv }(collection.breakOut)
-      m.values
-    }
-
-    val getDBReadyUpdatedInvs: (IndexedSeq[Inventory] => Iterable[Inventory]) = removeCompositeKeyDupes _ compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose.
-
     val items = collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
     val dirtyAndNewItems = itemsByState[Inventory, Inventory](items, get, dirtyPredicate)
-    val updatedInventories = getDBReadyUpdatedInvs(dirtyAndNewItems.dirtys)
-    val newInventories = removeCompositeKeyDupes(dirtyAndNewItems.news)
+
+    val inventoryToKey = {inv: Inventory => (inv.productid, inv.storeid)}
+    val updatedInventories = RetainSingles.filter( getUpdatedInvs(dirtyAndNewItems.dirtys), inventoryToKey)
+    val newInventories = RetainSingles.filter(dirtyAndNewItems.news, inventoryToKey)
+
     UpdatedAndNewInventories(updatedInventories, newInventories)
   }
 }

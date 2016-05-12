@@ -29,7 +29,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
 
   // for Loader and LCBOEntity
   override def table(): org.squeryl.Table[Store] = Store.table()
-  override def cache() = Store.storesCache
+  override def cache() = Store.cache
   override def LcboIdToPK() = Store.LcboIdToPK
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
@@ -173,30 +173,29 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
 }
 
 object Store extends Store with MetaRecord[Store] {
-  def findAll: Iterable[Store] = storesCache.values
-
-  private val storesCache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
-  override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache
+  override val cache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
+  override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache, a.k.a. index
   override def table() = MainSchema.stores
-
   override def cacheItems(items: Iterable[Store]): Unit = {
     super.cacheItems(items)
-    storesCache.values.foreach( _.refreshProducts())  // ensure inventories are refreshed INCLUDING on start up.
+    cache.values.foreach( _.refreshProducts())  // ensure inventories are refreshed INCLUDING on start up.
   }
+  override def getCachedItem: IStore => Option[IStore] = s => getItemByLcboId(s.lcboId)
+
+  def findAll: Iterable[Store] = cache.values
 
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
   val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
 
-  override def getCachedItem: IStore => Option[IStore] = s => getItemByLcboId(s.lcboId)
-  def availableStores = storesCache.keySet
+  def availableStores = cache.keySet
   def lcboIdToPK(lcboId: LCBO_ID): Option[P_KEY] = LcboIdToPK.get(lcboId)
-  def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = storesCache.get(pKey).map(_.lcboId)
-  def getStore(pKey: P_KEY) = storesCache.get(pKey)
+  def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = cache.get(pKey).map(_.lcboId)
+  def getStore(pKey: P_KEY) = cache.get(pKey)
   def getItemByLcboId(lcboId: LCBO_ID) =
     for (pKey <- LcboIdToPK.get(lcboId);
-         s <- storesCache.get(pKey)) yield s
+         s <- cache.get(pKey)) yield s
 
     /* Convert a store to XML, @see Scala in Depth implicit view */
   implicit def toXml(s: Store): Node =
