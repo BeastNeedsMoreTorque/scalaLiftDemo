@@ -189,18 +189,18 @@ object Store extends Store with MetaRecord[Store] {
 
   val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
 
-  override def getCachedItem: (IStore) => Option[IStore] = s => getItemByLcboId(s.lcboId)
+  override def getCachedItem: IStore => Option[IStore] = s => getItemByLcboId(s.lcboId)
   def availableStores = storesCache.keySet
-  def lcboIdToPK(id: LCBO_ID): Option[P_KEY] = LcboIdToPK.get(id)
-  def storeIdToLcboId(s: P_KEY): Option[LCBO_ID] = storesCache.get(s).map(_.lcboId)
-  def getStore(id: P_KEY) = storesCache.get(id)
-  def getItemByLcboId(id: LCBO_ID) =
-    for (dbId <- LcboIdToPK.get(id);
-         s <- storesCache.get(dbId)) yield s
+  def lcboIdToPK(lcboId: LCBO_ID): Option[P_KEY] = LcboIdToPK.get(lcboId)
+  def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = storesCache.get(pKey).map(_.lcboId)
+  def getStore(pKey: P_KEY) = storesCache.get(pKey)
+  def getItemByLcboId(lcboId: LCBO_ID) =
+    for (pKey <- LcboIdToPK.get(lcboId);
+         s <- storesCache.get(pKey)) yield s
 
     /* Convert a store to XML, @see Scala in Depth implicit view */
-  implicit def toXml(st: Store): Node =
-    <store>{Xml.toXml(st.asJValue)}</store>
+  implicit def toXml(s: Store): Node =
+    <store>{Xml.toXml(s.asJValue)}</store>
 
   private def getStores(): Box[IndexedSeq[Store]] = tryo {
       collectItemsAsWebClient("/stores", extract, queryFilterArgs) // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
