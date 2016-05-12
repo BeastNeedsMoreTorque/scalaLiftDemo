@@ -2,12 +2,13 @@ package code.model
 
 import scala.collection.Iterable
 import net.liftweb.common.Box
-import code.model.GlobalLCBO_IDs.P_KEY
+import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.utils.RNG
 
 trait InventoryService extends KeyKeeper {
   val inventoryByProductIdMap: P_KEY => Option[Inventory]
-  def getProductsByCategory(lcboCategory: String): IndexedSeq[IProduct]
+  def getProduct(x: LCBO_ID): Option[IProduct]
+  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals]
   def asyncLoadCache(): Unit
 }
 /**

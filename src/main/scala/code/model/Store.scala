@@ -77,24 +77,30 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   // following three caches leverage ORM's stateful cache of storeProducts and inventories above (which are not presented as map but as slower sequence;
   // we organize as map for faster access).
   // They're recomputed when needed by the three helper functions that follow.
-  private val productsCache = TrieMap[LCBO_ID, IProduct]()  // keyed by lcboId (comment is obsolete as now enforced by type system, woo-hoo!)
-  private val productsCacheByCategory = TrieMap[String, IndexedSeq[IProduct]]()
+  override def getProduct(x: LCBO_ID): Option[IProduct] = productsCache.get(x)
+  private val productsCache = TrieMap[LCBO_ID, IProduct]()
+  private val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()  // don't put whole IProduct in here, just useful keys.
   private val inventoryByProductId = TrieMap[P_KEY, Inventory]()
   override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => inventoryByProductId.toMap.get(key)
 
   private val getCachedInventoryItem: Inventory => Option[Inventory] =
   { inv: Inventory => inventoryByProductId.get(P_KEY(inv.productid)) }
 
-  override def getProductsByCategory(lcboCategory: String) =
+  override def getProductKeysByCategory(lcboCategory: String) =
     productsCacheByCategory.get(lcboCategory).
-      fold(IndexedSeq[IProduct]()){ identity }
+      fold(IndexedSeq[KeyKeeperVals]()){ identity }
 
   private def getInventories: Map[P_KEY, Inventory] =
     inventories.toIndexedSeq.map { inv => P_KEY(inv.productid) -> inv } (breakOut)
 
-  private def addToCaches(items: IndexedSeq[IProduct]) = {
+  case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals) {}
+  private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
     productsCache ++= items.map {item => item.lcboId -> item } (breakOut) // update local store specific caches after having updated global cache for all products
-    productsCacheByCategory ++= items.groupBy(_.primaryCategory)
+    // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
+    productsCacheByCategory ++= items.
+      map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).
+      groupBy(_.category).
+      mapValues(_.map(x => (x.keys)))
   }
 
   def refreshInventories(): Unit = inTransaction {
@@ -110,7 +116,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   private def emptyInventory = inventories.toIndexedSeq.forall(_.quantity == 0)
 
   def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
-    super.advise(rng, this, category, requestSize, runner)
+    advise(rng, this, category, requestSize, runner)
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {

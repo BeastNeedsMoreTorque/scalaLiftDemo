@@ -27,7 +27,8 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     override def pKey: P_KEY = P_KEY(1)
     override def lcboId: LCBO_ID = LCBO_ID(1)
     override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => None
-    override def getProductsByCategory(lcboCategory: String) = IndexedSeq[IProduct]()
+    override def getProduct(x: LCBO_ID): Option[IProduct] = None
+    override def getProductKeysByCategory(lcboCategory: String) = IndexedSeq[KeyKeeperVals]()
     override def asyncLoadCache() = {} // intentional Noop here.
   }
 

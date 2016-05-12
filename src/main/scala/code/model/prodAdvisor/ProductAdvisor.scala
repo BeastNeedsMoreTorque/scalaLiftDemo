@@ -1,13 +1,12 @@
 package code.model.prodAdvisor
 
 import code.model.utils.RNG
-import code.model.{IProduct, InventoryService, LiquorCategory, ProductRunner}
+import code.model.{KeyKeeperVals, IProduct, InventoryService, LiquorCategory, ProductRunner}
 import net.liftweb.common.Box
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 
 import scala.collection.{IndexedSeq, Iterable, Seq}
-import scala.util.Random
 
 /**
   * Created by philippederome on 2016-05-02. Cake Pattern style. Note that objects of type RNG are always called on methods that return objects and the meaningful
@@ -113,14 +112,15 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       def getShuffledProducts(invService: InventoryService,
                               runner: ProductRunner,
                               rng: RNG,
-                              initialProducts: IndexedSeq[IProduct],
+                              initialProductKeys: IndexedSeq[KeyKeeperVals],
                               category: String,
                               lcboProdCategory: String,
                               requestSize: Int) = tryo {
         val inStockItems = {
-          for (p <- initialProducts;
+          for (p <- initialProductKeys;
                inv <- invService.inventoryByProductIdMap(p.pKey);
-               q = inv.quantity if q > 0) yield (p, q)
+               q = inv.quantity if q > 0;
+               prod <- invService.getProduct(p.lcboId)) yield (prod, q)
         }
         // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
 
@@ -136,7 +136,7 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category)
       // the shuffling in getShuffledProducts is predetermined by rng (and not other class calls to random generation routines),
       // and when cache fails, it is predetermined by the actual contents we get from LCBO via getSerialResult.
-      getShuffledProducts(invService, runner, rng, invService.getProductsByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
+      getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
 
     }
   }
