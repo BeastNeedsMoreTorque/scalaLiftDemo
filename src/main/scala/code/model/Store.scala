@@ -82,13 +82,8 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   private val inventoryByProductId = TrieMap[P_KEY, Inventory]()
   override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => inventoryByProductId.toMap.get(key)
 
-  private val getCachedInventoryItem: (Inventory) => Option[Inventory] = { (inv: Inventory) => inventoryByProductId.get(P_KEY(inv.productid)) }
-
-  private def productsByLcboId: Map[LCBO_ID, Product] =
-    storeProducts.toIndexedSeq.map {item => item.lcboId -> item } (breakOut)
-
-  private def productsByCategory: Map[String, IndexedSeq[Product]] =
-    storeProducts.toIndexedSeq.groupBy(_.primaryCategory)
+  private val getCachedInventoryItem: Inventory => Option[Inventory] =
+  { inv: Inventory => inventoryByProductId.get(P_KEY(inv.productid)) }
 
   override def getProductsByCategory(lcboCategory: String) =
     productsCacheByCategory.get(lcboCategory).
@@ -102,8 +97,17 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     productsCacheByCategory ++= items.groupBy(_.primaryCategory)
   }
 
-  private def emptyInventory =
-    inventories.toIndexedSeq.forall(_.quantity == 0)
+  def refreshInventories(): Unit = inTransaction {
+    storeProducts.refresh // key for whole inventory caching to work!
+    inventoryByProductId ++= getInventories
+  }
+
+  def refreshProducts(): Unit =  {
+    refreshInventories()
+    addToCaches(storeProducts.toIndexedSeq)
+  }
+
+  private def emptyInventory = inventories.toIndexedSeq.forall(_.quantity == 0)
 
   def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
     super.advise(rng, this, category, requestSize, runner)
@@ -157,20 +161,9 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   }
 
   override def asyncLoadCache() =
-    // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
+  // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
-  def refreshInventories(): Unit = inTransaction {
-    storeProducts.refresh // key for whole inventory caching to work!
-    inventoryByProductId ++= getInventories
-  }
-
-  def refreshProducts(): Unit = inTransaction {
-    storeProducts.refresh // key for whole inventory caching and products caching to work!
-    productsCache ++= productsByLcboId
-    productsCacheByCategory ++= productsByCategory
-    inventoryByProductId ++= getInventories
-  }
 }
 
 object Store extends Store with MetaRecord[Store] {
