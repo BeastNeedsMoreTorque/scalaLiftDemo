@@ -25,13 +25,14 @@ class RetainSinglesTest  extends UnitTest {
   it should s"return 2 on normal pair" in {
     RetainSingles.filter(oddPair, modelToKey).toStream should have size 2
   }
-  it should s"return 2 on duped pair" in {
+  it should s"return size 2 on duped pair" in {
     RetainSingles.filter(many, modelToKey).toStream should have size 2
   }
   it should s"return 3 on sum of distinct keys for many pairs" in {
     RetainSingles.filter(many, modelToKey).toStream.map(_.k).sum should === (3)
   }
 
+  behavior of "preserving order after filtering"
   it should s"return 1 on first key of many duped pairs" in {
     RetainSingles.filter(many, modelToKey).toStream.map(_.k).head should === (1)
   }
