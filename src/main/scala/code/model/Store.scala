@@ -19,7 +19,7 @@ import code.model.Product.fetchByStore
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.{ProductAdvisorComponentImpl, ProductAdvisorDispatcher}
-import code.model.utils.RNG
+import code.model.utils.{RNG, RetainSingles}
 
 class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
 
@@ -35,7 +35,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
   override def meta = Store
 
-  override def getCachedItem: (IStore) => Option[IStore] =  s => Store.getItemByLcboId(s.lcboId)
+  override def getCachedItem: IStore => Option[IStore] = s => Store.getCachedItem(s)
 
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
@@ -83,24 +83,27 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   private val inventoryByProductId = TrieMap[P_KEY, Inventory]()
   override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => inventoryByProductId.toMap.get(key)
 
-  private val getCachedInventoryItem: Inventory => Option[Inventory] =
-  { inv: Inventory => inventoryByProductId.get(P_KEY(inv.productid)) }
+  private val getCachedInventoryItem = {
+    inv: Inventory =>
+    inventoryByProductId.get(P_KEY(inv.productid))
+  }
 
   override def getProductKeysByCategory(lcboCategory: String) =
     productsCacheByCategory.get(lcboCategory).
       fold(IndexedSeq[KeyKeeperVals]()){ identity }
 
   private def getInventories: Map[P_KEY, Inventory] =
-    inventories.toIndexedSeq.map { inv => P_KEY(inv.productid) -> inv } (breakOut)
+    RetainSingles.asMap(inventories, { i: Inventory => P_KEY(i.productid)} )
 
   case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals) {}
   private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
-    productsCache ++= items.map {item => item.lcboId -> item } (breakOut) // update local store specific caches after having updated global cache for all products
+    productsCache ++= RetainSingles.asMap(items, {p: IProduct => p.lcboId})
     // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
-    productsCacheByCategory ++= items.
+    // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
+    productsCacheByCategory ++= productsCache.values.toIndexedSeq.
       map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).
       groupBy(_.category).
-      mapValues(_.map(x => (x.keys)))
+      mapValues(_.map(x => x.keys))
   }
 
   def refreshInventories(): Unit = inTransaction {

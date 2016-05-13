@@ -33,7 +33,7 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
-  override def getCachedItem: (IProduct) => Option[IProduct] = s => Product.getItemByLcboId(s.lcboId)
+  override def getCachedItem: IProduct => Option[IProduct] = x => Product.getCachedItem(x)
 
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
@@ -147,12 +147,11 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
 
 }
 
-
 /**
   *
   */
 object Product extends Product with MetaRecord[Product] with ProductRunner  {
-  override type GotEnough_? = (Int) => Boolean
+  override type GotEnough_? = Int => Boolean
 
   // thread-safe lock free objects
   override val cache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB!
@@ -166,9 +165,9 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
   override def table() = MainSchema.products
   val MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
-  protected val sizeFulfilled: (Int) => GotEnough_? =
+  protected val sizeFulfilled: Int => GotEnough_? =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
-  override def getCachedItem: (IProduct) => Option[IProduct] = s => getItemByLcboId(s.lcboId)
+  override def getCachedItem: IProduct => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
   val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)  // seems difficult to apply D.I. here, so access global object.
   val queryFilterArgs = getSeq("product.query.Filter")(ConfigPairsRepo.defaultInstance)
