@@ -14,7 +14,7 @@ class RetainSinglesTest  extends UnitTest {
   behavior of "empty"
   it should s"return empty sequence on empty input" in {
     val empty = Seq.empty[Model]
-    RetainSingles.filter(empty, modelToKey).toStream shouldBe empty //have size 0
+    RetainSingles.filter(modelToKey)(empty ).toStream shouldBe empty //have size 0
   }
 
   behavior of "repeats"
@@ -23,20 +23,20 @@ class RetainSinglesTest  extends UnitTest {
   val oddPair = Seq(Philanthropist, Scrooge)
   val many: Seq[Model] = Seq.fill(100)(oddPair).flatten
   it should s"return 2 on normal pair" in {
-    RetainSingles.filter(oddPair, modelToKey).toStream should have size 2
+    RetainSingles.filter(modelToKey)(oddPair).toStream should have size 2
   }
   it should s"return size 2 on duped pair" in {
-    RetainSingles.filter(many, modelToKey).toStream should have size 2
+    RetainSingles.filter(modelToKey)(many).toStream should have size 2
   }
   it should s"return 3 on sum of distinct keys for many pairs" in {
-    RetainSingles.filter(many, modelToKey).toStream.map(_.k).sum should === (3)
+    RetainSingles.filter(modelToKey)(many).toStream.map(_.k).sum should === (3)
   }
 
   behavior of "preserving order after filtering"
   it should s"return 1 on first key of many duped pairs" in {
-    RetainSingles.filter(many, modelToKey).toStream.map(_.k).head should === (1)
+    RetainSingles.filter(modelToKey)(many).toStream.map(_.k).head should === (1)
   }
   it should s"return 2 on last key of many duped pairs" in {
-    RetainSingles.filter(many, modelToKey).toStream.map(_.k).last should === (2)
+    RetainSingles.filter(modelToKey)(many).toStream.map(_.k).last should === (2)
   }
 }

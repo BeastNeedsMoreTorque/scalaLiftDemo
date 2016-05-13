@@ -1,6 +1,6 @@
 package code.model.utils
 
-import scala.language.implicitConversions
+import code.model.{Inventory, KeyKeeper}
 
 /**
   * Created by philippederome on 2016-05-12.
@@ -18,7 +18,12 @@ object RetainSingles {
     }
   }
 
-  def filter[K, T](items: Iterable[T], toK: T => K): Iterable[T] =
+  def filter[K, T]( toK: T => K)(items: Iterable[T]): Iterable[T] =
     asMap(items, toK).values // no attempt to apply "pimp/enrich my library" pattern or work with Builders here.
 
+  val removeDupesForInvs: Iterable[Inventory] => Iterable[Inventory] =
+    RetainSingles.filter({inv: Inventory => (inv.productid, inv.storeid)})
+
+  def removeDupesForLcboIds[T <: KeyKeeper]: Iterable[T] => Iterable[T] =
+    RetainSingles.filter({k: T => k.lcboId})
 }

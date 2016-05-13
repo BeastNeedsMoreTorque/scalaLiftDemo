@@ -9,7 +9,7 @@ import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
-import code.model.utils.RetainSingles
+import code.model.utils.RetainSingles.removeDupesForInvs
 
 /**
   * Created by philippederome on 2016-03-26.
@@ -90,9 +90,9 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     val items = collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
     val dirtyAndNewItems = itemsByState[Inventory, Inventory](items, get, dirtyPredicate)
 
-    val inventoryToKey = {inv: Inventory => (inv.productid, inv.storeid)}
-    val updatedInventories = RetainSingles.filter( getUpdatedInvs(dirtyAndNewItems.dirtys), inventoryToKey)
-    val newInventories = RetainSingles.filter(dirtyAndNewItems.news, inventoryToKey)
+    val getDBReadyUpdatedInvs: IndexedSeq[Inventory] => Iterable[Inventory] = removeDupesForInvs compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose and use currying.
+    val updatedInventories = getDBReadyUpdatedInvs(dirtyAndNewItems.dirtys)
+    val newInventories = removeDupesForInvs(dirtyAndNewItems.news)
 
     UpdatedAndNewInventories(updatedInventories, newInventories)
   }
