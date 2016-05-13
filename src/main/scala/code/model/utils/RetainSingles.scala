@@ -5,7 +5,6 @@ import scala.language.implicitConversions
 /**
   * Created by philippederome on 2016-05-12.
   */
-
 object RetainSingles {
   def filter[K, T](items: Iterable[T], toK: T => K): Iterable[T] = {
     val m: Map[K,T] = items.foldLeft(Map.empty[K,T]){(acc, x) =>
