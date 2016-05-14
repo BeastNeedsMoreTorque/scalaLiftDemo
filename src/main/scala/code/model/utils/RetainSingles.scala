@@ -19,13 +19,12 @@ object RetainSingles extends Loggable {
     }
   }
 
-  case class RetainedDiscardedItems[T](retained: Iterable[T], discarded: Iterable[T]) {}
   case class RemoveDupesState[T](keys: Set[String], discarded: Seq[T], retained: Seq[T])
   def generalRemoveDupes[T <: KeyHolder](items: Iterable[T])(onFailure: Iterable[T] => Unit): Iterable[T] = {
     val pair = items.foldLeft(RemoveDupesState(Set.empty[String], Seq.empty[T], Seq.empty[T])) { (acc, item) =>
       val k = item.getKey
-      if (acc.keys(k))  RemoveDupesState(keys=acc.keys, discarded=acc.discarded ++ Seq(item), retained=acc.retained)
-      else RemoveDupesState(keys=acc.keys +k, discarded=acc.discarded, retained=acc.retained ++ Seq(item))
+      if (acc.keys(k)) RemoveDupesState(keys=acc.keys, discarded=acc.discarded ++ Seq(item), retained=acc.retained)
+      else RemoveDupesState(keys=acc.keys + k, discarded=acc.discarded, retained=acc.retained ++ Seq(item))
     }
     onFailure(pair.discarded)
     pair.retained
