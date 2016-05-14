@@ -1,6 +1,7 @@
 package code.model.utils
 
 import net.liftweb.common.Loggable
+import scala.language.implicitConversions
 
 /**
   * Created by philippederome on 2016-05-12.
@@ -18,9 +19,7 @@ object RetainSingles extends Loggable {
     }
   }
 
-  // no attempt to apply "pimp/enrich my library" pattern or work with Builders here even if we didn't both with side effect of onFailure.
-  def generalRemoveDupes[T <: KeyHolder](onFailure: Iterable[T] => Unit): Iterable[T] => Iterable[T] =
-    items => {
+  def generalRemoveDupes[T <: KeyHolder](items: Iterable[T])(onFailure: Iterable[T] => Unit): Iterable[T] = {
       var inKeys = Set.empty[String]
       var retained = Seq.empty[T]
       var discarded = Seq.empty[T]
@@ -41,10 +40,15 @@ object RetainSingles extends Loggable {
     items.foreach(x => logger.warn(s"discarded key:${x.getKey} item:$x"))
 
   // default is noisy.
-  def removeDupes[T <: KeyHolder]: Iterable[T] => Iterable[T] =
-    generalRemoveDupes(logDiscarded)
+  def removeDupes[T <: KeyHolder](items: Iterable[T]): Iterable[T] =
+    generalRemoveDupes(items)(logDiscarded)
+
+  // Minor use of "pimp/enrich my library" pattern (removeDupeds). Uses reflexion mind you.
+  implicit def iterToSyntax[A <: KeyHolder](iter: Iterable[A]) = new {
+    def removeDupeds = removeDupes(iter)
+  }
 
   val noop = (a: Any) => ()
-  def removeDupesQuietly[T <: KeyHolder]: Iterable[T] => Iterable[T] =
-    generalRemoveDupes{ noop }
+  def removeDupesQuietly[T <: KeyHolder](items: Iterable[T]): Iterable[T] =
+    generalRemoveDupes(items){ noop }
 }

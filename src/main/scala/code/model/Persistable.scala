@@ -4,7 +4,8 @@ import scala.collection.{IndexedSeq, Iterable}
 import net.liftweb.util.Props
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
-import code.model.utils.RetainSingles.removeDupes
+import code.model.utils.RetainSingles._
+import scala.language.reflectiveCalls
 
 /**
   * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,
@@ -37,7 +38,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     // Do special handling to filter out duplicate keys, which would throw.
     // Trust the database and not the cache, some other client could insert in database
     val LcboIDs = from(table())(elt => select(elt.lcboId)).toSet
-    val iter = removeDupes(items). // removes any duplicate keys from input, and log error by default if found duplicates
+    val iter = items.removeDupeds. // removes any duplicate keys from input, and log error by default if found duplicates
       filterNot { p => LcboIDs.contains(p.lcboId) }  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
     iter.grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) } // break it down in reasonable size transactions, and then serialize the work.
   }
