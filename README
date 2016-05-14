@@ -29,6 +29,7 @@ The Consume action is a basic simulation of a shopping cart, allowing user to se
 Scala patterns:
 enrich my library (RetainSingles)
 cake pattern (ProductAdvisor)
+value object (case classes, ubiquitous in Scala)
 
 Functional Programming: random number generation is a classical example of side effect and does not lend naturally to repeatable unit testing or pure functions implementation.
 However, the book Functional Programming in Scala guides developers in addressing this, in particular Chapter 6 for random number generation. This is the approach taken here.

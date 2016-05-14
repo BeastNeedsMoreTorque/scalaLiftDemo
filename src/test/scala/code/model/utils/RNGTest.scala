@@ -101,7 +101,7 @@ class RNGTest extends UnitTest {
     val seed3 = 50
     val (selected, newSimple) = collectSample(bigSample, k1).run(Simple(seed3))
     val expected_shuffled = List(107, 288, 472, 844, 867, 885, 1515, 1696, 1905, 2080, 2300, 2453, 2841, 3329, 3422, 3788, 4150, 4416, 4552, 4775)
-    (selected, newSimple) should equal(expected_shuffled, Simple(281348911128875L))
+    (selected, newSimple) should equal((expected_shuffled, Simple(281348911128875L)))
   }
 
   it should "get empty Sequence on choosing 0 item from non empty list with any random input" in new randomRNG {
