@@ -25,6 +25,11 @@ The Cancel action simply erases the products display.
 
 The Consume action is a basic simulation of a shopping cart, allowing user to select a count of each product within the proposed list and evaluating a total bill.
 
+
+Scala patterns:
+enrich my library (RetainSingles)
+cake pattern (ProductAdvisor)
+
 Functional Programming: random number generation is a classical example of side effect and does not lend naturally to repeatable unit testing or pure functions implementation.
 However, the book Functional Programming in Scala guides developers in addressing this, in particular Chapter 6 for random number generation. This is the approach taken here.
 Via configuration, we can let the random number generation be truly random (the seed is randomly controlled) or controlled for unit testing purpose (the seed is chosen by the unit test).
