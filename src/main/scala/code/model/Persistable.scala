@@ -5,7 +5,6 @@ import net.liftweb.util.Props
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
 import code.model.utils.RetainSingles._
-import scala.language.reflectiveCalls
 
 /**
   * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,

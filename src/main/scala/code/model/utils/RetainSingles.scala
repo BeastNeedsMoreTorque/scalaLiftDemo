@@ -38,10 +38,13 @@ object RetainSingles extends Loggable {
   def removeDupes[T <: KeyHolder](items: Iterable[T]): Iterable[T] =
     generalRemoveDupes(items)(logDiscarded)
 
-  // Minor use of "pimp/enrich my library" pattern (removeDupeds). Uses reflexion mind you.
-  implicit def iterToSyntax[A <: KeyHolder](iter: Iterable[A]) = new {
+  // @see http://www.scala-notes.org/2010/06/avoid-structural-types-when-pimping-libraries/
+  class Result[A <: KeyHolder](iter: Iterable[A]) {
     def removeDupeds = removeDupes(iter)
   }
+
+  // Minor use of "pimp/enrich my library" pattern (removeDupeds).
+  implicit def implicitIterToSyntax[A <: KeyHolder](iter: Iterable[A]) = new Result(iter)
 
   val noop = (a: Any) => ()
   def removeDupesQuietly[T <: KeyHolder](items: Iterable[T]): Iterable[T] =
