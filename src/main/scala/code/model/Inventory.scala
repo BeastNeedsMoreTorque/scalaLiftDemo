@@ -10,7 +10,7 @@ import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 import code.model.utils.KeyHolder
-import code.model.utils.RetainSingles.generalRemoveDupes
+import code.model.utils.RetainSingles.removeDupes
 
 /**
   * Created by philippederome on 2016-03-26.
@@ -98,8 +98,8 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     val items = collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
     val dirtyAndNewItems = itemsByState[Inventory, Inventory](items, get, dirtyPredicate)
 
-    val updatedInventories = generalRemoveDupes(getUpdatedInvs(dirtyAndNewItems.dirtys))(logDiscarded)
-    val newInventories = generalRemoveDupes(dirtyAndNewItems.news)(logDiscarded)
+    val updatedInventories = removeDupes(getUpdatedInvs(dirtyAndNewItems.dirtys))(logDiscarded)
+    val newInventories = removeDupes(dirtyAndNewItems.news)(logDiscarded)
 
     UpdatedAndNewInventories(updatedInventories, newInventories)
   }

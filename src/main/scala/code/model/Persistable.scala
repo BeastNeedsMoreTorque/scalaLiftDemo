@@ -31,15 +31,21 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
   }
 
   private def insert( items: IndexedSeq[T]) = {
+    // default policy on finding duplicates is to log as error, showing key and value for each filtered item (affects removeDupes below).
+    implicit val logDuplicateItems: Seq[T] => Unit = code.model.utils.RetainSingles.onFailureDefault
+
     // following cannot be val because of table() usage and timing and need for underlying transaction, connection, etc.
     def ORMInserter: Iterable[T] => Unit = table().insert _
 
     // Do special handling to filter out duplicate keys, which would throw.
     // Trust the database and not the cache, some other client could insert in database
-    val LcboIDs = from(table())(elt => select(elt.lcboId)).toSet
-    val iter = items.removeDupeds. // removes any duplicate keys from input, and log error by default if found duplicates
-      filterNot { p => LcboIDs.contains(p.lcboId) }  // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
-    iter.grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) } // break it down in reasonable size transactions, and then serialize the work.
+    val LcboIDs = from(table())(item => select(item.lcboId)).toSet
+
+    // removes any duplicate keys and log error if found duplicates
+    // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
+    val filtered = items.removeDupes.filterNot { p => LcboIDs(p.lcboId) }
+    // break it down in reasonable size transactions, and then serialize the work.
+    filtered.grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) }
   }
 
   private def batchTransactor(items: Iterable[T], ORMTransactor: (Iterable[T]) => Unit): Unit = {
