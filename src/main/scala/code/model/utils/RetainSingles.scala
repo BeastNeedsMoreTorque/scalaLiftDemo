@@ -19,21 +19,17 @@ object RetainSingles extends Loggable {
     }
   }
 
+  case class RetainedDiscardedItems[T](retained: Iterable[T], discarded: Iterable[T]) {}
+  case class RemoveDupesState[T](keys: Set[String], discarded: Seq[T], retained: Seq[T])
   def generalRemoveDupes[T <: KeyHolder](items: Iterable[T])(onFailure: Iterable[T] => Unit): Iterable[T] = {
-      var inKeys = Set.empty[String]
-      var retained = Seq.empty[T]
-      var discarded = Seq.empty[T]
-      items.foreach { x: T =>
-        val k = x.getKey
-        if (inKeys(k)) discarded ++= Seq(x)
-        else {
-          inKeys += k
-          retained ++= Seq(x)
-        }
-      }
-      onFailure(discarded)
-      retained
+    val pair = items.foldLeft(RemoveDupesState(Set.empty[String], Seq.empty[T], Seq.empty[T])) { (acc, item) =>
+      val k = item.getKey
+      if (acc.keys(k))  RemoveDupesState(keys=acc.keys, discarded=acc.discarded ++ Seq(item), retained=acc.retained)
+      else RemoveDupesState(keys=acc.keys +k, discarded=acc.discarded, retained=acc.retained ++ Seq(item))
     }
+    onFailure(pair.discarded)
+    pair.retained
+  }
 
   // this could be generalized to a full-fledge error reporter as opposed to using logger.
   def logDiscarded[T <: KeyHolder](items: Iterable[T]): Unit =

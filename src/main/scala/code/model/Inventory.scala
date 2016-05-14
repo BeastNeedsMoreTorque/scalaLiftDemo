@@ -93,7 +93,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
              dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
     }
     def logDiscarded(items: Iterable[Inventory]) =
-      logger.info(s"discarded ${items.size} duplicate inventory items") // this is normal, that's what they do...
+      if (items.nonEmpty) logger.info(s"discarded ${items.size} duplicate inventory items") // this is normal, that's what they do...
 
     val items = collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
     val dirtyAndNewItems = itemsByState[Inventory, Inventory](items, get, dirtyPredicate)
