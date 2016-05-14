@@ -7,20 +7,17 @@ import scala.language.implicitConversions
   * Created by philippederome on 2016-05-12.
   */
 object RetainSingles extends Loggable {
-  def asMap[K, T](items: Iterable[T], toK: T => K): Map[K,T] = {
-    var keys = Set.empty[K]
-    items.foldLeft(Map.empty[K, T]) { (acc, x) =>
+  def asMap[K, V](values: Iterable[V], toK: V => K): Map[K,V] = {
+    case class asMapState[K,V](s: Set[K], m: Map[K,V])
+    values.foldLeft(asMapState(Set.empty[K], Map.empty[K, V])) { (acc, x) =>
       val k = toK(x)
-      if (keys(k)) acc
-      else {
-        keys += k
-        acc + (k -> x)
-      }
-    }
+      if (acc.s(k)) acc
+      else asMapState(acc.s + k, acc.m + (k -> x))
+    }.m
   }
 
-  case class RemoveDupesState[T](keys: Set[String], discarded: IndexedSeq[T], retained: IndexedSeq[T])
   def generalRemoveDupes[T <: KeyHolder](items: Seq[T])(onFailure: Seq[T] => Unit): Seq[T] = {
+    case class RemoveDupesState[T](keys: Set[String], discarded: IndexedSeq[T], retained: IndexedSeq[T])
     val pair = items.reverse.foldLeft(RemoveDupesState(Set.empty[String], IndexedSeq.empty[T], IndexedSeq.empty[T])) { (acc, item) =>
       val k = item.getKey
       if (acc.keys(k)) RemoveDupesState(keys=acc.keys, discarded= item +: acc.discarded, retained=acc.retained)
@@ -39,12 +36,12 @@ object RetainSingles extends Loggable {
     generalRemoveDupes(items)(logDiscarded)
 
   // @see http://www.scala-notes.org/2010/06/avoid-structural-types-when-pimping-libraries/
-  class Result[A <: KeyHolder](iter: Seq[A]) {
-    def removeDupeds = removeDupes(iter)
+  class Result[A <: KeyHolder](as: Seq[A]) {
+    def removeDupeds = removeDupes(as)
   }
 
-  // Minor use of "pimp/enrich my library" pattern (removeDupeds).
-  implicit def implicitIterToSyntax[A <: KeyHolder](iter: Seq[A]) = new Result(iter)
+  // Use of "pimp/enrich my library" pattern (removeDupeds).
+  implicit def implicitSeqToSyntax[A <: KeyHolder](as: Seq[A]) = new Result(as)
 
   val noop = (a: Any) => ()
   def removeDupesQuietly[T <: KeyHolder](items: Seq[T]): Seq[T] =
