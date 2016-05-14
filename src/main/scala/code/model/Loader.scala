@@ -5,7 +5,7 @@ import net.liftweb.record.Record
 import net.liftweb.squerylrecord.RecordTypeMode._
 import org.squeryl.Table
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.utils.RetainSingles
+import code.model.utils.RetainSingles.asMap
 import net.liftweb.common.Loggable
 
 /**
@@ -24,7 +24,7 @@ trait Loader[T <: Loader[T]] extends Record[T] with Loggable
   protected def lcboId: LCBO_ID
 
   protected def cacheItems(items: Iterable[T]): Unit = {
-    cache() ++= RetainSingles.asMap(items, {item: T => item.pKey})
+    cache() ++= asMap(items, {item: T => item.pKey})
     LcboIdToPK() ++= cache().map { case(pk, item) => item.lcboId -> pk }
   }
 

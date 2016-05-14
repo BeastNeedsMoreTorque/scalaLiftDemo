@@ -1,11 +1,11 @@
 package code.model.utils
 
-import code.model.{Inventory, KeyKeeper}
+import net.liftweb.common.Loggable
 
 /**
   * Created by philippederome on 2016-05-12.
   */
-object RetainSingles {
+object RetainSingles extends Loggable {
   def asMap[K, T](items: Iterable[T], toK: T => K): Map[K,T] = {
     var keys = Set.empty[K]
     items.foldLeft(Map.empty[K, T]) { (acc, x) =>
@@ -18,12 +18,33 @@ object RetainSingles {
     }
   }
 
-  def filter[K, T]( toK: T => K)(items: Iterable[T]): Iterable[T] =
-    asMap(items, toK).values // no attempt to apply "pimp/enrich my library" pattern or work with Builders here.
+  // no attempt to apply "pimp/enrich my library" pattern or work with Builders here even if we didn't both with side effect of onFailure.
+  def generalRemoveDupes[T <: KeyHolder](onFailure: Iterable[T] => Unit): Iterable[T] => Iterable[T] =
+    items => {
+      var inKeys = Set.empty[String]
+      var retained = Seq.empty[T]
+      var discarded = Seq.empty[T]
+      items.foreach { x: T =>
+        val k = x.getKey
+        if (inKeys(k)) discarded ++= Seq(x)
+        else {
+          inKeys += k
+          retained ++= Seq(x)
+        }
+      }
+      onFailure(discarded)
+      retained
+    }
 
-  val removeDupesForInvs: Iterable[Inventory] => Iterable[Inventory] =
-    RetainSingles.filter({inv: Inventory => (inv.productid, inv.storeid)})
+  // this could be generalized to a full-fledge error reporter as opposed to using logger.
+  def logDiscarded[T <: KeyHolder](items: Iterable[T]): Unit =
+    items.foreach(x => logger.warn(s"discarded key:${x.getKey} item:$x"))
 
-  def removeDupesForLcboIds[T <: KeyKeeper]: Iterable[T] => Iterable[T] =
-    RetainSingles.filter({k: T => k.lcboId})
+  // default is noisy.
+  def removeDupes[T <: KeyHolder]: Iterable[T] => Iterable[T] =
+    generalRemoveDupes(logDiscarded)
+
+  val noop = (a: Any) => ()
+  def removeDupesQuietly[T <: KeyHolder]: Iterable[T] => Iterable[T] =
+    generalRemoveDupes{ noop }
 }

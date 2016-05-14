@@ -9,7 +9,8 @@ import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
-import code.model.utils.RetainSingles.removeDupesForInvs
+import code.model.utils.KeyHolder
+import code.model.utils.RetainSingles.generalRemoveDupes
 
 /**
   * Created by philippederome on 2016-03-26.
@@ -23,7 +24,9 @@ class Inventory private(val storeid: Long,
                         var is_dead: Boolean,
                         var store_id: Long=0,
                         var product_id: Long=0)
-  extends KeyedEntity[CompositeKey2[Long,Long]] {
+  extends KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
+
+  override def getKey = s"$productid:$storeid"
 
   def id = compositeKey(storeid, productid)
 
@@ -38,6 +41,8 @@ class Inventory private(val storeid: Long,
     updated_on = inv.updated_on
     this
   }
+
+  override def toString = s"$storeid $productid $quantity $updated_on $is_dead $store_id $product_id"
 }
 
 case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: Iterable[Inventory]) {}
@@ -87,12 +92,15 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
              cachedInv <- mapByProductId.get(P_KEY(freshInv.productid));
              dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
     }
+    def logDiscarded(items: Iterable[Inventory]) =
+      logger.info(s"discarded ${items.size} duplicate inventory items") // this is normal, that's what they do...
+
     val items = collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
     val dirtyAndNewItems = itemsByState[Inventory, Inventory](items, get, dirtyPredicate)
 
-    val getDBReadyUpdatedInvs: IndexedSeq[Inventory] => Iterable[Inventory] = removeDupesForInvs compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose and use currying.
+    val getDBReadyUpdatedInvs: IndexedSeq[Inventory] => Iterable[Inventory] = generalRemoveDupes(logDiscarded) compose getUpdatedInvs _  // more of a toy here than anything; interesting to know we can compose and use currying.
     val updatedInventories = getDBReadyUpdatedInvs(dirtyAndNewItems.dirtys)
-    val newInventories = removeDupesForInvs(dirtyAndNewItems.news)
+    val newInventories = generalRemoveDupes(logDiscarded)(dirtyAndNewItems.news)
 
     UpdatedAndNewInventories(updatedInventories, newInventories)
   }

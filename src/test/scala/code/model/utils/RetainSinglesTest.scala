@@ -1,20 +1,22 @@
 package code.model.utils
 
 import code.UnitTest
+import code.model.utils.RetainSingles.removeDupesQuietly
+import scala.language.implicitConversions
 
 /**
   * Created by philippederome on 2016-05-12.
   */
 class RetainSinglesTest  extends UnitTest {
 
-  type Key = Long
-  case class Model(k: Key, first: String, last : String, salary: Double) {}
-  val modelToKey = {m: Model => m.k}
+  case class Model(k: Long, first: String, last : String, salary: Double) extends KeyHolder {
+    override def getKey = k.toString
+  }
 
   behavior of "empty"
   it should s"return empty sequence on empty input" in {
     val empty = Seq.empty[Model]
-    RetainSingles.filter(modelToKey)(empty ).toStream shouldBe empty //have size 0
+    removeDupesQuietly(empty ).toStream shouldBe empty //have size 0
   }
 
   behavior of "repeats"
@@ -23,20 +25,17 @@ class RetainSinglesTest  extends UnitTest {
   val oddPair = Seq(Philanthropist, Scrooge)
   val many: Seq[Model] = Seq.fill(100)(oddPair).flatten
   it should s"return 2 on normal pair" in {
-    RetainSingles.filter(modelToKey)(oddPair).toStream should have size 2
+    removeDupesQuietly(oddPair).toStream should have size 2
   }
   it should s"return size 2 on duped pair" in {
-    RetainSingles.filter(modelToKey)(many).toStream should have size 2
-  }
-  it should s"return 3 on sum of distinct keys for many pairs" in {
-    RetainSingles.filter(modelToKey)(many).toStream.map(_.k).sum should === (3)
+    removeDupesQuietly(many).toStream should have size 2
   }
 
   behavior of "preserving order after filtering"
   it should s"return 1 on first key of many duped pairs" in {
-    RetainSingles.filter(modelToKey)(many).toStream.map(_.k).head should === (1)
+    removeDupesQuietly(many).toStream.map(_.getKey).head should === ("1")
   }
   it should s"return 2 on last key of many duped pairs" in {
-    RetainSingles.filter(modelToKey)(many).toStream.map(_.k).last should === (2)
+    removeDupesQuietly(many).toStream.map(_.getKey).last should === ("2")
   }
 }

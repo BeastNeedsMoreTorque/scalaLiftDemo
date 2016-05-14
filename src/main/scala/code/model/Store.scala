@@ -19,7 +19,9 @@ import code.model.Product.fetchByStore
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.{ProductAdvisorComponentImpl, ProductAdvisorDispatcher}
-import code.model.utils.{RNG, RetainSingles}
+import code.model.utils.RNG
+import code.model.utils.RetainSingles.asMap
+
 
 class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
 
@@ -93,11 +95,11 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
       fold(IndexedSeq[KeyKeeperVals]()){ identity }
 
   private def getInventories: Map[P_KEY, Inventory] =
-    RetainSingles.asMap(inventories, { i: Inventory => P_KEY(i.productid)} )
+    asMap(inventories, { i: Inventory => P_KEY(i.productid)} )
 
   case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals) {}
   private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
-    productsCache ++= RetainSingles.asMap(items, {p: IProduct => p.lcboId})
+    productsCache ++= asMap(items, {p: IProduct => p.lcboId})
     // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
     // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
     productsCacheByCategory ++= productsCache.values.toIndexedSeq.
