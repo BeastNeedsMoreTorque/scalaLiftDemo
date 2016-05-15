@@ -25,11 +25,18 @@ The Cancel action simply erases the products display.
 
 The Consume action is a basic simulation of a shopping cart, allowing user to select a count of each product within the proposed list and evaluating a total bill.
 
+Behavioral Design Patterns:
+template method design pattern (used for loading up caches generically upon a database store)
 
-Scala patterns:
+Scala-specific design patterns:
 enrich my library (RetainSingles)
 cake pattern (ProductAdvisor)
 value object (case classes, ubiquitous in Scala)
+allocation-free extension methods (LCBO_ID, P_KEY)
+curiously recurring template pattern (CRTP) as found in Persistable ( self: T =>), tied with Lift Record's design
+lazy evaluation (Store to inhibit immediate loading of stateful many2many relation storeProducts)
+Dependency Injection via Partially applied Functions (LCBOPageFetcherComponent using partially applied functions for JSitemsExtractor and GotEnough_? to apply different mechanisms of JSON parsing  )
+implicit injection (for type conversion also known as implicit view in Scala in Depth: P_KEY and LCBO_ID implicitly convert to Long, Store to XML Node conversion)
 
 Functional Programming: random number generation is a classical example of side effect and does not lend naturally to repeatable unit testing or pure functions implementation.
 However, the book Functional Programming in Scala guides developers in addressing this, in particular Chapter 6 for random number generation. This is the approach taken here.

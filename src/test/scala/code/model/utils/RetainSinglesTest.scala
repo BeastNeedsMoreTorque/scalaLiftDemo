@@ -31,17 +31,4 @@ class RetainSinglesTest  extends UnitTest {
     removeDupesQuietly(many).toStream should have size 2
   }
 
-  behavior of "preserving order after filtering"
-  it should s"return 1 on first key of many duped pairs" in {
-    removeDupesQuietly(many).toStream.map(_.getKey).head should === ("1")
-  }
-  it should s"return 2 on last key of many duped pairs" in {
-    removeDupesQuietly(many).toStream.map(_.getKey).last should === ("2")
-  }
-  it should s"return 1 on first key of no duped pair" in {
-    removeDupesQuietly(oddPair).toStream.map(_.getKey).head should === ("1")
-  }
-  it should s"return 2 on last key of no duped pair" in {
-    removeDupesQuietly(oddPair).toStream.map(_.getKey).last should === ("2")
-  }
 }

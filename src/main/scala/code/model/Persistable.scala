@@ -32,7 +32,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
 
   private def insert( items: IndexedSeq[T]) = {
     // default policy on finding duplicates is to log as error, showing key and value for each filtered item (affects removeDupes below).
-    implicit val logDuplicateItems: Seq[T] => Unit = code.model.utils.RetainSingles.onFailureDefault
+    implicit val logDuplicateItems: Iterable[T] => Unit = code.model.utils.RetainSingles.onFailureDefault
 
     // following cannot be val because of table() usage and timing and need for underlying transaction, connection, etc.
     def ORMInserter: Iterable[T] => Unit = table().insert _
