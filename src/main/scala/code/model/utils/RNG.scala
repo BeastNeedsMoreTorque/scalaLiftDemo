@@ -16,6 +16,7 @@ package code.model.utils
 import scala.annotation.tailrec
 import State._
 
+// A monad
 case class State[S, +A](run: S => (A, S)) {
   def map[B](f: A => B): State[S, B] =
     flatMap(a => unit(f(a)))
@@ -64,6 +65,17 @@ object RNG {
   val double: Rand[Double] =
     map(nonNegativeInt)(_ / (Int.MaxValue.toDouble + 1))
 
+  def nonNegativeLessThan(n: Int): Rand[Int] = State(rng => {
+    val (a, ra) = nonNegativeInt.run(rng)
+    @tailrec
+    def go(i: Int)(rng: RNG): (Int, RNG) = {
+      val mod = i % n
+      if (i + (n - 1) - mod >= 0) (mod, rng) else go(n)(rng) // the retry prevents sample bias.
+    }
+    go(a)(ra)
+    // map(nonNegativeInt)(_ % n) is incorrect due to sample bias
+  })
+
   def flatMap[A, B](f: Rand[A])(g: A => Rand[B]): Rand[B] = State(rng => {
     val (a, ra) = f.run(rng)
     g(a).run(ra)
@@ -79,16 +91,6 @@ object RNG {
 
   def ints(n: Int)(rng: RNG): (List[Int], RNG) =
     sequence(List.fill(n)(int)).run(rng)
-
-  def nonNegativeLessThan(n: Int): Rand[Int] = State(rng => {
-    val (a, ra) = nonNegativeInt.run(rng)
-    @tailrec
-    def go(i: Int)(rng: RNG): (Int, RNG) = {
-      val mod = i % n
-      if (i + (n - 1) - mod >= 0) (mod, rng) else go(n)(rng)
-    }
-    go(a)(ra)
-  })
 
   def randomElement(s: Seq[Int]): Rand[Seq[Int]] =
     flatMap(nonNegativeLessThan(s.size)) { i => unit(Seq(s(i))) }
