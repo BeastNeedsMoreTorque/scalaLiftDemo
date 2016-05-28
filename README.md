@@ -9,9 +9,9 @@ The choice of category is by selection of 6 icons representing each a category, 
 The choice of required count of product recommendation is a drop down menu offering numbers of 1,5,10, and 20.
 
 ## User actions
-User actions is via 3 icon buttons beneath the category icons. They are _recommend_ (question mark image), _cancel_ (road no entry sign), and _consume_ (a glass of wine).
+User actions is via 3 icon buttons beneath the category icons. They are `recommend` (question mark image), `cancel` (road no entry sign), and `consume` (a glass of wine).
 
-The _recommend_ action will find matching LCBO products for the given category and store attempting to show as many as requested, one following each other vertically.
+The `recommend` action will find matching LCBO products for the given category and store attempting to show as many as requested, one following each other vertically.
 The recommendation may use caching if a user has previously made requests from the current store and there are products and inventories available in the database for that store.
 Alternatively, the recommendation may make an immediate request to LCBO API from the server to obtain a subset of matching products for reasonable quick response.
 In both cases, the recommend action randomly selects a match of products. In the cached case, there may be 3000 items in a given store (e.g. wine), so it does a random
@@ -22,22 +22,22 @@ Random algorithms of sampling and shuffling are taken from The Art of Computer P
 
 The displayed products show an image, attributes of the product, and user input for selection count with dollar value of selection.
 
-The _Cancel_ action simply erases the products display.
+The `cancel` action simply erases the products display.
 
-The _Consume_ action is a basic simulation of a shopping cart, allowing user to select a count of each product within the proposed list and evaluating a total bill.
+The `consume` action is a basic simulation of a shopping cart, allowing user to select a count of each product within the proposed list and evaluating a total bill.
 
 ##Environment and Dependencies
-Run modes: dev and test (src/main/resources/props: default.props and test.default.props whose names are chosen as per Lift framework).
+Run modes: dev and test (`src/main/resources/props:` `default.props` and `test.default.props` whose names are chosen as per Lift framework).
 Test mode is used when executing a sample of Scalatest unit test cases.
 
-Starting app: in project folder, launch sbt, and then jetty:start.
+Starting app: in project folder, launch sbt, and then `jetty:start`.
 May also start from Intellij IDEA Community Edition 2016.1. Patience is required when Intellij IDEA CE decides to index your project.
 Runs on localhost:8080
 
 web server: runs fine on OS X Yosemite 10.10.5
 browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
-Logging: ch.qos.logback
+Logging: `ch.qos.logback`
 
 SBT: 0.13.1
 
@@ -55,19 +55,19 @@ scalatest for unit testing
 Install PostgresSQL. I use 9.4.5.0
 
 ## WEB API Dependencies (keys, rate usage)
-See https://lcboapi.com/docs/v1 about setting a LCBO token, which is required if used from a public website as queries are limited.
+See `https://lcboapi.com/docs/v1` about setting a LCBO token, which is required if used from a public website as queries are limited.
 
 My home private usage qualifies for following:
 When LCBO API is accessed from a web server or private script, these keys are not rate-limited, and they do not support CORS or JSONP.
 
 You need a Google MAPS API key as per following (JS API): https://developers.google.com/maps/documentation/javascript/get-api-key
-Once obtained, use it in webapp/index.html at following replacing GET_A_KEY with your API key.
-        <script async defer src="https://maps.googleapis.com/maps/api/js?key=GET_A_KEY&callback=storeFinder.initMap"
+Once obtained, use it in `webapp/index.html` at following replacing `GET_A_KEY` with your API key.
+        `<script async defer src="https://maps.googleapis.com/maps/api/js?key=GET_A_KEY&callback=storeFinder.initMap"`
 
-Install initial SQL tables using POSTGRES_SCHEMA_INIT.SQL. What may cause portability issues for other databases in that file are:
+Install initial SQL tables using `POSTGRES_SCHEMA_INIT.SQL`. What may cause portability issues for other databases in that file are:
 Usage of sequences to generate IDs.
-Usage of SERIAL in users table for primary key (auto increment in other RDBMSs).
-Table "Inventory" is double quoted. It's managed by Squeryl outside of LIFT's Record control and useful to represent stateful many-to-many relations between store and product.
+Usage of `SERIAL` in users table for primary key (auto increment in other RDBMSs).
+Table `"Inventory"` is double quoted. It's managed by Squeryl outside of LIFT's Record control and useful to represent stateful many-to-many relations between store and product.
 
 ## Design Limitations
 Security:
@@ -85,17 +85,17 @@ Behavioral Design Patterns:
 template method design pattern (used for loading up caches generically upon a database store)
 
 Functional Design Patterns:
-monad (for RNG, State in RNG.scala). They are also found with Options, Lift Boxes, collections, Futures. Pretty pervasive.
+monad (for `RNG`, `State` in `RNG.scala`). They are also found with Options, Lift Boxes, collections, Futures. Pretty pervasive.
 
 Scala-specific design patterns:
-enrich my library (RetainSingles), similar to C# extension methods
-cake pattern (ProductAdvisor)
+enrich my library (`RetainSingles`), similar to C# extension methods
+cake pattern (`ProductAdvisor`)
 value object (case classes, ubiquitous in Scala)
-allocation-free extension methods (LCBO_ID, P_KEY)
-curiously recurring template pattern (CRTP) as found in Persistable ( self: T =>), tied with Lift Record's design
-lazy evaluation (Store to inhibit immediate loading of stateful many2many relation storeProducts)
-Dependency Injection via Partially applied Functions (LCBOPageFetcherComponent using partially applied functions for JSitemsExtractor and GotEnough_? to apply different mechanisms of JSON parsing  )
-implicit injection (for type conversion also known as implicit view in Scala in Depth: P_KEY and LCBO_ID implicitly convert to Long, Store to XML Node conversion)
+allocation-free extension methods (`LCBO_ID`, `P_KEY`)
+curiously recurring template pattern (`CRTP`) as found in `Persistable` ( `self: T =>`), tied with Lift Record's design
+lazy evaluation (`Store` to inhibit immediate loading of stateful many2many relation `storeProducts`)
+Dependency Injection via Partially applied Functions (`LCBOPageFetcherComponent` using partially applied functions for `JSitemsExtractor` and `GotEnough_?` to apply different mechanisms of JSON parsing  )
+implicit injection (for type conversion also known as implicit view in Scala in Depth: `P_KEY` and `LCBO_ID` implicitly convert to `Long`, `Store` to XML Node conversion)
 
 Unused Design Patterns:
 stackable traits, duck typing, memoization, type class (via context bounds
