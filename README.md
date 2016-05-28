@@ -27,32 +27,32 @@ The `cancel` action simply erases the products display.
 The `consume` action is a basic simulation of a shopping cart, allowing user to select a count of each product within the proposed list and evaluating a total bill.
 
 ##Environment and Dependencies
-Run modes: dev and test (`src/main/resources/props:` `default.props` and `test.default.props` whose names are chosen as per Lift framework).
+- Run modes: dev and test (`src/main/resources/props:` `default.props` and `test.default.props` whose names are chosen as per Lift framework).
 Test mode is used when executing a sample of Scalatest unit test cases.
 
-Starting app: in project folder, launch sbt, and then `jetty:start`.
+- Starting app: in project folder, launch sbt, and then `jetty:start`.
 May also start from Intellij IDEA Community Edition 2016.1. Patience is required when Intellij IDEA CE decides to index your project.
 Runs on localhost:8080
 
-web server: runs fine on OS X Yosemite 10.10.5
+- web server: runs fine on OS X Yosemite 10.10.5
 browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
-Logging: `ch.qos.logback`
+- Logging: `ch.qos.logback`
 
-SBT: 0.13.1
+- SBT: 0.13.1
 
-Scala: 2.11.7
+- Scala: 2.11.7
 
-JVM SDK: 1.8
+- JVM SDK: 1.8
 
-Jetty
+- Jetty
 
-Lift framework: 2.6.2 but taken care by SBT
+- Lift framework: 2.6.2 but taken care by SBT
 Squeryl, a Scala ORM ((taken care by SBT)
 Apache common for httpclient (taken care by SBT)
 scalatest for unit testing
 
-Install PostgresSQL. I use 9.4.5.0
+- Install PostgresSQL. I use 9.4.5.0
 
 ## WEB API Dependencies (keys, rate usage)
 See `https://lcboapi.com/docs/v1` about setting a LCBO token, which is required if used from a public website as queries are limited.
@@ -70,15 +70,13 @@ Usage of `SERIAL` in users table for primary key (auto increment in other RDBMSs
 Table `"Inventory"` is double quoted. It's managed by Squeryl outside of LIFT's Record control and useful to represent stateful many-to-many relations between store and product.
 
 ## Design Limitations
-Security:
+- Security:
 User is expected to accept to provide geo-location, otherwise nothing will work since the closest store is where everything starts while users may select other stores of choice.
 There is no login security planned in database and none on web side of things with registration of users not enforcing any password complexity.
 
-HA/fail-over: not planned
+- HA/fail-over: not planned
 
-Mobile: not planned.
-
-
+- Mobile: not planned.
 
 ##Commentary about design patterns
 Behavioral Design Patterns:
