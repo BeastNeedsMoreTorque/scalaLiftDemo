@@ -19,13 +19,13 @@ trait ItemStateGrouper {
   // We want I to be an interface of T when using get/isDirty as get usage could be more abstract than type T at client side (possibly retrieving from cache).
   // Returned sequences require to be concrete because that is how our ORM interface is like.
   def itemsByState[I, T <: I](items: IndexedSeq[T],
-                              get: I => Option[I],
+                              cached: I => Option[I],
                               isDirty: (I, I) => Boolean): DirtyAndNewSequences[T] = {
     val x = items.groupBy {
-      latest => (get(latest), latest) match {
+      current => (cached(current), current) match {
         case (None, _) => New
-        case (Some(retrieved), item) if isDirty(retrieved, item) => Dirty
-        case (_, _) => Clean
+        case (Some(retrieved), curr) if isDirty(retrieved, curr) => Dirty
+        case _ => Clean
       }
     }
     DirtyAndNewSequences(

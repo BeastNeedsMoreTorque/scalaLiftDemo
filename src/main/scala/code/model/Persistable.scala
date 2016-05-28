@@ -43,12 +43,12 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
 
     // removes any duplicate keys and log error if found duplicates
     // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
-    val filtered = items.retainSinglesImpure.filterNot { p => LcboIDs(p.lcboId) }
+    val filtered = items.retainSinglesImpure.filterNot( p => LcboIDs(p.lcboId) )
     // break it down in reasonable size transactions, and then serialize the work.
     filtered.grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) }
   }
 
-  private def batchTransactor(items: Iterable[T], ORMTransactor: (Iterable[T]) => Unit): Unit = {
+  private def batchTransactor(items: Iterable[T], ORMTransactor: Iterable[T] => Unit): Unit = {
     def feedCache(items: Iterable[T]) = {
       val akIds = items.map(_.lcboId: Long) // alternate key ids, which are a proxy for our primary key IDs to be evaluated from DB.
       // select only those we just inserted, hopefully the same set.

@@ -102,8 +102,8 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     productsCache ++= asMap(items, {p: IProduct => p.lcboId})
     // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
     // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
-    productsCacheByCategory ++= productsCache.values.toIndexedSeq.
-      map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).
+    productsCacheByCategory ++= productsCache.values.
+      map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).toIndexedSeq.
       groupBy(_.category).
       mapValues(_.map(x => x.keys))
   }
