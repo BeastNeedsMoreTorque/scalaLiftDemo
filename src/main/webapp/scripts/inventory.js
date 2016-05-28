@@ -20,28 +20,7 @@ var inventory = (function() {
     return el.parents().find('td[name=' + prodId + ']');
   };
 
-  var collectProductInventories = function() {
-    prodIdCheckboxes[prodIdNodeKey(this)] = this;
-    var productId = parseInt(this.value) || 0;
-    var quantityEl = prodIdCBQuantityBuddy($(this), productId);
-    var quantity = parseInt($(quantityEl).val()) || 0;
-    if (storeId > 0 && productId > 0 && quantity <= 0) { // browser gets an update to complete likely missing info
-      ajaxFetchInventory(storeId, productId);
-    }
-  }
-
-  var ajaxFetchInventory = function(storeId, productId) {
-    var uri = 'http://lcboapi.com/stores/' + storeId + '/products/' + productId + '/inventory'
-    $.ajax({
-      url: uri,
-      dataType: 'jsonp', // for Cross Origin Access
-      type: 'GET',
-      success: inventorySuccess,
-      error: inventoryError
-    });
-  };
-
-  var inventorySuccess = function(data, status){
+  var success = function(data, status){
     var currProdId = data.result.product_id;
     var theCheckBox = prodIdCheckboxes[currProdId];
     if (theCheckBox != undefined) {
@@ -50,15 +29,36 @@ var inventory = (function() {
     }
   };
 
-  var inventoryError = function(data, status){  // deliberate avoidance of callback hell with much nesting being avoided
+  var error = function(data, status){  // deliberate avoidance of callback hell with much nesting being avoided
     console.log('Error Data: ' + data.responseText + '\nStatus: ' + status );
   };
+
+  var ajaxGetInventories = function(storeId, productId) {
+    var uri = 'http://lcboapi.com/stores/' + storeId + '/products/' + productId + '/inventory'
+    $.ajax({
+      url: uri,
+      dataType: 'jsonp', // for Cross Origin Access
+      type: 'GET',
+      success: success,
+      error: error
+    });
+  };
+
+  var getInventories = function() {
+    prodIdCheckboxes[prodIdNodeKey(this)] = this;
+    var productId = parseInt(this.value) || 0;
+    var quantityEl = prodIdCBQuantityBuddy($(this), productId);
+    var quantity = parseInt($(quantityEl).val()) || 0;
+    if (storeId > 0 && productId > 0 && quantity <= 0) { // browser gets an update to complete likely missing info
+      ajaxGetInventories(storeId, productId);
+    }
+  }
 
   return {
     fetchInventories: function() {
       prodIdCheckboxes = {}; // reset it. Too bad, if there was an earlier request. Just take current user input.
       storeId = storeFinder.getTheSelectedLcboStoreId(); // calls for requirejs or ES6 module usage perhaps
-      $('div.prodContainer').find('input:checkbox').each(collectProductInventories);
+      $('div.prodContainer').find('input:checkbox').each(getInventories);
     }
   }
 }());
