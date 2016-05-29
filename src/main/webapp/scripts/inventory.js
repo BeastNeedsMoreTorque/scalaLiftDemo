@@ -20,20 +20,20 @@ var inventory = (function() {
     return el.parents().find('td[name=' + prodId + ']');
   };
 
-  var success = function(data, status){
-    var currProdId = data.result.product_id;
-    var theCheckBox = prodIdCheckboxes[currProdId];
-    if (theCheckBox != undefined) {
-      var quantity = data.result.quantity;
-      prodIdCBQuantityBuddy($(theCheckBox), currProdId).html(quantity);
-    }
-  };
-
-  var error = function(data, status){  // deliberate avoidance of callback hell with much nesting being avoided
-    console.log('Error Data: ' + data.responseText + '\nStatus: ' + status );
-  };
-
   var ajaxGetInventories = function(storeId, productId) {
+    var success = function(data, status){
+      var currProdId = data.result.product_id;
+      var theCheckBox = prodIdCheckboxes[currProdId];
+      if (theCheckBox != undefined) {
+        var quantity = data.result.quantity;
+        prodIdCBQuantityBuddy($(theCheckBox), currProdId).html(quantity);
+      }
+    };
+
+    var error = function(data, status){  // deliberate avoidance of callback hell with much nesting being avoided
+      console.log('Error Data: ' + data.responseText + '\nStatus: ' + status );
+    };
+
     var uri = 'http://lcboapi.com/stores/' + storeId + '/products/' + productId + '/inventory'
     $.ajax({
       url: uri,

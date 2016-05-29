@@ -134,23 +134,23 @@ var storeFinder = (function() {
     directionsService.route(request, directionsListener);
   };
 
-  var error = function(data, status){  // deliberate avoidance of callback hell with much nesting being avoided
-    console.log('Error Data: ' + data.responseText + '\nStatus: ' + status );
-    alert(data.responseText );
-  };
-
-  var success = function(data, status){  // deliberate avoidance of callback hell with much nesting being avoided
-    function createMarker(store, index, array) {
-      var latlng = new google.maps.LatLng(store.latitude, store.longitude);
-      var key = buildKey(store);
-      addMarker(key, latlng);
-    }
-    data.forEach(createMarker);
-    stores = data;
-    fetchStore( userLocation);
-  };
-
   var fetchAllStores = function() {
+    var error = function(data, status){  // deliberate avoidance of callback hell with much nesting being avoided
+      console.log('Error Data: ' + data.responseText + '\nStatus: ' + status );
+      alert(data.responseText );
+    };
+
+    var success = function(data, status){  // deliberate avoidance of callback hell with much nesting being avoided
+      function createMarker(store, index, array) {
+        var latlng = new google.maps.LatLng(store.latitude, store.longitude);
+        var key = buildKey(store);
+        addMarker(key, latlng);
+      }
+      data.forEach(createMarker);
+      stores = data;
+      fetchStore( userLocation);
+    };
+
     $.ajax({
       url: '/stores',
       type: 'GET',
