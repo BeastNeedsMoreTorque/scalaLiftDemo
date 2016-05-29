@@ -9,7 +9,7 @@ db.url=jdbc:postgresql://localhost:5432
 http.ClientConnTimeOut=5000
 # different value to prove a point
 http.ClientReadTimeOut=8000
-lcboDomainURL=http://lcboapi.com
+lcboDomain=lcboapi.com
 DBWrite.BatchSize=1024
 
 radio.selectClass=thickBorder

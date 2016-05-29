@@ -1,8 +1,10 @@
 package code.Rest
 
 import java.io.IOException
+import java.net.URI
+
 import net.liftweb.common.Loggable
-import org.apache.http.{HttpEntity, HttpResponse}
+import org.apache.http.{HttpEntity, HttpResponse, TruncatedChunkException}
 import org.apache.http.client._
 import org.apache.http.client.methods.HttpGet
 import org.apache.http.impl.client.HttpClients
@@ -16,21 +18,22 @@ import org.apache.http.client.ClientProtocolException
 trait RestClient extends Loggable {
 
   /**
-    * Returns the text (content) from a REST URL as a String.
+    * Returns the text (content) from a REST URI as a String.
     * Returns a blank String if there was a problem.
     * This function will also throw exceptions if there are problems trying
-    * to connect to the url.
+    * to connect to the uri.
     *
-    * @param url A complete URL, such as "http://foo.com/bar"
+    * @param uri A complete uri, such as "http://foo.com/bar"
     */
   @throws(classOf[ClientProtocolException])
-  @throws(classOf[IOException])  // say LCBO sends less data than they promise by chopping off data, a distinct possibility!
-  def get(url: String): String = {
+  @throws(classOf[IOException])
+  @throws(classOf[TruncatedChunkException])// say LCBO sends less data than they promise by chopping off data, a distinct possibility!
+  def get(uri: URI): String = {
 
     val httpclient = HttpClients.createDefault()
     try {
-      logger.trace(s"RestClient.get $url")
-      val httpget = new HttpGet(url)
+      logger.trace(s"RestClient.get $uri")
+      val httpget = new HttpGet(uri)
       // Create a custom response handler
       val responseHandler = new ResponseHandler[String]() {
         @Override
