@@ -14,12 +14,13 @@ import org.apache.http.client.ClientProtocolException
 import org.apache.http.client.config.RequestConfig
 
 /**
-  * Created by philippederome on 2015-12-19. First implementation had been from Alvin Alexander: http://alvinalexander.com/scala/how-to-write-scala-http-get-request-client-source-fromurl
-  * With errors of data truncation, I settled for Apache Commons on 2016-03-25 and simply translated to Scala.
+  * Created by philippederome on 2015-12-19.
   */
 trait RestClient extends Loggable {
   val sockTimeOut = Props.getInt("http.ClientReadTimeOut", 5000)
   val connTimeOut = Props.getInt("http.ClientConnTimeOut", 5000)
+
+  case class TimeOuts(socketTimeOut: Int, connectionTimeOut: Int)
 
   /**
     * Returns the text (content) from a REST URI as a String.
@@ -32,7 +33,7 @@ trait RestClient extends Loggable {
   @throws(classOf[ClientProtocolException])
   @throws(classOf[IOException])
   @throws(classOf[TruncatedChunkException])// say LCBO sends less data than they promise by chopping off data, a distinct possibility!
-  def get(uri: URI): String = {
+  def get(uri: URI, times: TimeOuts = TimeOuts(sockTimeOut, connTimeOut)): String = {
     val httpclient = HttpClients.createDefault()
     logger.trace(s"RestClient.get $uri")
     val httpget = new HttpGet(uri)
@@ -51,8 +52,8 @@ trait RestClient extends Loggable {
         }
       }
       val requestConfig = RequestConfig.custom()
-        .setSocketTimeout(sockTimeOut)
-        .setConnectTimeout(connTimeOut)
+        .setSocketTimeout(times.socketTimeOut)
+        .setConnectTimeout(times.connectionTimeOut)
         .build()
       httpget.setConfig(requestConfig)
       httpclient.execute(httpget, responseHandler)
