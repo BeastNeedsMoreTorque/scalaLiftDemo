@@ -2,14 +2,13 @@ package code.model
 
 import scala.collection._
 import scala.language.implicitConversions
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 import scala.xml.Node
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import net.liftweb.common.Box
 import net.liftweb.json._
-import net.liftweb.util.Helpers.tryo
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
@@ -126,11 +125,11 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
     def fetchProducts() = {
-      val fullContextErr = { (m: String, err: String) =>
-        s"Problem loading products into cache with message $m and exception error $err"
+      val contextErr = { (err: String) =>
+        s"Problem loading products into cache with exception error $err"
       }
       val theProducts = fetchByStore(lcboId)
-      lazy val err = checkErrors(theProducts, fullContextErr, error = "Problem loading products into cache" )
+      lazy val err = checkErrors(theProducts, contextErr, error = "Problem loading products into cache" )
       theProducts.toOption.fold[Unit](logger.error(err))( items => addToCaches _)
     }
 
@@ -138,24 +137,24 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
       def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update
       def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert
 
-      val fullContextErr = (m: String, err: String) =>
-        s"Problem loading inventories into cache for '$lcboId' with message $m and exception error $err"
+      val fullContextErr = (err: String) =>
+        s"Problem loading inventories into cache for '$lcboId' with exception error $err"
       // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
       // we chain errors using flatMap (FP fans apparently like this).
-      val box =
+      val computation =
         fetchInventoriesByStore(
           webApiRoute = "/inventories",
           getCachedInventoryItem,
           inventoryByProductId.toMap,
           Seq("store_id" -> lcboId, "where_not" -> "is_dead")).
       flatMap { inventories =>
-        inTransaction {
+        Try(inTransaction {
           execute[Inventory](inventories.updatedInvs, inventoryTableUpdater) // bulk update the ones needing an update, having made the change from LCBO input
           execute[Inventory](inventories.newInvs, inventoryTableInserter) // bulk insert the ones needing an insert having filtered out duped composite keys
-        }
+        })
       }
-      lazy val err = checkUnitErrors(box, fullContextErr )
-      box.toOption.fold[Unit](logger.error(err))( (Unit) => refreshInventories())
+      lazy val err = checkUnitErrors(computation, fullContextErr )
+      computation.toOption.fold[Unit](logger.error(err))( (Unit) => refreshInventories())
     }
 
     val fetches =
@@ -206,7 +205,7 @@ object Store extends Store with MetaRecord[Store] {
   implicit def toXml(s: Store): Node =
     <store>{Xml.toXml(s.asJValue)}</store>
 
-  private def getStores(): Box[IndexedSeq[Store]] = tryo {
+  private def getStores(): Try[IndexedSeq[Store]] = Try {
       collectItemsAsWebClient("/stores", extract, queryFilterArgs) // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
 
@@ -215,8 +214,8 @@ object Store extends Store with MetaRecord[Store] {
     * Well... Trend is to do everything asynch these days...
     */
   override def load(): Unit = inTransaction {
-    def fullContextErr( m: String,  ex: String): String =
-      s"Problem loading LCBO stores into cache with message '$m' and exception error '$ex'"
+    def contextErr( ex: String): String =
+      s"Problem loading LCBO stores into cache with exception error '$ex'"
     val briefContextErr = "Problem loading LCBO stores into cache, none found"
 
     logger.info("load start")
@@ -224,7 +223,7 @@ object Store extends Store with MetaRecord[Store] {
     cacheItems(dbStores)
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
     val refreshed = getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
-    lazy val err = checkErrors(refreshed, fullContextErr, briefContextErr )
+    lazy val err = checkErrors(refreshed, contextErr, briefContextErr )
     refreshed.toOption.fold[Unit](logger.error(err))( items => synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate))
     logger.info("load end") // trace because it takes a long time.
   }

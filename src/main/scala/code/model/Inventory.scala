@@ -1,9 +1,9 @@
 package code.model
 
 import scala.collection.{IndexedSeq, Iterable}
+import scala.util.Try
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
-import net.liftweb.common.Box
 import net.liftweb.util.Helpers._
 import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
@@ -11,6 +11,7 @@ import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 import code.model.utils.KeyHolder
 import code.model.utils.RetainSingles.retainSinglesImpure
+
 
 /**
   * Created by philippederome on 2016-03-26.
@@ -83,7 +84,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
   def fetchInventoriesByStore(webApiRoute: String,
                               get: (Inventory) => Option[Inventory],
                               mapByProductId: Map[P_KEY, Inventory],
-                              params: Seq[(String, Any)]): Box[UpdatedAndNewInventories] = tryo {
+                              params: Seq[(String, Any)]): Try[UpdatedAndNewInventories] =  {
     // set up some functional transformers first, then get ready for real work.
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
 
@@ -95,12 +96,10 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     def logDiscarded(items: Iterable[Inventory]) =
       if (items.nonEmpty) logger.info(s"discarded ${items.size} duplicate inventory items") // this is normal, that's what they do...
 
-    val items = collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
-    val dirtyAndNewItems = itemsByState[Inventory, Inventory](items, get, dirtyPredicate)
-
-    val updatedInventories = retainSinglesImpure(getUpdatedInvs(dirtyAndNewItems.dirtys))(logDiscarded)
-    val newInventories = retainSinglesImpure(dirtyAndNewItems.news)(logDiscarded)
-
-    UpdatedAndNewInventories(updatedInventories, newInventories)
+    for (items <- Try(collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage));
+         dirtyAndNewItems <- Try(itemsByState[Inventory, Inventory](items, get, dirtyPredicate));
+         updatedInventories <- Try(retainSinglesImpure(getUpdatedInvs(dirtyAndNewItems.dirtys))(logDiscarded));
+         newInventories <- Try(retainSinglesImpure(dirtyAndNewItems.news)(logDiscarded));
+         inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))) yield inventories
   }
 }

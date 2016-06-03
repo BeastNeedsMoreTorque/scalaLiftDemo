@@ -42,12 +42,13 @@ trait RestClient extends Loggable {
       val responseHandler = new ResponseHandler[String]() {
         @Override
         def handleResponse(response: HttpResponse) = {
-          val status  = response.getStatusLine.getStatusCode
-          if (status >= 200 && status < 300) {
+          val statusLine = response.getStatusLine
+          val code  = statusLine.getStatusCode
+          if (code >= 200 && code < 300) {
             val e = response.getEntity
             if (e ne null) EntityUtils.toString(e) else ""
           } else {
-            throw new ClientProtocolException("Unexpected response status: " + status)
+            throw new ClientProtocolException("Unexpected response statusLine: " + statusLine.toString)
           }
         }
       }

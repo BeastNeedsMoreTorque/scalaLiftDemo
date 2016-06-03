@@ -4,10 +4,10 @@ import java.text.NumberFormat
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.{Seq, _}
+import scala.util.Try
 import scala.language.implicitConversions
 import scala.xml.Node
 import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField}
-import net.liftweb.common.Box
 import net.liftweb.record.MetaRecord
 import net.liftweb.util.Props
 import net.liftweb.json._
@@ -193,7 +193,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
     collectItemsAsWebClient("/products", extract, Seq("per_page" -> MaxPerPage, "store_id" -> lcboStoreId) ++ seq)
 
   // side effect to store updates of the products
-  def fetchByStore(lcboStoreId: Long): Box[IndexedSeq[IProduct]] = tryo {
+  def fetchByStore(lcboStoreId: Long): Try[IndexedSeq[IProduct]] = Try {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
       val prods = productWebQuery( lcboStoreId, queryFilterArgs) // take them all from Stream

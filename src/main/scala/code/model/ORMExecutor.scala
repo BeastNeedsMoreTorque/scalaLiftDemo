@@ -2,8 +2,7 @@ package code.model
 
 import java.sql.SQLException
 
-import net.liftweb.common.{Box,Loggable}
-import net.liftweb.util.Helpers.tryo
+import net.liftweb.common.Loggable
 
 import scala.collection.Iterable
 
@@ -15,7 +14,7 @@ import scala.collection.Iterable
   * Please, please, please: hide this try catch block from privy eyes. It makes me noxious. ;-)
   */
 trait ORMExecutor extends Loggable {
-  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Box[Unit] = tryo { // captures exception in Box and force callers to deal with it.
+  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Unit = // captures exception in Box and force callers to deal with it.
     try {
       apply(items) // e.g. insert, update, delete
     } catch {
@@ -29,5 +28,4 @@ trait ORMExecutor extends Loggable {
       // intentionally skip other errors and let them all be "handled" higher up including SQLException, record more context along the way.
       // actually typically immediately higher up because of the tryo returning a Box type (similar to Option/Either)
     }
-  }
 }

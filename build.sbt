@@ -21,10 +21,15 @@ libraryDependencies ++= {
   val liftVersion = "2.6.2"
   val squeryl = "net.liftweb" %% "lift-squeryl-record" % liftVersion % "compile->default" withSources() // Record interface to RDBMS
   val scalaCompiler = "2.11.7"
+  val scalazVersion = "7.1.0"
 
   Seq(
     "org.scala-lang"    % "scala-compiler"      % scalaCompiler,
     "org.scala-lang"    % "scala-reflect"       % scalaCompiler,
+    "org.scalaz" %% "scalaz-core" % scalazVersion,
+    "org.scalaz" %% "scalaz-effect" % scalazVersion,
+    "org.scalaz" %% "scalaz-typelevel" % scalazVersion,
+    "org.scalaz" %% "scalaz-scalacheck-binding" % scalazVersion % "test",
     "net.liftweb"     %% "lift-webkit" % liftVersion % "compile" withSources(),
     "net.liftweb"     %% "lift-mapper" % liftVersion % "compile->default" withSources(),
     "net.liftweb"     %% "lift-wizard" % liftVersion % "compile->default" withSources(),
