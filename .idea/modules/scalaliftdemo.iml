@@ -25,6 +25,9 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="SBT: cglib:cglib-nodep:2.2:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.scala-lang:scala-reflect:2.11.8:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.scala-lang:scala-library:2.11.8:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.scala-lang:scala-compiler:2.11.8:jar" level="project" />
     <orderEntry type="library" scope="TEST" name="SBT: org.scalaz:scalaz-xml_2.11:7.1.0:jar" level="project" />
     <orderEntry type="library" name="SBT: org.scalaz:scalaz-typelevel_2.11:7.1.0:jar" level="project" />
     <orderEntry type="library" scope="TEST" name="SBT: org.scalaz:scalaz-scalacheck-binding_2.11:7.1.0:jar" level="project" />
@@ -85,9 +88,6 @@
     <orderEntry type="library" scope="TEST" name="SBT: org.parboiled:parboiled-core:1.1.4:jar" level="project" />
     <orderEntry type="library" scope="TEST" name="SBT: org.parboiled:parboiled-java:1.1.4:jar" level="project" />
     <orderEntry type="library" scope="TEST" name="SBT: org.pegdown:pegdown:1.2.1:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.scala-lang:scala-compiler:2.11.7:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.scala-lang:scala-library:2.11.7:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.scala-lang:scala-reflect:2.11.7:jar" level="project" />
     <orderEntry type="library" name="SBT: org.scala-lang:scalap:2.11.1:jar" level="project" />
     <orderEntry type="library" name="SBT: org.scala-lang.modules:scala-parser-combinators_2.11:1.0.4:jar" level="project" />
     <orderEntry type="library" name="SBT: org.scala-lang.modules:scala-xml_2.11:1.0.4:jar" level="project" />
