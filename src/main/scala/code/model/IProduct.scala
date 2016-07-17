@@ -38,8 +38,6 @@ trait IProduct extends Equals with KeyKeeper {
       case _ => false
     }
 
-  val dissimilar: (IProduct, IProduct) => Boolean = { (x, y)=> !x.equals(y)}
-  def getCachedItem: (IProduct) => Option[IProduct]
   def streamAttributes: IndexedSeq[Attribute]
 
 }

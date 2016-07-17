@@ -36,8 +36,6 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
   override def meta = Store
 
-  override def getCachedItem: IStore => Option[IStore] = s => Store.getCachedItem(s)
-
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
   val longitude = new DoubleField(this)
@@ -61,13 +59,11 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   override def equals(other: Any): Boolean =
     other match {
       case that: Store =>
-        if (this eq that) true
-        else {
-          that.canEqual(this) &&
-          (Name == that.Name &&
-           isDead == that.isDead &&
-           addressLine1 == that.addressLine1 )
-        }
+        (this eq that) ||
+        (that.canEqual(this) &&
+          Name == that.Name &&
+          isDead == that.isDead &&
+          addressLine1 == that.addressLine1)
       case _ => false
     }
 
@@ -184,7 +180,7 @@ object Store extends Store with MetaRecord[Store] {
     super.cacheItems(items)
     cache.values.foreach( _.refreshProducts())  // ensure inventories are refreshed INCLUDING on start up.
   }
-  override def getCachedItem: IStore => Option[IStore] = s => getItemByLcboId(s.lcboId)
+  def getCachedItem: IStore => Option[IStore] = s => getItemByLcboId(s.lcboId)
 
   def findAll: Iterable[Store] = cache.values
 
@@ -224,7 +220,7 @@ object Store extends Store with MetaRecord[Store] {
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
     val refreshed = getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
     lazy val err = checkErrors(refreshed, contextErr, briefContextErr )
-    refreshed.toOption.fold[Unit](logger.error(err))( items => synchDirtyAndNewItems(items, getCachedItem, dirtyPredicate))
+    refreshed.toOption.fold[Unit](logger.error(err))( items => synchDirtyAndNewItems(items, getCachedItem))
     logger.info("load end") // trace because it takes a long time.
   }
 }

@@ -25,16 +25,25 @@ class Inventory private(val storeid: Long,
                         var is_dead: Boolean,
                         var store_id: Long=0,
                         var product_id: Long=0)
-  extends KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
+  extends Equals with KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
 
   override def getKey = s"$productid:$storeid"
 
   def id = compositeKey(storeid, productid)
 
-  def isDirty(inv: Inventory): Boolean =
-    quantity != inv.quantity ||
-    is_dead != inv.is_dead ||
-    updated_on != inv.updated_on
+  override def canEqual(other: Any) =
+    other.isInstanceOf[Inventory]
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: Inventory =>
+        (this eq that) ||
+          (that.canEqual(this) &&
+            quantity == that.quantity &&
+            is_dead == that.is_dead &&
+            updated_on == that.updated_on)
+      case _ => false
+    }
 
   def copyDiffs(inv: Inventory): Inventory = {
     quantity = inv.quantity
@@ -51,7 +60,6 @@ case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: I
 object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper with ORMExecutor {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   implicit val formats = net.liftweb.json.DefaultFormats
-  private val dirtyPredicate: (Inventory, Inventory) => Boolean = { _.isDirty(_)}
 
   case class InventoryAsLCBOJson(product_id: Long,
                                  store_id: Long,
@@ -97,7 +105,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
       if (items.nonEmpty) logger.info(s"discarded ${items.size} duplicate inventory items") // this is normal, that's what they do...
 
     for (items <- Try(collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage));
-         dirtyAndNewItems <- Try(itemsByState[Inventory, Inventory](items, get, dirtyPredicate));
+         dirtyAndNewItems <- Try(itemsByState[Inventory, Inventory](items, get));
          updatedInventories <- Try(retainSinglesImpure(getUpdatedInvs(dirtyAndNewItems.dirtys))(logDiscarded));
          newInventories <- Try(retainSinglesImpure(dirtyAndNewItems.news)(logDiscarded));
          inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))) yield inventories

@@ -36,8 +36,8 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
   // type parameter I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class, and it should not return just anything.
   // Some LCBO entities also have a similar pattern of identifying new info from LCBO (items being provided from a query), reconciling/interpreting as new or dirty (or clean/unchanged)
   // and then make sure first DB is brought up to date with that info and synchronously the cache memory as well.
-  final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], get: I => Option[I], p: (I, I) => Boolean): Unit = {
-    val dirtyAndNewItems = itemsByState[I, T](items, get, p)
+  final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], get: I => Option[I]): Unit = {
+    val dirtyAndNewItems = itemsByState[I, T](items, get)
     updateAndInsert(dirtyAndNewItems.dirtys, dirtyAndNewItems.news) // updates DB AND cache.
   }
 }

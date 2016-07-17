@@ -42,7 +42,4 @@ trait IStore extends Equals with InventoryService {
     }
   }
 
-  val dirtyPredicate: (IStore, IStore) => Boolean = {(x, y)=> !x.equals(y)}
-  def getCachedItem: IStore => Option[IStore]
-
 }

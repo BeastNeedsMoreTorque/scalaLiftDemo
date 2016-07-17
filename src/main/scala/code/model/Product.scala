@@ -33,8 +33,6 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
-  override def getCachedItem: IProduct => Option[IProduct] = x => Product.getCachedItem(x)
-
   val is_discontinued = new BooleanField(this, false)
   val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
     override def optional_? : Boolean = true  // tolerates null in JSON input
@@ -113,16 +111,14 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
   override def equals(other: Any): Boolean =
     other match {
       case that: Product =>
-        if (this eq that) true
-        else {
-            that.canEqual(this) &&
-            ( Name == that.Name &&
-              primaryCategory == that.primaryCategory &&
-              isDiscontinued == that.isDiscontinued &&
-              imageThumbUrl == that.imageThumbUrl &&
-              price == that.price) &&
-            (alcohol_content.get == that.alcohol_content.get) // more of an exercise than anything
-        }
+        (this eq that) ||
+        (that.canEqual(this) &&
+          Name == that.Name &&
+          primaryCategory == that.primaryCategory &&
+          isDiscontinued == that.isDiscontinued &&
+          imageThumbUrl == that.imageThumbUrl &&
+          price == that.price &&
+          alcohol_content.get == that.alcohol_content.get) // more of an exercise than anything
       case _ => false
     }
 
@@ -167,7 +163,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   val MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   protected val sizeFulfilled: Int => GotEnough_? =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
-  override def getCachedItem: IProduct => Option[IProduct] = s => getItemByLcboId(s.lcboId)
+  def getCachedItem: IProduct => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
   val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)  // seems difficult to apply D.I. here, so access global object.
   val queryFilterArgs = getSeq("product.query.Filter")(ConfigPairsRepo.defaultInstance)
@@ -197,7 +193,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
       // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
       // and gives us opportunity to bring our cache up to date about firm wide products.
       val prods = productWebQuery( lcboStoreId, queryFilterArgs) // take them all from Stream
-      synchDirtyAndNewItems(prods, getCachedItem, dissimilar) // the side effect
+      synchDirtyAndNewItems(prods, getCachedItem) // the side effect
       prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
   }
 }
