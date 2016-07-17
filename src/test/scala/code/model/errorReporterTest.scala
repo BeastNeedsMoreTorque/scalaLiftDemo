@@ -27,11 +27,11 @@ class errorReporterTest extends UnitTest {
   private def testExceptions[T >: Exception](test: (T, String) => Unit) = {
     val tests = Table(
       ("ex: Exception", "msg: String"), // The following are NOT The Magnificent Seven nor The Fab Four.
-      (new IllegalArgumentException("Consider Partial Functions as with Actors"), "as with Actors...Full(java.lang.IllegalArgumentException:"),
-      (new NullPointerException("Consider using Scala and Options"), "Scala and Options...Full(java.lang.NullPointerException:"),
-      (new ArithmeticException("was this a bad case of DIV BY 0?"), "DIV BY 0?...Full(java.lang.ArithmeticException"),
-      (new SQLException("Is the developer or DBA forgetful? Brittle data validation? access control or referential integrity issue?"), "control or referential integrity issue?...Full(java.sql.SQLException"),
-      (new MappingException("Consider extractOpt?"), "extractOpt?...Full(net.liftweb.json.MappingException"))
+      (new IllegalArgumentException("Consider Partial Functions as with Actors"), "...java.lang.IllegalArgumentException: Consider Partial Functions as with Actors"),
+      (new NullPointerException("Consider using Scala and Options"), "...java.lang.NullPointerException: Consider using Scala and Options"),
+      (new ArithmeticException("was this a bad case of DIV BY 0?"), "...java.lang.ArithmeticException: was this a bad case of DIV BY 0?"),
+      (new SQLException("Is the developer or DBA forgetful? Brittle data validation? access control or referential integrity issue?"), "...java.sql.SQLException: Is the developer or DBA forgetful? Brittle data validation? access control or referential integrity issue?"),
+      (new MappingException("Consider extractOpt?"), "...net.liftweb.json.MappingException: Consider extractOpt?"))
     forAll(tests)(test)
   }
 
@@ -66,7 +66,7 @@ class errorReporterTest extends UnitTest {
       Seq(x, 1,2,3)
     }
     val appContxtError = "YOUR Integer COLLECTION IS EMPTY BECAUSE of too tight of a filter perhaps? TERRIBLY SORRY! ErrNo:123456, Sev: 18"
-    instance.checkErrors(intsTry(ints), errorFormatter, appContxtError) should startWith("/ by zero...Full(java.lang.Arithmetic")  // Ouch!!
+    instance.checkErrors(intsTry(ints), errorFormatter, appContxtError) should startWith("...java.lang.ArithmeticException: / by zero")  // Ouch!!
   }
 
   it should "return app context message on unexpected empty collection" in {
