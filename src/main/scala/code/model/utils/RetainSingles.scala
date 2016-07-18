@@ -25,7 +25,7 @@ object RetainSingles extends Loggable {
 
   // @see http://www.scala-notes.org/2010/06/avoid-structural-types-when-pimping-libraries/
   class ResultImpure[A <: KeyHolder](as: Seq[A])(implicit ev: Iterable[A] => Unit = onFailureDefault _) {
-    def retainSinglesImpure(implicit ev: Iterable[A] => Unit) = RetainSingles.retainSinglesImpure(as)(ev)
+    def retainSinglesImpure(implicit ev: Iterable[A] => Unit): Iterable[A] = RetainSingles.retainSinglesImpure(as)(ev)
   }
   // Use of "pimp/enrich my library" pattern (removeDupes).
   implicit def implicitSeqToImpure[A <: KeyHolder](as: Seq[A])(implicit ev: Iterable[A] => Unit = onFailureDefault _): ResultImpure[A] =
@@ -34,7 +34,7 @@ object RetainSingles extends Loggable {
 
   val noop = (a: Any) => ()
   class ResultPure[A <: KeyHolder](as: Seq[A]) {
-    def retainSinglesPure = RetainSingles.retainSinglesImpure(as)(noop) // no side effect
+    def retainSinglesPure: Iterable[A] = RetainSingles.retainSinglesImpure(as)(noop) // no side effect
   }
   implicit def implicitSeqToPure[A <: KeyHolder](as: Seq[A]): ResultPure[A] = new ResultPure(as)
 }

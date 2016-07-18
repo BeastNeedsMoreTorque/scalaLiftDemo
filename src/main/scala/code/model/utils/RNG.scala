@@ -2,11 +2,17 @@ package code.model.utils
 
 //Copyright (c) 2012, Manning Publications, Co.
 
-//Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+// and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 //The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-//THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 // Edited and modified by Phil Derome, abiding by above copyright from Manning Publications, Co. Modified Software is provided "AS IS" as per above as well.
 
@@ -103,8 +109,10 @@ object RNG {
     @tailrec
     def sampleIter[T](N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (Seq[T], RNG) =  {
       val (u,y) = double.run(rng) // Knuth's method is not "functional" here (does not return a state capturing RNG) otherwise it's conceptually the same
-      val sampleSuccess = (N-t)* u <= n-m
-      if (sampleSuccess && m+1 == n)  (selected ++ Seq(avail(t)), y)
+      val sampleSuccess = (N - t) * u <= n - m
+      if (sampleSuccess && m + 1 == n) {
+        (selected ++ Seq(avail(t)), y)
+      }
       else {
         // do this "trick" to satisfy tailrec.
         val (newSel, newM) = if (sampleSuccess) (selected ++ Seq(avail(t)), m + 1) else (selected, m)
@@ -113,8 +121,12 @@ object RNG {
     }
 
     State(rng => {
-      if (s.isEmpty || k <= 0) (Seq(), rng)  // allow client not to check for empty sequence (or specify k <= 0), robust and flexible.
-      else sampleIter(s.size, k, 0, 0, s.toVector, Seq(), rng)
+      if (s.isEmpty || k <= 0) {
+        (Seq(), rng)
+      }  // allow client not to check for empty sequence (or specify k <= 0), robust and flexible.
+      else {
+        sampleIter(s.size, k, 0, 0, s.toVector, Seq(), rng)
+      }
     })
   }
 
@@ -143,16 +155,20 @@ object RNG {
 
   case class SelectorState(chosen: Seq[Int], available: Set[Int])
 
-  def update = (i: Int) => (s: SelectorState) =>
-    if (s.chosen.contains(i)) s  // failed to improve
-    else SelectorState(s.chosen ++ Seq(i), s.available - i) // succeeded
+  def execute(inputs: List[Int]): State[SelectorState, (Seq[Int], Set[Int])] = {
+    def update = (i: Int) => (s: SelectorState) =>
+      if (s.chosen.contains(i)) {
+        s
+      }  // failed to improve
+      else {
+        SelectorState(s.chosen ++ Seq(i), s.available - i)
+      } // succeeded
 
-  def execute(inputs: List[Int]): State[SelectorState, (Seq[Int], Set[Int])] =
     for {
       _ <- State.rawSequence(inputs map (modify[SelectorState] _ compose update))
       s <- get
     } yield (s.chosen, s.available)
-
+  }
 }
 
 object State {

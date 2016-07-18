@@ -7,4 +7,4 @@ addSbtPlugin("com.github.mpeltonen" % "sbt-idea" % "1.6.0")
 // Enable Eclipse plugin, you could try sbt eclipse and import project using it in Eclipse (https://github.com/typesafehub/sbteclipse)
 addSbtPlugin("com.typesafe.sbteclipse" % "sbteclipse-plugin" % "4.0.0")
 
-addSbtPlugin("org.scalastyle" %% "scalastyle-sbt-plugin" % "0.8.0")s
+addSbtPlugin("org.scalastyle" %% "scalastyle-sbt-plugin" % "0.8.0")

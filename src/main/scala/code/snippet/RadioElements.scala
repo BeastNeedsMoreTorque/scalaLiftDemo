@@ -16,13 +16,14 @@ object RadioElements {
   val thickBorder = Props.get("radio.selectClass", "thickBorder")
   val thinBorder = Props.get("radio.unselectClass", "thinBorder")
 
-  def selectOption(s: String, img: String) =
+  def selectOption(s: String, img: String): RadioElements =
     RadioElements(s, <img name={s} title={s} class={thickBorder} src={img}/>)  // maybe adding button could work?
 
   def radioOptions(ss: Seq[String],
                    defaultName: String,
                    toImg: String => String): Seq[RadioElements] =
     ss.map { s =>
-      RadioElements(s, <img name={s} title={s} src={toImg(s)} class={if (s == defaultName) thickBorder else thinBorder} />) // selected with style that frames it
+      RadioElements(s, <img name={s} title={s} src={toImg(s)} class={if (s == defaultName) thickBorder else thinBorder} />)
+      // selected with style that frames it
   }
 }

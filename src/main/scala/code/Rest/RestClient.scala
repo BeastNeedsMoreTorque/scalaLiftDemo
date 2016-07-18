@@ -5,7 +5,7 @@ import java.net.URI
 
 import net.liftweb.common.Loggable
 import net.liftweb.util.Props
-import org.apache.http.{HttpResponse, TruncatedChunkException}
+import org.apache.http.{HttpResponse, HttpStatus, TruncatedChunkException}
 import org.apache.http.client._
 import org.apache.http.client.methods.HttpGet
 import org.apache.http.impl.client.HttpClients
@@ -17,8 +17,10 @@ import org.apache.http.client.config.RequestConfig
   * Created by philippederome on 2015-12-19.
   */
 trait RestClient extends Loggable {
-  val sockTimeOut = Props.getInt("http.ClientReadTimeOut", 5000)
-  val connTimeOut = Props.getInt("http.ClientConnTimeOut", 5000)
+  val sockTimeOut = Props.getInt("http.ClientReadTimeOut", 0)
+  val connTimeOut = Props.getInt("http.ClientConnTimeOut", 0)
+  val HTTP_PROTOCOL_GOOD_STAT_LOW = HttpStatus.SC_OK
+  val HTTP_PROTOCOL_GOOD_STAT_HI = HttpStatus.SC_MULTIPLE_CHOICES
 
   case class TimeOuts(socketTimeOut: Int, connectionTimeOut: Int)
 
@@ -44,7 +46,7 @@ trait RestClient extends Loggable {
         def handleResponse(response: HttpResponse) = {
           val statusLine = response.getStatusLine
           val code  = statusLine.getStatusCode
-          if (code >= 200 && code < 300) {
+          if (code >= HTTP_PROTOCOL_GOOD_STAT_LOW && code < HTTP_PROTOCOL_GOOD_STAT_HI) {
             val e = response.getEntity
             if (e ne null) EntityUtils.toString(e) else ""
           } else {
