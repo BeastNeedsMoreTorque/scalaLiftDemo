@@ -39,15 +39,16 @@ libraryDependencies ++= {
     "postgresql"        % "postgresql"          % "9.1-901.jdbc4",
     "org.scalatest"     %% "scalatest"      % "2.2.6"            % Test,
     "org.apache.httpcomponents" % "httpclient"  % "4.5.2",
-    "org.eclipse.jetty" % "jetty-webapp"        % "8.1.7.v20120910"  % "container,test", // Needed to run RunWebApp.scala in IDEA
-    "org.eclipse.jetty" % "jetty-plus"          % "8.1.7.v20120910"  % "container,test", // For Jetty Config
+    "org.eclipse.jetty" %  "jetty-webapp" % "9.1.0.v20131115"   % "container,test",  // Needed to run RunWebApp.scala in IDEA
+    "org.eclipse.jetty" %  "jetty-plus"   % "9.1.0.v20131115"  % "container,test", // For Jetty Config
     "org.specs2"        %% "specs2"             % "2.3.12"           % Test,
     "ch.qos.logback"    % "logback-classic"     % "1.0.13"
   )
 }
 
-// Comment out below if need to run scalastyle.
+// Comment out below two lines if need to run scalastyle.
 enablePlugins(JettyPlugin)  // so we can do jetty:start jetty:stop in sbt https://github.com/earldouglas/xsbt-web-plugin/blob/master/docs/2.0.md
 
 containerPort := 8080  // applicable when running from sbt, not with the jetty container plug-in in IDEA.
+
 
