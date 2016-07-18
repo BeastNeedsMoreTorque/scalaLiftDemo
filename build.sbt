@@ -48,7 +48,6 @@ libraryDependencies ++= {
 
 // Comment out below two lines if need to run scalastyle.
 enablePlugins(JettyPlugin)  // so we can do jetty:start jetty:stop in sbt https://github.com/earldouglas/xsbt-web-plugin/blob/master/docs/2.0.md
-
-containerPort := 8080  // applicable when running from sbt, not with the jetty container plug-in in IDEA.
+containerPort := 8080  // applicable when running from sbt (which is now BROKEN), not with the jetty container plug-in in IDEA.
 
 
