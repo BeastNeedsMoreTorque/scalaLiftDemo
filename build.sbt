@@ -1,14 +1,21 @@
 name := "lcboViewer"
+
 version := "1.0"
+
 scalaVersion := "2.11.8"
+
 organization := "ORG"
+
 resolvers ++= Seq("snapshots"     at "https://oss.sonatype.org/content/repositories/snapshots",
                   "staging"       at "https://oss.sonatype.org/content/repositories/staging",
-                  "releases"      at "https://oss.sonatype.org/content/repositories/releases"
-                 )
+                  "releases"      at "https://oss.sonatype.org/content/repositories/releases")
+
 unmanagedResourceDirectories in Test <+= baseDirectory { _ / "src/main/webapp" }
+
 scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked")
+
 ideaExcludeFolders += ".idea"
+
 ideaExcludeFolders += ".idea_modules"
 
 javaOptions in run += "-Xmn2G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+PrintGC -XX:+PrintGCTimeStamps"
@@ -17,7 +24,6 @@ libraryDependencies ++= {
   val liftVersion = "2.6.2"
   val scalaCompiler = "2.11.8"
   val scalazVersion = "7.1.0"
-
   Seq(
     "org.scala-lang"    % "scala-compiler"      % scalaCompiler,
     "org.scala-lang"    % "scala-reflect"       % scalaCompiler,
@@ -43,7 +49,7 @@ libraryDependencies ++= {
   )
 }
 
-enablePlugins(JettyPlugin)  // so we can do jetty:start jetty:stop in sbt https://github.com/earldouglas/xsbt-web-plugin/blob/master/docs/2.0.md
-containerPort := 8080  // applicable when running from sbt, not with the jetty container plug-in in IDEA.
+//enablePlugins(JettyPlugin)  // so we can do jetty:start jetty:stop in sbt https://github.com/earldouglas/xsbt-web-plugin/blob/master/docs/2.0.md
+//containerPort := 8080  // applicable when running from sbt, not with the jetty container plug-in in IDEA.
 // Can also do triggered execution: > ~jetty:start
 //enablePlugins(TomcatPlugin) // for Tomcat container instead.
