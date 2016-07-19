@@ -39,7 +39,7 @@ browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - Logging: `ch.qos.logback`
 
-- SBT: 0.13.1
+- SBT: 0.13.11
 
 - Scala: 2.11.7
 
