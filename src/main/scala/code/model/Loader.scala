@@ -31,7 +31,7 @@ trait Loader[T <: Loader[T]] extends Record[T] with Loggable
   def load(): Unit = inTransaction {
     logger.info("load start")
     // load all items from DB for navigation and synch with LCBO for possible delta (small set so we can afford synching, plus it's done async way)
-      val items = from(table())(s => select(s))
+      val items = from(table)(s => select(s))
       cacheItems(items)
     logger.info("load end")
   }

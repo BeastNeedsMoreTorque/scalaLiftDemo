@@ -24,7 +24,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
 
   // We can afford to be less strict in our data preparation/validation than for the insert.
   private def update(items: Iterable[T]) = {
-    def ORMUpdater: Iterable[T] => Unit = table().forceUpdate _  // @see http://squeryl.org/occ.html. Regular call as update throws because of possibility of multiple updates on same record.
+    def ORMUpdater: Iterable[T] => Unit = table.forceUpdate _  // @see http://squeryl.org/occ.html. Regular call as update throws because of possibility of multiple updates on same record.
     items.grouped(batchSize).
       foreach {
         batchTransactor( _ , ORMUpdater)
@@ -36,11 +36,11 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     implicit val logDuplicateItems: Iterable[T] => Unit = code.model.utils.RetainSingles.onFailureDefault
 
     // following cannot be val because of table() usage and timing and need for underlying transaction, connection, etc.
-    def ormInserter: Iterable[T] => Unit = table().insert _
+    def ormInserter: Iterable[T] => Unit = table.insert _
 
     // Do special handling to filter out duplicate keys, which would throw.
     // Trust the database and not the cache, some other client could insert in database
-    val LcboIDs = from(table())(item => select(item.lcboId)).toSet
+    val LcboIDs = from(table)(item => select(item.lcboId)).toSet
 
     // removes any duplicate keys and log error if found duplicates
     // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
@@ -53,7 +53,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     def feedCache(items: Iterable[T]) = {
       val akIds = items.map(_.lcboId: Long) // alternate key ids, which are a proxy for our primary key IDs to be evaluated from DB.
       // select only those we just inserted, hopefully the same set.
-      val itemsWithAK = from(table())(item => where(item.lcboId.underlying in akIds) select item)
+      val itemsWithAK = from(table)(item => where(item.lcboId.underlying in akIds) select item)
       if (itemsWithAK.size < akIds.size) logger.error(s"feedCache got only ${itemsWithAK.size} items for expected ${akIds.size}")
       cacheItems(itemsWithAK)
     }

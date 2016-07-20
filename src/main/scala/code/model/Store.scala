@@ -214,7 +214,7 @@ object Store extends Store with MetaRecord[Store] {
     val briefContextErr = "Problem loading LCBO stores into cache, none found"
 
     logger.info("load start")
-    val dbStores = from(table())(item => select(item))
+    val dbStores = from(table)(item => select(item))
     cacheItems(dbStores)
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
     val refreshed = getStores  // improves our cache of stores with latest info from LCBO. In real-world,
