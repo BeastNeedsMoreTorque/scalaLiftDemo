@@ -113,7 +113,7 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
       case that: Product =>
         (this eq that) ||
         (that.canEqual(this) &&
-          Name == that.Name &&
+          name == that.name &&
           primaryCategory == that.primaryCategory &&
           isDiscontinued == that.isDiscontinued &&
           imageThumbUrl == that.imageThumbUrl &&
@@ -132,9 +132,9 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
       Attribute("Primary Category:", primary_category.get) ::
       Attribute("Secondary Category:", secondary_category.get) ::
       Attribute("Varietal:", varietal.get) ::
-      Attribute ("Package:", Package) ::
-      Attribute ("Volume:", volumeInLitre) ::
-      Attribute ("Price:", price) ::
+      Attribute("Package:", Package) ::
+      Attribute("Volume:", volumeInLitre) ::
+      Attribute("Price:", price) ::
       Attribute("Description:", description.get) ::
       Attribute("Serving Suggestion:", serving_suggestion.get) ::
       Attribute("Alcohol content:", alcoholContent) ::

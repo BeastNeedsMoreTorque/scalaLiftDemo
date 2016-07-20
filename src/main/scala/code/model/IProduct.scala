@@ -17,10 +17,10 @@ trait IProduct extends Equals with KeyKeeper {
   def price: String
 
   // @see Scala in Depth
-  override def canEqual(other: Any) =
+  override def canEqual(other: Any): Boolean =
     other.isInstanceOf[IProduct]
 
-  override def hashCode: Int = (Name+price).## // if the names are the same, they're probably the same products, but price is a bit volatile too.
+  override def hashCode: Int = (Name + price).## // if the names are the same, they're probably the same products, but price is a bit volatile too.
 
   override def equals(other: Any): Boolean =
     other match {

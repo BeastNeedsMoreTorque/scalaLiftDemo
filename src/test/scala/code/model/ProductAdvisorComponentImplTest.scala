@@ -97,6 +97,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     override def lcboId: LCBO_ID = LCBO_ID(1000)
     override def Name: String = "Oyster Bay"
   }
+
   val ChampagneKrug = new typicalWineProduct {
     override def pKey: P_KEY = P_KEY(1001)
     override def lcboId: LCBO_ID = LCBO_ID(1001)

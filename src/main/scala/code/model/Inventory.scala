@@ -27,11 +27,11 @@ class Inventory private(val storeid: Long,
                         var product_id: Long=0)
   extends Equals with KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
 
-  override def getKey = s"$productid:$storeid"
+  override def getKey: String = s"$productid:$storeid"
 
-  def id = compositeKey(storeid, productid)
+  def id: CompositeKey2[Long, Long] = compositeKey(storeid, productid)
 
-  override def canEqual(other: Any) =
+  override def canEqual(other: Any): Boolean =
     other.isInstanceOf[Inventory]
 
   override def equals(other: Any): Boolean =
@@ -52,7 +52,7 @@ class Inventory private(val storeid: Long,
     this
   }
 
-  override def toString = s"$storeid $productid $quantity $updated_on $is_dead $store_id $product_id"
+  override def toString: String = s"$storeid $productid $quantity $updated_on $is_dead $store_id $product_id"
 }
 
 case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: Iterable[Inventory]) {}
@@ -67,7 +67,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
                                  updated_on: String,
                                  quantity: Long) {}
 
-  def apply( sKey: Long, pKey: Long, inv: InventoryAsLCBOJson) = {
+  def apply( sKey: Long, pKey: Long, inv: InventoryAsLCBOJson): Inventory = {
     def notNull(s: String) = if (s eq null) "" else s  // protection against NullPointerException and LCBO's poisoning us with missing data
     new Inventory(
       storeid = sKey, // apply our composite PK
