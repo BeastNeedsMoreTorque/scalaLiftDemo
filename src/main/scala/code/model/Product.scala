@@ -13,23 +13,25 @@ import net.liftweb.util.Props
 import net.liftweb.json._
 import net.liftweb.util.Helpers._
 import org.squeryl.annotations._
+import org.squeryl.Table
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 
 /**
-  * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper), Record being open to NoSQL and Squeryl providing ORM service.
+  * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper),
+  * Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
 class Product private() extends LCBOEntity[Product] with IProduct   {
-  def meta = Product
+  def meta: MetaRecord[Product] = Product
 
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
 
   // for Loader and LCBOEntity
-  override def table(): org.squeryl.Table[Product] = Product.table()
-  override def cache() = Product.cache
-  override def LcboIdToPK() = Product.LcboIdToPK
+  override def table: Table[Product] = Product.table
+  override def cache: concurrent.Map[P_KEY, Product] = Product.cache
+  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY]  = Product.lcboIdToPKMap
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
@@ -80,12 +82,12 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
   }
 
   // intentional aliasing allowing more standard naming convention and not having to call get on.
-  def Name = name.get
-  def primaryCategory = primary_category.get
-  def isDiscontinued = is_discontinued.get
-  def totalPackageUnits = total_package_units.get
-  def imageThumbUrl = image_thumb_url.get
-  def Package = `package`.get // alias to avoid back ticks
+  def Name: String = name.get
+  def primaryCategory: String = primary_category.get
+  def isDiscontinued: Boolean = is_discontinued.get
+  def totalPackageUnits: Int = total_package_units.get
+  def imageThumbUrl: String = image_thumb_url.get
+  def Package: String = `package`.get // alias to avoid back ticks
 
   val formatter = NumberFormat.getCurrencyInstance() // Not French Canada, which does it differently...
 
@@ -105,7 +107,7 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
     f"$v%1.3f L"
   }
 
-  override def canEqual(other: Any) =
+  override def canEqual(other: Any): Boolean =
     other.isInstanceOf[Product]
 
   override def equals(other: Any): Boolean =
@@ -127,7 +129,8 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
   def streamAttributes: IndexedSeq[Attribute] =
-  // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database or in web design. This assumes order can be fairly static.
+  // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database
+  // or in web design. This assumes order can be fairly static.
     ( Attribute("Name:", name.get) ::
       Attribute("Primary Category:", primary_category.get) ::
       Attribute("Secondary Category:", secondary_category.get) ::
@@ -153,19 +156,18 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   override val cache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB!
   def getProduct(id: P_KEY): Option[IProduct] = cache.get(id)
   def getItemByLcboId(id: LCBO_ID): Option[IProduct] =
-    for (dbId <- LcboIdToPK.get(id);
+    for (dbId <- lcboIdToPKMap.get(id);
          p <- cache.get(dbId)) yield p
 
-  def lcboIdToPK(id: LCBO_ID): Option[P_KEY] = LcboIdToPK.get(id)
-
-  override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
-  override def table() = MainSchema.products
+  val lcboIdToPKMap: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
+  override def table: Table[Product] = MainSchema.products
   val MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   protected val sizeFulfilled: Int => GotEnough_? =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
   def getCachedItem: IProduct => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 
-  val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)  // seems difficult to apply D.I. here, so access global object.
+  val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)
+  // seems difficult to apply D.I. here, so access global object.
   val queryFilterArgs = getSeq("product.query.Filter")(ConfigPairsRepo.defaultInstance)
 
   /* Convert a store to XML @see progscala2 chapter on implicits or Scala in Depth implicit view */

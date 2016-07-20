@@ -14,6 +14,7 @@ import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
 import org.squeryl.annotations._
+import org.squeryl.Table
 import code.model.Product.fetchByStore
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
@@ -29,12 +30,12 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
 
   // for Loader and LCBOEntity
-  override def table(): org.squeryl.Table[Store] = Store.table()
-  override def cache() = Store.cache
-  override def LcboIdToPK() = Store.LcboIdToPK
+  override def table: Table[Store] = Store.table
+  override def cache: concurrent.Map[P_KEY, Store] = Store.cache
+  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY]  = Store.lcboIdToPKMap
   override def pKey: P_KEY = P_KEY(idField.get)
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
-  override def meta = Store
+  override def meta: MetaRecord[Store] = Store
 
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
@@ -49,11 +50,11 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 
-  override def Name = name.get
-  override def isDead = is_dead.get
-  override def addressLine1 = address_line_1.get
+  override def Name: String = name.get
+  override def isDead: Boolean = is_dead.get
+  override def addressLine1: String = address_line_1.get
 
-  override def canEqual(other: Any) =
+  override def canEqual(other: Any): Boolean =
     other.isInstanceOf[Store]
 
   override def equals(other: Any): Boolean =
@@ -80,12 +81,10 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   private val inventoryByProductId = TrieMap[P_KEY, Inventory]()
   override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => inventoryByProductId.toMap.get(key)
 
-  private val getCachedInventoryItem = {
-    inv: Inventory =>
-    inventoryByProductId.get(P_KEY(inv.productid))
-  }
+  private val getCachedInventoryItem: Inventory => Option[Inventory] =
+    inv => inventoryByProductId.get(P_KEY(inv.productid))
 
-  override def getProductKeysByCategory(lcboCategory: String) =
+  override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] =
     productsCacheByCategory.get(lcboCategory).
       fold(IndexedSeq[KeyKeeperVals]()){ identity }
 
@@ -113,7 +112,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     addToCaches(storeProducts.toIndexedSeq)
   }
 
-  private def emptyInventory = inventories.toIndexedSeq.forall(_.quantity == 0)
+  private def emptyInventory: Boolean = inventories.toIndexedSeq.forall(_.quantity == 0)
 
   def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
     advise(rng, this, category, requestSize, runner)
@@ -154,8 +153,10 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     }
 
     val fetches =
-      for (p <- Future(fetchProducts()); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously, so we can use their caches.
-           i <- Future(fetchInventories())) yield i // similarly for inventories and serialize intentionally because of Ref.Integrity  if no exception was thrown
+      for (p <- Future(fetchProducts()); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously,
+           // so we can use their caches.
+           i <- Future(fetchInventories())) yield i
+    // similarly for inventories and serialize intentionally because of Ref.Integrity  if no exception was thrown
 
     fetches onComplete {
       case Success(_) => //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
@@ -166,7 +167,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
   }
 
-  override def asyncLoadCache() =
+  override def asyncLoadCache(): Unit =
   // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
@@ -174,13 +175,15 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
 
 object Store extends Store with MetaRecord[Store] {
   override val cache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
-  override val LcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache, a.k.a. index
-  override def table() = MainSchema.stores
+  val lcboIdToPKMap: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache, a.k.a. index
+  override def table: Table[Store] = MainSchema.stores
   override def cacheItems(items: Iterable[Store]): Unit = {
     super.cacheItems(items)
     cache.values.foreach( _.refreshProducts())  // ensure inventories are refreshed INCLUDING on start up.
   }
-  def getCachedItem: IStore => Option[IStore] = s => getItemByLcboId(s.lcboId)
+  def getCachedItem: IStore => Option[IStore] = s =>
+    for (pKey <- lcboIdToPKMap.get(s.lcboId);
+         ss <- getStore(pKey)) yield ss
 
   def findAll: Iterable[Store] = cache.values
 
@@ -189,20 +192,16 @@ object Store extends Store with MetaRecord[Store] {
 
   val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
 
-  def availableStores = cache.keySet
-  def lcboIdToPK(lcboId: LCBO_ID): Option[P_KEY] = LcboIdToPK.get(lcboId)
-  def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = cache.get(pKey).map(_.lcboId)
-  def getStore(pKey: P_KEY) = cache.get(pKey)
-  def getItemByLcboId(lcboId: LCBO_ID) =
-    for (pKey <- LcboIdToPK.get(lcboId);
-         s <- cache.get(pKey)) yield s
+  def getStore(pKey: P_KEY): Option[Store] = cache.get(pKey)
+  def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = getStore(pKey).map(_.lcboId)
 
-    /* Convert a store to XML, @see Scala in Depth implicit view */
+  /* Convert a store to XML, @see Scala in Depth implicit view */
   implicit def toXml(s: Store): Node =
     <store>{Xml.toXml(s.asJValue)}</store>
 
-  private def getStores(): Try[IndexedSeq[Store]] = Try {
-      collectItemsAsWebClient("/stores", extract, queryFilterArgs) // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
+  private def getStores = Try {
+      collectItemsAsWebClient("/stores", extract, queryFilterArgs)
+    // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
     }
 
   /**
@@ -218,7 +217,8 @@ object Store extends Store with MetaRecord[Store] {
     val dbStores = from(table())(item => select(item))
     cacheItems(dbStores)
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
-    val refreshed = getStores()  // improves our cache of stores with latest info from LCBO. In real-world, we might have the app run for long and call getStores async once in a while
+    val refreshed = getStores  // improves our cache of stores with latest info from LCBO. In real-world,
+    // we might have the app run for long and call getStores async once in a while
     lazy val err = checkErrors(refreshed, contextErr, briefContextErr )
     refreshed.toOption.fold[Unit](logger.error(err))( items => synchDirtyAndNewItems(items, getCachedItem))
     logger.info("load end") // trace because it takes a long time.

@@ -9,6 +9,7 @@ import net.liftweb.util.DefaultConnectionIdentifier
 import net.liftweb.util.Helpers._
 
 import net.liftweb.squerylrecord.RecordTypeMode._
+import scala.xml.Node
 
 // This is provided by Liftweb framework as a helper to get started or experiment.
 /**
@@ -72,7 +73,7 @@ object User extends User with MetaMegaProtoUser[User] with Loggable {
   override def dbTableName = "users"
 
   // define the DB table name
-  override def screenWrap = Full(<lift:surround with="default" at="content">
+  override def screenWrap: Full[Node] = Full(<lift:surround with="default" at="content">
     <lift:bind/>
   </lift:surround>)
 
@@ -81,6 +82,6 @@ object User extends User with MetaMegaProtoUser[User] with Loggable {
     locale, timezone, password) // deleted parameter textArea from demo
 
   // comment this line out to require email validations
-  override def skipEmailValidation = true
+  override def skipEmailValidation: Boolean = true
 }
 

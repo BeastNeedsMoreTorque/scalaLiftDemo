@@ -7,7 +7,7 @@ import net.liftweb.squerylrecord.KeyedRecord
 import org.squeryl.annotations.Column
 
 class UserProduct private() extends Record[UserProduct] with KeyedRecord[Long] with CreatedUpdated[UserProduct] {
-  def meta = UserProduct
+  def meta: MetaRecord[UserProduct] = UserProduct
 
   @Column(name="id")
   override val idField = new LongField(this, 1)  // our own auto-generated id
@@ -18,4 +18,5 @@ class UserProduct private() extends Record[UserProduct] with KeyedRecord[Long] w
     override def defaultValue = 1
   }
 }
+
 object UserProduct extends UserProduct with MetaRecord[UserProduct] {}

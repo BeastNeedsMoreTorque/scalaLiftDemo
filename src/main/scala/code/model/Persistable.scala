@@ -36,7 +36,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     implicit val logDuplicateItems: Iterable[T] => Unit = code.model.utils.RetainSingles.onFailureDefault
 
     // following cannot be val because of table() usage and timing and need for underlying transaction, connection, etc.
-    def ORMInserter: Iterable[T] => Unit = table().insert _
+    def ormInserter: Iterable[T] => Unit = table().insert _
 
     // Do special handling to filter out duplicate keys, which would throw.
     // Trust the database and not the cache, some other client could insert in database
@@ -46,7 +46,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
     val filtered = items.retainSinglesImpure.filterNot( p => LcboIDs(p.lcboId) )
     // break it down in reasonable size transactions, and then serialize the work.
-    filtered.grouped(batchSize).foreach { batchTransactor( _ , ORMInserter) }
+    filtered.grouped(batchSize).foreach { batchTransactor( _ , ormInserter) }
   }
 
   private def batchTransactor(items: Iterable[T], ORMTransactor: Iterable[T] => Unit): Unit = {

@@ -46,7 +46,7 @@ trait LCBOPageLoader {
 }
 
 trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
-  def fetcher = new FetcherImpl
+  def fetcher: LCBOPageFetcher = new FetcherImpl
 
   // this whole class is hidden from clients. So, who needs to worry about private, public, protected here? No one.
   class FetcherImpl extends LCBOPageFetcher with RestClient {
@@ -106,7 +106,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
     }
 
     implicit val formats = net.liftweb.json.DefaultFormats
-    def isFinalPage(jsonRoot: JValue, pageNo: Int) = {
+    def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
       //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
       val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
       val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
