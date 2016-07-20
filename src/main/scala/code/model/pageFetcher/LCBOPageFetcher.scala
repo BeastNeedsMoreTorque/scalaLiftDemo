@@ -11,11 +11,12 @@ import code.Rest.RestClient
 /**
   * Created by philippederome on 2016-03-30.
   * An excuse to exercise myself in Cake Pattern as per example found at
- *
+  *
   * @see http://blog.originate.com/blog/2013/10/21/reader-monad-for-dependency-injection/
   *      He makes very interesting observations about using Reader Monads in web app and cake pattern at outer edges.
   *
-  *      Nice personal observation: after having implemented this, the RestClient trait (based on Apache Commons) is buried down at a lower level of abstraction further hidden away.
+  *      Nice personal observation: after having implemented this,
+  *      the RestClient trait (based on Apache Commons) is buried down at a lower level of abstraction further hidden away.
   *      In previous versions of code, the RestClient trait made it all the way to Product and Inventory.
   *
   *      With cake, interface is more explicit, no need to sort out public, private and we don't need
@@ -85,7 +86,8 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
                                   (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
       val uriBuilder = new URIBuilder().setScheme("http").setHost(LcboDomain).setPath(path)
       // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise using "closure" as is often found in JS).
-      // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same. It has no side effect for sure, other than helpful log.
+      // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same.
+      // It has no side effect for sure, other than helpful log.
       @tailrec // in general it's good to make recursion tailrec to avoid stack overflow.
       def go(accumItems: IndexedSeq[T], currPage: Int): IndexedSeq[T] = {
         def buildURI(baseUri: URIBuilder, params: Seq[(String, Any)]) = {
@@ -94,7 +96,8 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
           baseUri.setParameters(nvps.asJava).build()
         }
         val uri = buildURI(uriBuilder, params ++ Seq(("page", currPage))) // get as many as possible on a page because we could have few matches.
-        val jsonRoot = parse(get(uri)) // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException. Will we survive this?
+        val jsonRoot = parse(get(uri))
+        // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException.
         val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
         if (isFinalPage(jsonRoot, currPage) || enough(revisedItems.size)) {
           logger.info(uri) // log only last one to be less verbose

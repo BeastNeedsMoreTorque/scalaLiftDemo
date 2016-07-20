@@ -8,8 +8,8 @@ import net.liftweb.util.Props
   * additionally, provides a mapping of queryable pattern-categories to those used as primary categories in LCBO catalog
   */
 object LiquorCategory {
-  private def getMap(k: String): Map[String, String] =
-    ConfigPairsRepo.ConfigPairsRepoPropsImpl.getSeq(k).toMap
+  private def getMap(k: String) =
+    ConfigPairsRepo.configPairsRepoPropsImpl.getSeq(k).toMap
 
   def toPrimaryCategory(category: String): String = {
     val x = getMap("product.CategoriesMap")

@@ -9,7 +9,7 @@ import scala.language.implicitConversions
   * Created by philippederome on 2016-04-12.
   */
 trait KeyKeeper extends KeyHolder {
-  override def getKey = lcboId.toString
+  override def getKey: String = lcboId.toString
   def lcboId: LCBO_ID
   def pKey: P_KEY
 }
@@ -17,5 +17,5 @@ trait KeyKeeper extends KeyHolder {
 case class KeyKeeperVals(lcboId: LCBO_ID, pKey: P_KEY){}
 
 object KeyKeeperVals {
-  implicit def toKeyKeeperVals(k: KeyKeeper) = KeyKeeperVals(k.lcboId, k.pKey)
+  implicit def toKeyKeeperVals(k: KeyKeeper): KeyKeeperVals = KeyKeeperVals(k.lcboId, k.pKey)
 }

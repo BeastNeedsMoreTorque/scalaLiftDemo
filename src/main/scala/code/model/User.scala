@@ -70,7 +70,7 @@ class User extends MegaProtoUser[User] with Loggable {
   * The singleton that has methods for accessing the database
   */
 object User extends User with MetaMegaProtoUser[User] with Loggable {
-  override def dbTableName = "users"
+  override def dbTableName: String = "users"
 
   // define the DB table name
   override def screenWrap: Full[Node] = Full(<lift:surround with="default" at="content">

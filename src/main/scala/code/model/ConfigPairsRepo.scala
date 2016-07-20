@@ -16,7 +16,7 @@ trait ConfigPairsRepo {
 }
 
 object ConfigPairsRepo { // lo and behold, a module!!! ;-)  Arguably, excessive design for such a small app, but it shows the way.
-  implicit def ConfigPairsRepoPropsImpl = new propsSeqReader // client wants this specific one
+  implicit def configPairsRepoPropsImpl: ConfigPairsRepo = new propsSeqReader // client wants this specific one
   implicit val defaultInstance = new propsSeqReader // client does not care about which one
   // provide as many implementations as required.
   class propsSeqReader extends ConfigPairsRepo {

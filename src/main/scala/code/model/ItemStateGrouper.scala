@@ -20,7 +20,7 @@ trait ItemStateGrouper {
   // Returned sequences require to be concrete because that is how our ORM interface is like.
   def itemsByState[I, T <: I](items: IndexedSeq[T],
                               cached: I => Option[I]): DirtyAndNewSequences[T] = {
-    def Empty: IndexedSeq[Nothing] = IndexedSeq()
+    def empty = IndexedSeq.empty[T]
 
     val x = items.groupBy {
       current => (cached(current), current) match {
@@ -29,8 +29,6 @@ trait ItemStateGrouper {
         case _ => Clean
       }
     }
-    DirtyAndNewSequences(
-      x.getOrElse(Dirty, Empty),
-      x.getOrElse(New, Empty))
+    DirtyAndNewSequences(x.getOrElse(Dirty, empty), x.getOrElse(New, empty))
   }
 }

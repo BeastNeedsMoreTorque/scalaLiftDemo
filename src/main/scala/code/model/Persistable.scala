@@ -20,18 +20,19 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     insert(insertItems)
   }
 
-  private val batchSize: Int = Props.getInt("DBWrite.BatchSize", 1024)
+  private val batchSize = Props.getInt("DBWrite.BatchSize", 1024)
 
   // We can afford to be less strict in our data preparation/validation than for the insert.
   private def update(items: Iterable[T]) = {
-    def ORMUpdater: Iterable[T] => Unit = table.forceUpdate _  // @see http://squeryl.org/occ.html. Regular call as update throws because of possibility of multiple updates on same record.
+    // @see http://squeryl.org/occ.html. Regular call as update throws because of possibility of multiple updates on same record.
+    def ormUpdater: Iterable[T] => Unit = table.forceUpdate _
     items.grouped(batchSize).
       foreach {
-        batchTransactor( _ , ORMUpdater)
+        batchTransactor( _ , ormUpdater)
       }
   }
 
-  private def insert( items: IndexedSeq[T]) = {
+  private def insert(items: IndexedSeq[T]) = {
     // default policy on finding duplicates is to log as error, showing key and value for each filtered item (affects removeDupes below).
     implicit val logDuplicateItems: Iterable[T] => Unit = code.model.utils.RetainSingles.onFailureDefault
 
