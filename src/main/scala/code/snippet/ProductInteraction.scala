@@ -89,9 +89,8 @@ class ProductInteraction extends Loggable {
     val options = values.keys.map(k => (k, k)).toList
   }
   object Shuffler  {
-    val UseRandomSeed = Props.getBool("store.useRandomSeed", true)
-    val FixedRNGSeed = Props.getInt("store.fixedRNGSeed", 21)
-    val MaxSampleSize = Props.getInt("store.maxSampleSize", 0)
+    val UseRandomSeed = Props.getBool("productInteraction.useRandomSeed", true)
+    val FixedRNGSeed = Props.getInt("productInteraction.fixedRNGSeed", 0)
   }
 
   def render = {

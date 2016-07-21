@@ -23,7 +23,7 @@ trait Updated[T <: Updated[T]] extends Record[T] {
     override def defaultValue = Calendar.getInstance
   }
 
-  def onUpdate = this.updated(Calendar.getInstance)
+  def onUpdate: Unit = this.updated(Calendar.getInstance)
 
 }
 

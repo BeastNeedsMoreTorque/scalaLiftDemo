@@ -40,10 +40,11 @@ store.query.Filter={"where_not":"is_dead"}
 
 # false means we're in charge and will get repeatable predictable samples good for unit testing or proving we can work in "pure functional" way.
 # true means we're getting unpredictable selections, it's more entertaining but not as testable.
-advisor.useRandomSeed=true
+productInteraction.useRandomSeed=true
 # in "deterministic or false mode", change this number to get different types of runs.
-advisor.fixedRNGSeed=411
-# When going synchronously to select products of a category, we'll request no more than store.maxSampleSize from LCBO
+productInteraction.fixedRNGSeed=21
+
+# When going synchronously to select products of a category, we'll request no more than advisor.maxSampleSize from LCBO
 advisor.maxSampleSize=60
 
 inventory.lcboMaxPerPage=50

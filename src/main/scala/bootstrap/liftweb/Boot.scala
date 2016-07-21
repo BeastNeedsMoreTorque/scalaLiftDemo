@@ -33,7 +33,8 @@ class Boot {
     val driver = Props.get("db.driver", "org.selectvendor.Driver") // intentionally bad to force a decision in props files.
     val jdbcURL = Props.get("db.url", "jdbc:vendordbname-perhaps://localhost:5432") // intentionally bad to force a decision in props files.
     if (!DB.jndiJdbcConnAvailable_?){  // for Lift's user
-      val vendor = new StandardDBVendor(// user and password will be empty boxes if not specified in default.props as they are considered optional by StandardDBVendor
+      // user and password will be empty boxes if not specified in default.props as they are considered optional by StandardDBVendor
+      val vendor = new StandardDBVendor(
         driver,
         jdbcURL,
         Props.get("db.user"),

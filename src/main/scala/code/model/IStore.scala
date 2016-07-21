@@ -22,7 +22,7 @@ trait IStore extends Equals with InventoryService {
   def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]]
 
   // @see Scala in Depth
-  override def canEqual(other: Any) =
+  override def canEqual(other: Any): Boolean =
     other.isInstanceOf[IStore]
 
   override def hashCode: Int = Name.## // if the names are the same, they're probably the same
