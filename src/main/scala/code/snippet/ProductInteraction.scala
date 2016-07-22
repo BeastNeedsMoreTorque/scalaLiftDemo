@@ -220,8 +220,8 @@ class ProductInteraction extends Loggable {
             if (missedQty <= 0)
               s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
             else
-              s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units;"
-              "sorry about the unfulfilled $missedQty items out of stock"
+              s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units;" +
+              s"sorry about the unfulfilled $missedQty items out of stock"
 
           }
 

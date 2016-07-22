@@ -84,7 +84,7 @@ class RNGTest extends UnitTest {
     val (shuffled, _) = shuffle(Nil).run(seed)
     shuffled shouldBe empty
   }
-  
+
   // Warning: very moderately slow.
   it should s"return sequence with no duplicates on permuting large sequence with random seed" taggedAs(SlowTest) in new randomRNG {
     val N = 10000
