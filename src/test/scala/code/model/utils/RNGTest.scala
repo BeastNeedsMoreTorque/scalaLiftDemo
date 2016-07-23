@@ -6,8 +6,6 @@ import State._
 import code.UnitTest
 import code.SlowTest
 
-import scala.language.reflectiveCalls
-
 /**
   * Created by philippederome on 2016-04-28.
   * Unit testing is useful: it helped me identify stack overflow on shuffle for large N and later on rather egregious performance in my original

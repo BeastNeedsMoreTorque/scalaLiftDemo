@@ -3,7 +3,6 @@ package code.snippet
 import java.text.NumberFormat
 
 import scala.xml._
-import scala.language.implicitConversions
 import net.liftweb.common._
 import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds._

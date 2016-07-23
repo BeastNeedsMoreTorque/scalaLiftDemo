@@ -107,7 +107,7 @@ object RNG {
     // Don Knuth: Algorithm S (Selection sampling technique) N: total size, t visited (visiting item t+1), m selected, n requested/desired.
     // avail is assumed to be the numbers we select from randomly
     @tailrec
-    def sampleIter[T](N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (Seq[T], RNG) =  {
+    def sampleIter(N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (Seq[T], RNG) =  {
       val (u,y) = double.run(rng) // Knuth's method is not "functional" here (does not return a state capturing RNG) otherwise it's conceptually the same
       val sampleSuccess = (N - t) * u <= n - m
       if (sampleSuccess && m + 1 == n) {
