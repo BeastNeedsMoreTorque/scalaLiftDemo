@@ -6,3 +6,5 @@ Doc
 *.iws
 .idea
 out
+project/
+scalastyle-config.xml
