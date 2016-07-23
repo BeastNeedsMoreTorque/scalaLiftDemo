@@ -1,16 +1,17 @@
 package code.model
 
-import scala.collection.{IndexedSeq, Iterable}
-import scala.util.Try
-import net.liftweb.squerylrecord.RecordTypeMode._
-import net.liftweb.util.Props
-import net.liftweb.util.Helpers._
-import org.squeryl.KeyedEntity
-import org.squeryl.dsl.CompositeKey2
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 import code.model.utils.KeyHolder
 import code.model.utils.RetainSingles.retainSinglesImpure
+import net.liftweb.squerylrecord.RecordTypeMode._
+import net.liftweb.util.Helpers._
+import net.liftweb.util.Props
+import org.squeryl.KeyedEntity
+import org.squeryl.dsl.CompositeKey2
+
+import scala.collection.{IndexedSeq, Iterable}
+import scala.util.Try
 
 
 /**
@@ -31,9 +32,6 @@ class Inventory private(val storeid: Long,
 
   def id: CompositeKey2[Long, Long] = compositeKey(storeid, productid)
 
-  override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[Inventory]
-
   override def equals(other: Any): Boolean =
     other match {
       case that: Inventory =>
@@ -44,6 +42,9 @@ class Inventory private(val storeid: Long,
             updated_on == that.updated_on)
       case _ => false
     }
+
+  override def canEqual(other: Any): Boolean =
+    other.isInstanceOf[Inventory]
 
   def copyDiffs(inv: Inventory): Inventory = {
     quantity = inv.quantity
@@ -60,12 +61,14 @@ case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: I
 object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper with ORMExecutor {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   implicit val formats = net.liftweb.json.DefaultFormats
-
-  case class InventoryAsLCBOJson(product_id: Long,
-                                 store_id: Long,
-                                 is_dead: Boolean,
-                                 updated_on: String,
-                                 quantity: Long) {}
+  val extract: JSitemsExtractor[Inventory] =  { jVal =>
+    for (p <- jVal.children.toIndexedSeq;
+         inv <- p.extractOpt[InventoryAsLCBOJson];
+         sKey <- Store.lcboIdToPKMap.get(LCBO_ID(inv.store_id));
+         pKey <- Product.lcboIdToPKMap.get(LCBO_ID(inv.product_id));
+         newInv = Inventory.apply(sKey, pKey, inv)
+    ) yield newInv
+  }
 
   def apply( sKey: Long, pKey: Long, inv: InventoryAsLCBOJson): Inventory = {
     def notNull(s: String) = if (s eq null) "" else s  // protection against NullPointerException and LCBO's poisoning us with missing data
@@ -78,15 +81,6 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
       updated_on = notNull(inv.updated_on),
       quantity = inv.quantity
     )
-  }
-
-  val extract: JSitemsExtractor[Inventory] =  { jVal =>
-    for (p <- jVal.children.toIndexedSeq;
-         inv <- p.extractOpt[InventoryAsLCBOJson];
-         sKey <- Store.lcboIdToPKMap.get(LCBO_ID(inv.store_id));
-         pKey <- Product.lcboIdToPKMap.get(LCBO_ID(inv.product_id));
-         newInv = Inventory.apply(sKey, pKey, inv)
-    ) yield newInv
   }
 
   def fetchInventoriesByStore(webApiRoute: String,
@@ -110,4 +104,10 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
          newInventories <- Try(retainSinglesImpure(dirtyAndNewItems.news)(logDiscarded));
          inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))) yield inventories
   }
+
+  case class InventoryAsLCBOJson(product_id: Long,
+                                 store_id: Long,
+                                 is_dead: Boolean,
+                                 updated_on: String,
+                                 quantity: Long) {}
 }
