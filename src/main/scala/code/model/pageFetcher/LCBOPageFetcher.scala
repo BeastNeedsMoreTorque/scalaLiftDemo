@@ -1,12 +1,13 @@
 package code.model.pageFetcher
 
-import scala.annotation.tailrec
-import scala.collection.IndexedSeq
+import code.Rest.RestClient
 import net.liftweb.json._
 import net.liftweb.util.Props
-import org.apache.http.{NameValuePair,TruncatedChunkException}
 import org.apache.http.client.utils.URIBuilder
-import code.Rest.RestClient
+import org.apache.http.{NameValuePair, TruncatedChunkException}
+
+import scala.annotation.tailrec
+import scala.collection.IndexedSeq
 
 /**
   * Created by philippederome on 2016-03-30.
@@ -23,10 +24,11 @@ import code.Rest.RestClient
   *      to think about access rights!
   */
 trait LCBOPageFetcherComponent  {
-  def fetcher: LCBOPageFetcher
   type JSitemsExtractor[T] = JValue => IndexedSeq[T]
   type GotEnough_? = (Int) => Boolean
   val neverEnough: GotEnough_? = { x => false }
+
+  def fetcher: LCBOPageFetcher
 
   trait LCBOPageFetcher {
     def collectItemsAsWebClient[T](webApiRoute: String,
@@ -51,12 +53,9 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
 
   // this whole class is hidden from clients. So, who needs to worry about private, public, protected here? No one.
   class FetcherImpl extends LCBOPageFetcher with RestClient {
-    case class URIParam(name: String, value: String) extends NameValuePair {
-      def getName: String = name
-      def getValue: String = value
-    }
     type BufferOfNameValuePair = scala.collection.mutable.Buffer[NameValuePair]
     val LcboDomain = Props.get("lcboDomain", "")  // set it!
+    implicit val formats = net.liftweb.json.DefaultFormats
 
     /**
       * LCBO client JSON query handler. Exists to present a cleaner interface than the tail recursive method
@@ -108,12 +107,16 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
       go( IndexedSeq(), 1) // tail recursion with classic accumulator as first parameter
     }
 
-    implicit val formats = net.liftweb.json.DefaultFormats
     def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
       //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
       val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
       val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
       isFinalPage || totalPages < pageNo + 1
+    }
+
+    case class URIParam(name: String, value: String) extends NameValuePair {
+      def getName: String = name
+      def getValue: String = value
     }
 
   }

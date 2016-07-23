@@ -2,23 +2,23 @@ package code.snippet
 
 import java.text.NumberFormat
 
-import scala.xml._
-import net.liftweb.common._
-import net.liftweb.http.js.{JE, JsCmd}
-import net.liftweb.http.js.JsCmds._
-import net.liftweb.http.S
-import net.liftweb.json.JsonParser._
-import net.liftweb.json.JsonAST._
-import net.liftweb.util.Helpers._
-import net.liftweb.http.SHtml._
-import code.model.{Attribute => _, _}
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.snippet.SessionCache._
-import JSUtilities._
 import code.model.utils.RNG
+import code.model.{Attribute => _, _}
+import code.snippet.JSUtilities._
+import code.snippet.SessionCache._
+import net.liftweb.common._
+import net.liftweb.http.S
+import net.liftweb.http.SHtml._
+import net.liftweb.http.js.JsCmds._
+import net.liftweb.http.js.{JE, JsCmd}
+import net.liftweb.json.JsonAST._
+import net.liftweb.json.JsonParser._
+import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 
 import scala.util.Random
+import scala.xml._
 
 /**
   * This is a Lift Snippet: it plays the equivalent of a controller and a view with render being responsible to render to client (a bit like a PLAY! Action)
@@ -58,39 +58,13 @@ import scala.util.Random
   * Created by philippederome on 15-10-26.
   */
 class ProductInteraction extends Loggable {
-  case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product,
-  // message is confirmation when successful, error when not
-  case class QuantityOfProduct(quantity: Long, product: IProduct)  // quantity available at the current store for a product (store is implied by context)
-  case class SelectedProduct(id: Long, quantity: Long, cost: Double, missedQty: Long)
-  // to capture user input via JS and JSON (stick to Long to simplify interface with JS)
-  case class SelectedProductFeedback(selectedProduct: SelectedProduct, feedback: Feedback)
-  case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
-
+  val formatter = NumberFormat.getCurrencyInstance()
   private implicit val formats = net.liftweb.json.DefaultFormats
-
   private val hideProdDisplayJS =  JsHideId("prodDisplay")
   private val fetchInventoriesJS = JE.Call("inventory.fetchInventories") // let the client deal with incomplete inventories and get them himself
   private val showProdDisplayJS =  JsShowId("prodDisplay") & fetchInventoriesJS
   private val showConfirmationJS =  JsShowId("confirmationDiv")
   private val hideConfirmationJS =  JsHideId("confirmationDiv")
-
-  val formatter = NumberFormat.getCurrencyInstance()
-
-  // data store for a count of products select menu, could easily be generalized to be configured from properties
-  object RecommendCount {
-    val values = Map[String, Int](
-      "1" -> 1,
-      "5" -> 5,
-      "10" -> 10,
-      "20" -> 20
-    )
-    val default = Full("1")
-    val options = values.keys.map(k => (k, k)).toList
-  }
-  object Shuffler  {
-    val UseRandomSeed = Props.getBool("productInteraction.useRandomSeed", true)
-    val FixedRNGSeed = Props.getInt("productInteraction.fixedRNGSeed", 0)
-  }
 
   def render = {
     def advise(jsStore: JValue): JsCmd = {
@@ -319,5 +293,33 @@ class ProductInteraction extends Loggable {
     "@recommend [onclick]" #>
       jsonCall( JE.Call("storeFinder.getTheSelectedStore"),
         { j: JValue => advise(j) & setBorderJS(actionButtonsContainer, "recommend")})
+  }
+
+  case class Feedback(userName: String, success: Boolean, message: String) // outcome of userName's selection of a product,
+
+  // message is confirmation when successful, error when not
+  case class QuantityOfProduct(quantity: Long, product: IProduct)  // quantity available at the current store for a product (store is implied by context)
+
+  case class SelectedProduct(id: Long, quantity: Long, cost: Double, missedQty: Long)
+
+  // to capture user input via JS and JSON (stick to Long to simplify interface with JS)
+  case class SelectedProductFeedback(selectedProduct: SelectedProduct, feedback: Feedback)
+
+  case class PurchasedProductConfirmation(selectedProduct: SelectedProduct, confirmation: String)
+  // data store for a count of products select menu, could easily be generalized to be configured from properties
+  object RecommendCount {
+    val values = Map[String, Int](
+      "1" -> 1,
+      "5" -> 5,
+      "10" -> 10,
+      "20" -> 20
+    )
+    val default = Full("1")
+    val options = values.keys.map(k => (k, k)).toList
+  }
+
+  object Shuffler  {
+    val UseRandomSeed = Props.getBool("productInteraction.useRandomSeed", true)
+    val FixedRNGSeed = Props.getInt("productInteraction.fixedRNGSeed", 0)
   }
 }

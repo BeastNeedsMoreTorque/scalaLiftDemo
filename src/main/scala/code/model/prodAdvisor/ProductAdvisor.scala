@@ -1,7 +1,7 @@
 package code.model.prodAdvisor
 
 import code.model.utils.RNG
-import code.model.{KeyKeeperVals, IProduct, InventoryService, LiquorCategory, ProductRunner}
+import code.model._
 import net.liftweb.common.Box
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
@@ -50,31 +50,28 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
     val MaxSampleSize = Props.getInt("advisor.maxSampleSize", 0)
 
     /**
-      * @param invService an inventory service instance
-      * @param runner a ProductRunner instance
-      * @param requestSize amount of items the client is requesting for a recommendation/advice
-      * @param category the category of the product
-      * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO.
-      *                         It's been known that they would send a Wiser's Whiskey on a wine request.
-      * @param r a Random Number Generator state item.
-      * @return 0 quantity found in inventory for product (unknown to be resolved in JS) and the product
+      * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
+      * Select a random product that matches the parameters subject to a max sample size.
+      *
+      * @param invService    a InventoryService trait that has a few abstract methods about inventory in stock or
+      *                      ability to sync cache from LCBO Web API (theoretically inventory update or provisioning).
+      * @param category    a String such as beer, wine, mostly matching primary_category at LCBO,
+      *                    or an asset category (for query only not to compare results and filter!).
+      * @param requestSize a number representing how many items we need to propose as recommendation
+      * @param runner a ProductRunner, responsible to obtain products in a store for a given vategory.
+      * @return quantity found in inventory for product and the product
       */
-    private def getSerialResult(invService: InventoryService,
-                        runner: ProductRunner,
-                        requestSize: Int,
-                        category: String,
-                        lcboProdCategory: String,
-                        r: RNG) = {
+    def advise(rng: RNG,
+               invService: InventoryService,
+               category: String,
+               requestSize: Int,
+               runner: ProductRunner): Box[Iterable[(IProduct, Long)]] = {
 
-      val prods = runner.fetchByStoreCategory(invService.lcboId, category, MaxSampleSize)
-      // take a hit of one go to LCBO, querying by category, no more.
-      val (permutedIndices, rr) = RNG.shuffle(prods.indices).run(r)
-      // stream avoids checking primary category on full collection (the permutation is done though).
-      val stream = for (id <- permutedIndices.toStream;
-                        p = prods(id) if p.primaryCategory == lcboProdCategory) yield p
-      stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
-      // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
-      // and then zip with list of zeroes because we are too slow to obtain inventories.
+      val lcboProdCategory = LiquorCategory.toPrimaryCategory(category)
+      // the shuffling in getShuffledProducts is predetermined by rng (and not other class calls to random generation routines),
+      // and when cache fails, it is predetermined by the actual contents we get from LCBO via getSerialResult.
+      getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
+
     }
 
     /**
@@ -122,28 +119,31 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
     }
 
     /**
-      * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
-      * Select a random product that matches the parameters subject to a max sample size.
-      *
-      * @param invService    a InventoryService trait that has a few abstract methods about inventory in stock or
-      *                      ability to sync cache from LCBO Web API (theoretically inventory update or provisioning).
-      * @param category    a String such as beer, wine, mostly matching primary_category at LCBO,
-      *                    or an asset category (for query only not to compare results and filter!).
-      * @param requestSize a number representing how many items we need to propose as recommendation
-      * @param runner a ProductRunner, responsible to obtain products in a store for a given vategory.
-      * @return quantity found in inventory for product and the product
+      * @param invService an inventory service instance
+      * @param runner a ProductRunner instance
+      * @param requestSize amount of items the client is requesting for a recommendation/advice
+      * @param category the category of the product
+      * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO.
+      *                         It's been known that they would send a Wiser's Whiskey on a wine request.
+      * @param r a Random Number Generator state item.
+      * @return 0 quantity found in inventory for product (unknown to be resolved in JS) and the product
       */
-    def advise(rng: RNG,
-               invService: InventoryService,
-               category: String,
-               requestSize: Int,
-               runner: ProductRunner): Box[Iterable[(IProduct, Long)]] = {
+    private def getSerialResult(invService: InventoryService,
+                        runner: ProductRunner,
+                        requestSize: Int,
+                        category: String,
+                        lcboProdCategory: String,
+                        r: RNG) = {
 
-      val lcboProdCategory = LiquorCategory.toPrimaryCategory(category)
-      // the shuffling in getShuffledProducts is predetermined by rng (and not other class calls to random generation routines),
-      // and when cache fails, it is predetermined by the actual contents we get from LCBO via getSerialResult.
-      getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
-
+      val prods = runner.fetchByStoreCategory(invService.lcboId, category, MaxSampleSize)
+      // take a hit of one go to LCBO, querying by category, no more.
+      val (permutedIndices, rr) = RNG.shuffle(prods.indices).run(r)
+      // stream avoids checking primary category on full collection (the permutation is done though).
+      val stream = for (id <- permutedIndices.toStream;
+                        p = prods(id) if p.primaryCategory == lcboProdCategory) yield p
+      stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
+      // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
+      // and then zip with list of zeroes because we are too slow to obtain inventories.
     }
   }
 }

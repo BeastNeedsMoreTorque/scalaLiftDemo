@@ -25,18 +25,12 @@ import code.model.utils.RetainSingles.asMap
 
 class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
 
+  //products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
+  lazy val storeProducts = MainSchema.inventories.leftStateful(this)
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
+  override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => inventoryByProductId.toMap.get(key)
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
-
-  // for Loader and LCBOEntity
-  override def table: Table[Store] = Store.table
-  override def cache: concurrent.Map[P_KEY, Store] = Store.cache
-  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY]  = Store.lcboIdToPKMap
-  override def pKey: P_KEY = P_KEY(idField.get)
-  override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
-  override def meta: MetaRecord[Store] = Store
-
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
   val longitude = new DoubleField(this)
@@ -49,13 +43,22 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   val city = new StringField(this, 30) {
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
+  private val productsCache = TrieMap[LCBO_ID, IProduct]()
+  private val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()  // don't put whole IProduct in here, just useful keys.
+  private val inventoryByProductId = TrieMap[P_KEY, Inventory]()
+  private val getCachedInventoryItem: Inventory => Option[Inventory] =
+    inv => inventoryByProductId.get(P_KEY(inv.productid))
 
-  override def Name: String = name.get
-  override def isDead: Boolean = is_dead.get
-  override def addressLine1: String = address_line_1.get
+  // for Loader and LCBOEntity
+  override def table: Table[Store] = Store.table
 
-  override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[Store]
+  override def cache: concurrent.Map[P_KEY, Store] = Store.cache
+
+  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY]  = Store.lcboIdToPKMap
+
+  override def pKey: P_KEY = P_KEY(idField.get)
+
+  override def meta: MetaRecord[Store] = Store
 
   override def equals(other: Any): Boolean =
     other match {
@@ -68,54 +71,35 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
       case _ => false
     }
 
-  //products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
-  lazy val storeProducts = MainSchema.inventories.leftStateful(this)
-  private def inventories = storeProducts.associations
+  override def Name: String = name.get
+
+  override def isDead: Boolean = is_dead.get
+
+  override def addressLine1: String = address_line_1.get
+
+  override def canEqual(other: Any): Boolean =
+    other.isInstanceOf[Store]
 
   // following three caches leverage ORM's stateful cache of storeProducts and inventories above (which are not presented as map but as slower sequence;
   // we organize as map for faster access).
   // They're recomputed when needed by the three helper functions that follow.
   override def getProduct(x: LCBO_ID): Option[IProduct] = productsCache.get(x)
-  private val productsCache = TrieMap[LCBO_ID, IProduct]()
-  private val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()  // don't put whole IProduct in here, just useful keys.
-  private val inventoryByProductId = TrieMap[P_KEY, Inventory]()
-  override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => inventoryByProductId.toMap.get(key)
-
-  private val getCachedInventoryItem: Inventory => Option[Inventory] =
-    inv => inventoryByProductId.get(P_KEY(inv.productid))
 
   override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] =
     productsCacheByCategory.get(lcboCategory).
       fold(IndexedSeq[KeyKeeperVals]()){ identity }
-
-  private def getInventories: Map[P_KEY, Inventory] =
-    asMap(inventories, { i: Inventory => P_KEY(i.productid)} )
-
-  case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals) {}
-  private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
-    productsCache ++= asMap(items, {p: IProduct => p.lcboId})
-    // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
-    // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
-    productsCacheByCategory ++= productsCache.values.
-      map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).toIndexedSeq.
-      groupBy(_.category).
-      mapValues(_.map(x => x.keys))
-  }
-
-  def refreshInventories(): Unit = inTransaction {
-    storeProducts.refresh // key for whole inventory caching to work!
-    inventoryByProductId ++= getInventories
-  }
 
   def refreshProducts(): Unit =  {
     refreshInventories()
     addToCaches(storeProducts.toIndexedSeq)
   }
 
-  private def emptyInventory: Boolean = inventories.toIndexedSeq.forall(_.quantity == 0)
-
   def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
     advise(rng, this, category, requestSize, runner)
+
+  override def asyncLoadCache(): Unit =
+  // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
+    if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
@@ -167,42 +151,50 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
   }
 
-  override def asyncLoadCache(): Unit =
-  // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
-    if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
+  override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
+
+  private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
+    productsCache ++= asMap(items, {p: IProduct => p.lcboId})
+    // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
+    // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
+    productsCacheByCategory ++= productsCache.values.
+      map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).toIndexedSeq.
+      groupBy(_.category).
+      mapValues(_.map(x => x.keys))
+  }
+
+  def refreshInventories(): Unit = inTransaction {
+    storeProducts.refresh // key for whole inventory caching to work!
+    inventoryByProductId ++= getInventories
+  }
+
+  private def getInventories: Map[P_KEY, Inventory] =
+    asMap(inventories, { i: Inventory => P_KEY(i.productid)} )
+
+  private def emptyInventory: Boolean = inventories.toIndexedSeq.forall(_.quantity == 0)
+
+  private def inventories = storeProducts.associations
+
+  case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals) {}
 
 }
 
 object Store extends Store with MetaRecord[Store] {
   override val cache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
   val lcboIdToPKMap: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache, a.k.a. index
-  override def table: Table[Store] = MainSchema.stores
-  override def cacheItems(items: Iterable[Store]): Unit = {
-    super.cacheItems(items)
-    cache.values.foreach( _.refreshProducts())  // ensure inventories are refreshed INCLUDING on start up.
-  }
-  def getCachedItem: IStore => Option[IStore] = s =>
-    for (pKey <- lcboIdToPKMap.get(s.lcboId);
-         ss <- getStore(pKey)) yield ss
+  val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
+  private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
 
   def findAll: Iterable[Store] = cache.values
 
-  private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
-  // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
-
-  val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
+  def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = getStore(pKey).map(_.lcboId)
 
   def getStore(pKey: P_KEY): Option[Store] = cache.get(pKey)
-  def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = getStore(pKey).map(_.lcboId)
+  // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
 
   /* Convert a store to XML, @see Scala in Depth implicit view */
   implicit def toXml(s: Store): Node =
     <store>{Xml.toXml(s.asJValue)}</store>
-
-  private def getStores = Try {
-      collectItemsAsWebClient("/stores", extract, queryFilterArgs)
-    // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
-    }
 
   /**
     * synchronous because once the webapp accepts requests, this load must have completed so that the store collection is not empty.
@@ -223,4 +215,20 @@ object Store extends Store with MetaRecord[Store] {
     refreshed.toOption.fold[Unit](logger.error(err))( items => synchDirtyAndNewItems(items, getCachedItem))
     logger.info("load end") // trace because it takes a long time.
   }
+
+  override def table: Table[Store] = MainSchema.stores
+
+  override def cacheItems(items: Iterable[Store]): Unit = {
+    super.cacheItems(items)
+    cache.values.foreach( _.refreshProducts())  // ensure inventories are refreshed INCLUDING on start up.
+  }
+
+  def getCachedItem: IStore => Option[IStore] = s =>
+    for (pKey <- lcboIdToPKMap.get(s.lcboId);
+         ss <- getStore(pKey)) yield ss
+
+  private def getStores = Try {
+      collectItemsAsWebClient("/stores", extract, queryFilterArgs)
+    // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
+    }
 }
