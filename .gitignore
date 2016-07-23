@@ -7,4 +7,16 @@ Doc
 .idea
 out
 project/
-scalastyle-config.xml
+.cache-main
+.cache-tests
+.classpath
+.ensime
+.ensime_cache/
+.history
+.idea_modules/
+.ipynb_checkpoints/
+.project
+bin
+sbt*
+src/main/webapp/images/GoogleMapsMarkersDELETE_ME/
+
