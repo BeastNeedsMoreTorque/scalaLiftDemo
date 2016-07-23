@@ -47,4 +47,3 @@ object MainSchema extends Schema {
       p.lcbo_id defineAs (unique,indexed("lcbo_id_idx")))
   }
 }
-
