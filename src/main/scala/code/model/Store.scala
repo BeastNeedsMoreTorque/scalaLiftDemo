@@ -1,26 +1,27 @@
 package code.model
 
-import scala.collection._
-import scala.language.implicitConversions
-import scala.util.{Failure, Success, Try}
-import scala.xml.Node
-import scala.collection.concurrent.TrieMap
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
+import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.Inventory.fetchInventoriesByStore
+import code.model.Product.fetchByStore
+import code.model.prodAdvisor.{ProductAdvisorComponentImpl, ProductAdvisorDispatcher}
+import code.model.utils.RNG
+import code.model.utils.RetainSingles.asMap
 import net.liftweb.common.Box
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
-import org.squeryl.annotations._
 import org.squeryl.Table
-import code.model.Product.fetchByStore
-import code.model.Inventory.fetchInventoriesByStore
-import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.prodAdvisor.{ProductAdvisorComponentImpl, ProductAdvisorDispatcher}
-import code.model.utils.RNG
-import code.model.utils.RetainSingles.asMap
+import org.squeryl.annotations._
+
+import scala.collection._
+import scala.collection.concurrent.TrieMap
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.language.implicitConversions
+import scala.util.{Failure, Success, Try}
+import scala.xml.Node
 
 
 class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
@@ -94,6 +95,26 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     addToCaches(storeProducts.toIndexedSeq)
   }
 
+  private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
+    productsCache ++= asMap(items, {p: IProduct => p.lcboId})
+    // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
+    // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
+    productsCacheByCategory ++= productsCache.values.
+      map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).toIndexedSeq.
+      groupBy(_.category).
+      mapValues(_.map(x => x.keys))
+  }
+
+  def refreshInventories(): Unit = inTransaction {
+    storeProducts.refresh // key for whole inventory caching to work!
+    inventoryByProductId ++= getInventories
+  }
+
+  private def getInventories: Map[P_KEY, Inventory] =
+    asMap(inventories, { i: Inventory => P_KEY(i.productid)} )
+
+  private def inventories = storeProducts.associations
+
   def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
     advise(rng, this, category, requestSize, runner)
 
@@ -153,27 +174,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
 
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
-  private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
-    productsCache ++= asMap(items, {p: IProduct => p.lcboId})
-    // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
-    // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
-    productsCacheByCategory ++= productsCache.values.
-      map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).toIndexedSeq.
-      groupBy(_.category).
-      mapValues(_.map(x => x.keys))
-  }
-
-  def refreshInventories(): Unit = inTransaction {
-    storeProducts.refresh // key for whole inventory caching to work!
-    inventoryByProductId ++= getInventories
-  }
-
-  private def getInventories: Map[P_KEY, Inventory] =
-    asMap(inventories, { i: Inventory => P_KEY(i.productid)} )
-
   private def emptyInventory: Boolean = inventories.toIndexedSeq.forall(_.quantity == 0)
-
-  private def inventories = storeProducts.associations
 
   case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals) {}
 
