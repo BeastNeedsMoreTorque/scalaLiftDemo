@@ -35,7 +35,7 @@ May also start from Intellij IDEA Community Edition 2016.1. Patience is required
 Runs on localhost:8090 except if launched from IDEA in which case it is localhost:8080. The port number is controlled in build.sbt by containerPort,
 which is tied to plugin xsbt-web-plugin (project/plugins.sbt)
 
-- web server: runs fine on OS X Yosemite 10.10.5
+- web server: runs fine on OS X El Capitan 10.11 (initially developed on Yosemite 10.10.5).
 browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - Logging: `ch.qos.logback`

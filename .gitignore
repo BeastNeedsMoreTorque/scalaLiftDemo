@@ -4,7 +4,7 @@ Doc
 *.iml
 *.ipr
 *.iws
-console.devmode.log
+*.log
 .idea/**/*
 out
 project/
