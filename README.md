@@ -32,7 +32,8 @@ Test mode is used when executing a sample of Scalatest unit test cases.
 
 - Starting app: in project folder, launch sbt, and then `jetty:start`.
 May also start from Intellij IDEA Community Edition 2016.1. Patience is required when Intellij IDEA CE decides to index your project.
-Runs on localhost:8080
+Runs on localhost:8090 except if launched from IDEA in which case it is localhost:8080. The port number is controlled in build.sbt by containerPort,
+which is tied to plugin xsbt-web-plugin (project/plugins.sbt)
 
 - web server: runs fine on OS X Yosemite 10.10.5
 browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
