@@ -2,7 +2,7 @@ package code
 package model
 
 import code.model.MainSchema._
-import net.liftweb.common._
+import net.liftweb.common.Full
 import net.liftweb.db.DB
 import net.liftweb.mapper._
 import net.liftweb.util.DefaultConnectionIdentifier
@@ -17,16 +17,8 @@ import cats.data.Xor
 /**
   * An O-R mapped "User" class that includes first name, last name, password and Liftweb demo would add a "Personal Essay" to it
   */
-class User extends MegaProtoUser[User] with Loggable {
+class User extends MegaProtoUser[User] {
   def getSingleton = User
-
-  // Lift sample comments start with sample code: what's the "meta" server
-  // define an additional field for a personal essay
-//  object textArea extends MappedTextarea(this, 2048) {
- //   override def textareaRows = 10
-   // override def textareaCols = 50
-   // override def displayName = "Personal Essay"
- //  End of excerpt from Lift sample, not using for current project}
 
   /**
     * consume (persist) a product to database handling insert or update depending on whether the entry exists already or not.
@@ -72,7 +64,7 @@ class User extends MegaProtoUser[User] with Loggable {
 /**
   * The singleton that has methods for accessing the database
   */
-object User extends User with MetaMegaProtoUser[User] with Loggable {
+object User extends User with MetaMegaProtoUser[User] {
   override def dbTableName: String = "users"
 
   // define the DB table name

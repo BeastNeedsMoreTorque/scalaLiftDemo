@@ -1,9 +1,7 @@
 package code.model
 
 import java.sql.SQLException
-
-import net.liftweb.common.Loggable
-
+import cats.data.Xor
 import scala.collection.Iterable
 
 /**
@@ -12,18 +10,20 @@ import scala.collection.Iterable
   * The only spot we do a catch so far, BECAUSE we need all the diagnostics we can get
   * and we can identify the error neatly right here.
   */
-trait ORMExecutor extends Loggable {
-  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Unit =
+trait ORMExecutor {
+  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Xor[String, Iterable[T]] =
     try {
-      apply(items) // e.g. insert, update, delete
+      apply(items)
+      Xor.Right(items) // e.g. insert, update, delete
     } catch {
       case se: SQLException =>
-        logger.error(s"SQLException $items")
-        logger.error("Code: " + se.getErrorCode)
-        logger.error("SqlState: " + se.getSQLState)
-        logger.error("Error Message: " + se.getMessage)
-        logger.error("NextException:" + se.getNextException)
-        throw se
-      // intentionally skip other errors and let them all be "handled" higher up including SQLException, record more context along the way.
+        val err = s"SQLException $items\n" +
+          s"Code: ${se.getErrorCode}\n" +
+          s"SqlState: ${se.getSQLState}\n" +
+          s"Error Message: ${se.getMessage}\n" +
+          s"NextException: ${se.getNextException}\n"
+        Xor.Left(err)
+      case other: Throwable =>
+        Xor.Left(other.toString())
     }
 }

@@ -5,6 +5,7 @@ import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 import code.model.utils.KeyHolder
 import code.model.utils.RetainSingles.retainSinglesImpure
 import net.liftweb.squerylrecord.RecordTypeMode._
+import net.liftweb.common.Loggable
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 import org.squeryl.KeyedEntity
@@ -58,7 +59,7 @@ class Inventory private(val storeid: Long,
 
 case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: Iterable[Inventory]) {}
 
-object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper with ORMExecutor {
+object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper with ORMExecutor with Loggable {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   implicit val formats = net.liftweb.json.DefaultFormats
   val extract: JSitemsExtractor[Inventory] =  { jVal =>

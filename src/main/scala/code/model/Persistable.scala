@@ -1,7 +1,6 @@
 package code.model
 
 import scala.collection.{IndexedSeq, Iterable}
-import scala.util.Try
 import net.liftweb.util.Props
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
@@ -62,8 +61,8 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     // Seems high enough to report error to log as it appears a little messy to push it up further.
     val context = (err: String) =>
       s"Problem with batchTransactor, exception error $err"
-    val executed = Try(execute[T](items, ORMTransactor))
-    executed.toOption.fold[Unit](
-      executed.failed.foreach(f => logger.error(context(f.toString()))))( (Unit) => feedCache(items))
+
+    val executedOrErrors = execute[T](items, ORMTransactor)
+    executedOrErrors.fold[Unit](err => logger.error(context(err)), feedCache)
   }
 }

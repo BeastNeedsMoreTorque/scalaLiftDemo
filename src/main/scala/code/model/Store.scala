@@ -152,8 +152,13 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
           Seq("store_id" -> lcboId, "where_not" -> "is_dead")).
       flatMap { inventories =>
         Try(inTransaction {
-          execute[Inventory](inventories.updatedInvs, inventoryTableUpdater) // bulk update the ones needing an update, having made the change from LCBO input
-          execute[Inventory](inventories.newInvs, inventoryTableInserter) // bulk insert the ones needing an insert having filtered out duped composite keys
+          // bulk update the ones needing an update, having made the change from LCBO input
+          val updatedOrErrors = execute[Inventory](inventories.updatedInvs, inventoryTableUpdater)
+          updatedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
+
+          // bulk insert the ones needing an insert having filtered out duped composite keys
+          val insertedOrErrors = execute[Inventory](inventories.newInvs, inventoryTableInserter)
+          insertedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
         })
       }
 
