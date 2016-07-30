@@ -8,7 +8,7 @@ import scala.util.{Failure, Try, Success}
 /**
   * Created by philippederome on 2016-04-03.
   */
-trait ErrorReporter extends Loggable {
+trait ErrorFormatter extends Loggable {
   // returns true on success, false with error on failure
   def checkUnitErrors(execution: Try[Unit],
                       formatter: String => String): String =

@@ -4,14 +4,11 @@ import code.UnitTest
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.ProductAdvisorComponentImpl
 import code.model.utils.RNG
+
 import net.liftweb.common.Full
 
 import scala.collection.IndexedSeq
 
-// Highly experimental (scalacheck)
-import org.scalacheck.Arbitrary._
-import org.scalacheck.Prop._
-import org.scalacheck.Gen
 
 
 /**

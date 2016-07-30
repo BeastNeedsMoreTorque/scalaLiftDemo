@@ -12,7 +12,12 @@ resolvers ++= Seq("snapshots"     at "https://oss.sonatype.org/content/repositor
 
 unmanagedResourceDirectories in Test <+= baseDirectory { _ / "src/main/webapp" }
 
-scalacOptions ++= Seq("-deprecation", "-explaintypes", "-feature", "-unchecked")
+scalacOptions ++= Seq(
+  "-deprecation",
+  "-encoding", "UTF-8",
+  "-feature",
+  "-language:_"
+)
 
 ideaExcludeFolders += ".idea"
 
@@ -23,14 +28,10 @@ javaOptions in run += "-Xmn2G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+PrintGC
 libraryDependencies ++= {
   val liftVersion = "2.6.2"
   val scalaCompiler = "2.11.8"
-  val scalazVersion = "7.1.0"
   Seq(
     "org.scala-lang"    % "scala-compiler"      % scalaCompiler,
     "org.scala-lang"    % "scala-reflect"       % scalaCompiler,
-    "org.scalaz"      %% "scalaz-core" % scalazVersion,
-    "org.scalaz"      %% "scalaz-effect" % scalazVersion,
-    "org.scalaz"      %% "scalaz-typelevel" % scalazVersion,
-    "org.scalaz"      %% "scalaz-scalacheck-binding" % scalazVersion % Test,
+    "org.typelevel" %% "cats" % "0.6.1",
     "net.liftweb"     %% "lift-webkit" % liftVersion % "compile" withSources(),
     "net.liftweb"     %% "lift-mapper" % liftVersion % "compile->default" withSources(),
     "net.liftweb"     %% "lift-wizard" % liftVersion % "compile->default" withSources(),
@@ -49,5 +50,3 @@ libraryDependencies ++= {
 enablePlugins(JettyPlugin)  // so we can do jetty:start jetty:stop in sbt https://github.com/earldouglas/xsbt-web-plugin/blob/master/docs/2.0.md
 
 containerPort := 8090  // applicable when running from sbt, not with the jetty container plug-in in IDEA (which uses 8080 and not this variable).
-
-

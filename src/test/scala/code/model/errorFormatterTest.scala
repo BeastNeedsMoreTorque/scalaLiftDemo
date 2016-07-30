@@ -12,10 +12,10 @@ import net.liftweb.json.MappingException
   * Note we don't use intercept on exceptions here because we capture them functionally (there's only ONE throw in whole app, at ORMExecutor).
   */
 
-class errorReporterTest extends UnitTest {
-  class errorReporterClass extends ErrorReporter
+class errorFormatterTest extends UnitTest {
+  class errorFormatterClass extends ErrorFormatter
 
-  val instance = new errorReporterClass
+  val instance = new errorFormatterClass
   def errorFormatter(suffix: String): String = s"...$suffix"
 
   def unitTry(body: => Unit): Try[Unit] = Try(body)

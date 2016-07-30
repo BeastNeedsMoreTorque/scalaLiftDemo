@@ -11,7 +11,7 @@ import code.model.utils.RetainSingles._
   * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,
   * so mitigate with access control on methods, one method is protected.
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor with ErrorReporter with KeyKeeper {
+trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor with ErrorFormatter with KeyKeeper {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.
