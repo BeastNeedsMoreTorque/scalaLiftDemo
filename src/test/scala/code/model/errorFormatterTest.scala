@@ -4,7 +4,6 @@ import java.sql.SQLException
 
 import code.UnitTest
 import scala.util.Try
-import net.liftweb.common.Box
 import net.liftweb.json.MappingException
 
 /**
