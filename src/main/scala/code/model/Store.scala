@@ -6,7 +6,8 @@ import code.model.Product.fetchByStore
 import code.model.prodAdvisor.{ProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RNG
 import code.model.utils.RetainSingles.asMap
-import net.liftweb.common.Box
+
+import cats.data.Xor
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field._
@@ -115,16 +116,14 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
 
   private def inventories = storeProducts.associations
 
-  def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
+  def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]] =
     advise(rng, this, category, requestSize, runner)
 
   override def asyncLoadCache(): Unit =
   // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
-  // generally has side effect to update database with more up to date content from LCBO's (if different)
-  private def loadCache(): Unit = {
-    def fetchProducts() = {
+  private def fetchProducts() = {
       def context(err: String): String =
         s"Problem loading products into cache with exception error $err"
       lazy val onEmptyError = "Problem loading products into cache, none found"
@@ -137,7 +136,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
         })
     }
 
-    def fetchInventories() = {
+  private def fetchInventories() = {
       def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update
       def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert
 
@@ -162,6 +161,9 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
         computation.failed.foreach(f => logger.error(context(f.toString()))))( (Unit) => refreshInventories())
 
     }
+
+  // generally has side effect to update database with more up to date content from LCBO's (if different)
+  private def loadCache(): Unit = {
 
     val fetches =
       for (p <- Future(fetchProducts()); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously,
@@ -240,6 +242,6 @@ object Store extends Store with MetaRecord[Store] {
 
   private def getStores = Try {
       collectItemsAsWebClient("/stores", extract, queryFilterArgs)
-    // nice to know if it's empty, so we can log an error in that case. That's captured by box and looked at within checkErrors using briefContextErr.
+    // nice to know if it's empty, so we can log an error in that case.
     }
 }

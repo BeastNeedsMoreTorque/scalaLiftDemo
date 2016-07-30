@@ -6,10 +6,12 @@ import net.liftweb.common._
 import net.liftweb.db.DB
 import net.liftweb.mapper._
 import net.liftweb.util.DefaultConnectionIdentifier
-import net.liftweb.util.Helpers._
 
 import net.liftweb.squerylrecord.RecordTypeMode._
 import scala.xml.Node
+import scala.util.Try
+import cats.data.Xor
+
 
 // This is provided by Liftweb framework as a helper to get started or experiment.
 /**
@@ -34,18 +36,17 @@ class User extends MegaProtoUser[User] with Loggable {
     * @param p a product representing the Record object that was created after serialization from LCBO.
     * @see Lift in Action, Chapter 10-11 (Mapper and mostly Record), Section 10.3.2 Transactions
     * @return the number of times the user has purchased this product as a pair/tuple.
-    *         May throw but would be caught as a Failure within Box to be consumed higher up.
+    *         May throw but would be caught as a Throwable within Xor to be consumed higher up.
     */
-  def consume(p: IProduct, quantity: Long): Box[Long] =
+  def consume(p: IProduct, quantity: Long): Xor[Throwable, Long] = {
     // update it with new details; we could verify that there is a difference between LCBO and our version first...
     // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
-    // tryo captures database provider errors (column size too small for example, reporting it as an Empty Box with Failure)
-    tryo {
+    // Try captures database provider errors (column size too small for example, reporting it as an Throwable in Xor)
+    val scalaTry = Try {
       DB.use(DefaultConnectionIdentifier) { connection =>
         // avoids two/three round-trips to store to DB.
         val updatedCount = Product.getProduct(p.pKey).fold {
-          logger.error(s"User.consume on unsaved product $p")
-          0.toLong  // this is an error, the product should have been in cache.
+          throw new IllegalStateException(s"User.consume on unsaved product $p missing key ${p.pKey} expected to be found")
         } { pp =>
           val prodId: Long = pp.pKey // coerce type conversion as Squeryl needs a Long to convert to NumericType and P_KEY does not.
           val userProd = userProducts.where(u => u.userid === id.get and u.productid === prodId).forUpdate.headOption
@@ -64,6 +65,8 @@ class User extends MegaProtoUser[User] with Loggable {
         updatedCount
       }
     }
+    Xor.fromTry(scalaTry)
+  }
 }
 
 /**
@@ -84,4 +87,3 @@ object User extends User with MetaMegaProtoUser[User] with Loggable {
   // comment this line out to require email validations
   override def skipEmailValidation: Boolean = true
 }
-

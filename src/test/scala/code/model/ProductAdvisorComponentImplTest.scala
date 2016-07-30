@@ -36,21 +36,18 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   }
   it should s"advise an empty list of products when using dummy InventoryService and ProductRunner when no products of category can be found" in {
     val rng = RNG.Simple(411)
-    drunkShuffler.advise(rng, NullInventoryService, "wine", 5, outOfStockRunner) match {
-      case Full(x) => x.toList shouldBe empty
-      case _ => 1 should equal(2) // we should never get here
+    drunkShuffler.advise(rng, NullInventoryService, "wine", 5, outOfStockRunner).map {
+      x => x.toList shouldBe empty
     }
   }
 
   it should s"advise an empty list of products when no products of category can be found" in {
     val categories = Seq("wine", "spirits", "beer", "ciders", "coolers", "non-Alc")
     val rng = RNG.Simple(411)
-    categories.foreach(cat => drunkShuffler.advise(rng, Store, cat, 5, outOfStockRunner) match {
-      case Full(x) => x.toList shouldBe empty
-      case _ => true should equal(false) // we should never get here
+    categories.foreach(cat => drunkShuffler.advise(rng, Store, cat, 5, outOfStockRunner).map {
+      x => x.toList shouldBe empty
     })
   }
-
 
   //val ints = Gen.choose(1, 1000), eventually might use that.
   trait typicalBeerProduct extends IProduct {
@@ -134,17 +131,15 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   behavior of "Single product match by category once list of 1 and once empty list"
   it should s"get a Heineken name in first selection for beer when it is the only product" in {
     val rng = RNG.Simple(411)
-    drunkShuffler.advise(rng, NullInventoryService, "beer", 1, singleBeerRunner) match {
-      case Full(x) => x.headOption.foreach(_._1.Name should equal("Heineken"))
-      case _ =>  assert(false) // we don't care about this.
+    drunkShuffler.advise(rng, NullInventoryService, "beer", 1, singleBeerRunner).map {
+      _.headOption.foreach(_._1.Name should equal("Heineken"))
     }
   }
   // following is more to validate previous test. This is not particularly interesting.
   it should s"NOT get a Heineken name in first selection for wine when Heineken is the only (beer) product" in {
     val rng = RNG.Simple(411)
-    drunkShuffler.advise(rng, NullInventoryService, "wine", 1, singleBeerRunner) match {
-      case Full(Nil) => // success: wine != beer, no match.
-      case _ =>  assert(false) // we should not get here.
+    drunkShuffler.advise(rng, NullInventoryService, "wine", 1, singleBeerRunner).map {
+      case Nil => ; // success: wine != beer, no match.
     }
   }
 
@@ -152,9 +147,8 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   behavior of "Deterministic random selection of single item among 101 beers: 1 Mill Street among 100 Heinekens fixed seed"
   val rng411 = RNG.Simple(411)
   def validateSelectedName(runner: ProductRunner, rng: RNG, name: String): Unit = {
-    drunkShuffler.advise(rng, NullInventoryService, "beer", 1, runner) match {
-      case Full(x) => x.headOption.foreach{ _._1.Name should equal(name)}
-      case _ =>  assert(false) // we should not get here, so fail it.
+    drunkShuffler.advise(rng, NullInventoryService, "beer", 1, runner).map {
+      _.headOption.foreach{ _._1.Name should equal(name)}
     }
   }
   // this more primitive test on shuffling indices motivates the next two material examples that do shuffling on products.

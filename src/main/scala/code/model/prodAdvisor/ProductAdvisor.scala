@@ -2,10 +2,11 @@ package code.model.prodAdvisor
 
 import code.model.utils.RNG
 import code.model._
-import net.liftweb.common.Box
-import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 
+import cats.data.Xor
+
+import scala.util.Try
 import scala.collection.{IndexedSeq, Iterable, Seq}
 
 /**
@@ -24,7 +25,7 @@ trait ProductAdvisorComponent {
                invService: InventoryService,
                category: String,
                requestSize: Int,
-               runner: ProductRunner): Box[Iterable[(IProduct, Long)]]
+               runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]]
   }
 
 }
@@ -36,7 +37,7 @@ trait ProductAdvisorDispatcher   {
              invService: InventoryService,
              category: String,
              requestSize: Int,
-             runner: ProductRunner): Box[Iterable[(IProduct, Long)]] =
+             runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]] =
     agent.advise(rng, invService, category, requestSize, runner)
 }
 
@@ -65,7 +66,7 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
                invService: InventoryService,
                category: String,
                requestSize: Int,
-               runner: ProductRunner): Box[Iterable[(IProduct, Long)]] = {
+               runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]] = {
 
       val lcboProdCategory = LiquorCategory.toPrimaryCategory(category)
       // the shuffling in getShuffledProducts is predetermined by rng (and not other class calls to random generation routines),
@@ -90,7 +91,8 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO.
       *                         It's been known that they would send a Wiser's Whiskey on a wine request.
       * @param requestSize amount of items the client is requesting for a recommendation/advice
-      * @return Box[Iterable[(IProduct,Long)] ]  captures exceptions as errors in Box if any, otherwise an Iterable of IProducts with their quantities.
+      * @return Xor[Throwable, Iterable[(IProduct, Long)]]  captures exceptions as errors in Xor if any, otherwise an Iterable of IProducts with their
+      *         quantities.
       */
     private def getShuffledProducts(invService: InventoryService,
                             runner: ProductRunner,
@@ -98,7 +100,8 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
                             initialProductKeys: IndexedSeq[KeyKeeperVals],
                             category: String,
                             lcboProdCategory: String,
-                            requestSize: Int) = tryo {
+                            requestSize: Int): Xor[Throwable, Iterable[(IProduct, Long)]] = {
+    val scalaTry = Try {
       val inStockItems = {
         for (p <- initialProductKeys;
              inv <- invService.inventoryByProductIdMap(p.pKey);
@@ -117,7 +120,8 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       // get back the items that the ids have been selected (we don't stream because we know inventory > 0)
       else getSerialResult(invService, runner, requestSize, category, lcboProdCategory, rr)
     }
-
+    Xor.fromTry(scalaTry)
+  }
     /**
       * @param invService an inventory service instance
       * @param runner a ProductRunner instance

@@ -153,21 +153,22 @@ class ProductInteraction extends Loggable {
 
       def maySelect(s: Store): JsCmd = {
         val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
-
-        val prodQtySeq = s.advise(rng, theCategory.is, theRecommendCount.is, Product) match {
-          // we want to distinguish error messages to user to provide better diagnostics.
-          case Full(pairs) =>
+        val successToProducts: Iterable[(IProduct, Long)] => Option[Iterable[(IProduct, Long)]] = {
+          pairs: Iterable[(IProduct, Long)] =>
             if (pairs.isEmpty) S.error(s"Unable to find a product of category ${theCategory.is}")
             // we're reloading into cache to make up for that issue!
             Full(pairs) // returns prod and quantity in inventory normally, regardless of emptyness)
-          case Failure(m, ex, _) =>
-            S.error(s"Unable to choose product of category ${theCategory.is} with message $m and exception error $ex")
-            Empty
-          case Empty =>
-            S.error(s"Unable to find product of category ${theCategory.is}")
+        }
+        val errorToProducts: Throwable => Option[Iterable[(IProduct, Long)]] = {
+          t: Throwable =>
+            S.error(s"Unable to choose product of category ${theCategory.is} with exception error ${t.toString()}")
             Empty
         }
-        prodQtySeq.dmap { Noop } // we gave notice of error already via JS, nothing else to do
+        val advisedProductsSeq = s.advise(rng, theCategory.is, theRecommendCount.is, Product)
+
+        val prodQtySeq = advisedProductsSeq.fold(errorToProducts, successToProducts)
+
+        prodQtySeq.fold { Noop } // we gave notice of error already via JS, nothing else to do
         { pairs => // normal case
           S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
           prodDisplayJS( pairs.map{case (p, q) => QuantityOfProduct(q, p)})
@@ -195,7 +196,6 @@ class ProductInteraction extends Loggable {
             else
               s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units;" +
               s"sorry about the unfulfilled $missedQty items out of stock"
-
           }
 
           val formattedCost = formatter format item.selectedProduct.cost
@@ -216,15 +216,17 @@ class ProductInteraction extends Loggable {
       }
 
       def mayConsume(user: User, selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
-        def mayConsumeItem(p: IProduct, quantity: Long): Feedback =
-          user.consume(p, quantity) match {
-            case Full(count) =>
-              Feedback(user.firstName.get, success = true, s"${p.Name} $count unit(s) over the years")
-            case Failure(e, ex, _) =>
-              Feedback(user.firstName.get, success = false, s"Unable to sell you product ${p.Name} with error $e and exception '$ex'")
-            case Empty =>   // ugly: should never happen actually based on user.consume implementation (would be a bug).
-              Feedback(user.firstName.get, success = false, s"Unable to sell you product ${p.Name}")
+        def mayConsumeItem(p: IProduct, quantity: Long): Feedback = {
+          val successToFeedback: Long => Feedback = { count: Long =>
+            Feedback(user.firstName.get, success = true, s"${p.Name} $count unit(s) over the years")
           }
+          val errorToFeedback: Throwable => Feedback = { t: Throwable =>
+            Feedback(user.firstName.get,
+              success = false,
+              s"Unable to sell you product ${p.Name} with exception '${t.toString()}'")
+          }
+          user.consume(p, quantity).fold[Feedback](errorToFeedback, successToFeedback)
+        }
 
         // associate primitive browser product details for selected products (SelectedProduct)
         // with full data of same products we should have in cache as pairs

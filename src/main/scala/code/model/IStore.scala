@@ -1,7 +1,8 @@
 package code.model
 
+import cats.data.Xor
+
 import scala.collection.Iterable
-import net.liftweb.common.Box
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.utils.RNG
 
@@ -19,7 +20,7 @@ trait IStore extends Equals with InventoryService {
   def isDead: Boolean
   def addressLine1: String
 
-  def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Box[Iterable[(IProduct, Long)]]
+  def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]]
 
   // @see Scala in Depth
   override def canEqual(other: Any): Boolean =

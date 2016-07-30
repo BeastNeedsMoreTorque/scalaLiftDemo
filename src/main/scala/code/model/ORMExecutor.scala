@@ -10,11 +10,10 @@ import scala.collection.Iterable
   * Created by philippederome on 2016-04-03.
   * Just to isolate the verbose try catch block.
   * The only spot we do a catch so far, BECAUSE we need all the diagnostics we can get
-  * and we can identify the error neatly right here. Other error handling is done FP way with tryo/Box playing role of Either/Option.
-  * Please, please, please: hide this try catch block from privy eyes. It makes me noxious. ;-)
+  * and we can identify the error neatly right here.
   */
 trait ORMExecutor extends Loggable {
-  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Unit = // captures exception in Box and force callers to deal with it.
+  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Unit =
     try {
       apply(items) // e.g. insert, update, delete
     } catch {
@@ -26,6 +25,5 @@ trait ORMExecutor extends Loggable {
         logger.error("NextException:" + se.getNextException)
         throw se
       // intentionally skip other errors and let them all be "handled" higher up including SQLException, record more context along the way.
-      // actually typically immediately higher up because of the tryo returning a Box type (similar to Option/Either)
     }
 }
