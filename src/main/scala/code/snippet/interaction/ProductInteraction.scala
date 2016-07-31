@@ -30,12 +30,12 @@ import scala.xml.NodeSeq
   * The various elements that are rewritten occur in parallel unless parallelism is turned off with "andThen" as per other Scala idioms.
   * The parallel chaining is done with &.
   *
-  * Here we do 4 rewrites, one for the ? (recommend) button, the x (cancel) button, the glass (consume) button
-  * and the recommend count drop down select menu.
-  * The select menu of # items is always evaluated serially before the recommend button callback is activated
-  * so that we know properly the right number of products to recommend.
+  * Here we do 4 rewrites, one for the ? (recommend/advise) button, the x (cancel) button, the glass (consume) button
+  * and the recommend count drop down select menu. Each button activation is represented by a corresponding trait.
+  * The select menu of # items is always evaluated serially before the advise button callback is activated
+  * so that we know properly the right number of products to advise.
   *
-  * The prodDisplyJS and getDivs function below can be thought as an Action callback that mixes up markup and Scala.
+  * The prodDisplayJS and getDivs function below can be thought as an Action callback that mixes up markup and Scala.
   * The structure deliberately follows the markup of index.html.
   * There's no template engine in Lift, the html pages are pure html and contain no Scala code.
   * The design view seems to be that Scala developers can build everything in the stack and they don't want to get into JS too often;
@@ -54,34 +54,30 @@ class ProductInteraction extends Cancel with Consume with Advise with Loggable {
   val hideConfirmationJS =  JsHideId("confirmationDiv")
 
   def render: NodeSeq => NodeSeq = {
-    val actionButtonsContainer = "prodInteractionContainer"  // html markup identifier
+    def activateBt(name: String) = setBorderJS("prodInteractionContainer", name) // prodInteractionContainer is html markup identifier
 
     theRecommendCount.set(toInt(RecommendCount.default))
-    // call to setBorderJS after button activation simply highlights that button was pressed.
+
+    // call to activateBt after button activation simply highlights that button was pressed, so we do it on each onclick action below.
     "@consume [onclick]" #>
       jsonCall( JE.Call("prodSelection.currentProds"),
-                      { j: JValue => consumeProducts(j) & setBorderJS(actionButtonsContainer, "consume")}) &
+                      { j: JValue => consume(j) & activateBt("consume")}) &
       // fetch in JSON with JS Call the lcbo product IDs and then deal with them
     "@cancel [onclick]" #>
-      ajaxInvoke({() => cancel & setBorderJS(actionButtonsContainer, "cancel")}) &
+      ajaxInvoke({() => cancel & activateBt("cancel")}) &
     "select" #> ajaxSelect(RecommendCount.options, RecommendCount.default,
       { selected: String => theRecommendCount.set(toInt(selected)); Noop }) andThen
       // always before recommend so it takes effect so that we know how many products to recommend.
     "@recommend [onclick]" #>
       jsonCall( JE.Call("storeFinder.getTheSelectedStore"),
-        { j: JValue => advise(j) & setBorderJS(actionButtonsContainer, "recommend")})
+        { j: JValue => advise(j) & activateBt("recommend")})
   }
 
   // data store for a count of products select menu, could easily be generalized to be configured from properties
   object RecommendCount {
-    val values = Map[String, Int](
-      "1" -> 1,
-      "5" -> 5,
-      "10" -> 10,
-      "20" -> 20
-    )
-    val default = Full("1")
-    val options = values.keys.map(k => (k, k)).toList
+    val values = List("1","5","10","20","50")
+    val default = Full(values.head)
+    val options = values.map(k => (k,k))
   }
 
 }

@@ -20,7 +20,7 @@ trait Consume extends UtilCommands {
   val formatter = NumberFormat.getCurrencyInstance()
   implicit val formats = net.liftweb.json.DefaultFormats
 
-  def consumeProducts(selection: JValue): JsCmd = {
+  def consume(selection: JValue): JsCmd = {
     // Validate and report errors at high level of functionality as much as possible
     // and then get down to business with helper mayConsume.
     User.currentUser.dmap { S.error("consumeProducts", "unable to process transaction, Login first!"); Noop } { user =>
