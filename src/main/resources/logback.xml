@@ -18,7 +18,7 @@
     <logger name="code.model.Product" level="debug"/>
     <logger name="code.model.StoreProduct" level="debug"/>
     <logger name="code.snippet" level="info"/>
-    <logger name="code.snippet.ProductInteraction" level="debug"/>
+    <logger name="code.snippet.interaction.ProductInteraction" level="debug"/>
     <logger name="net.liftweb" level="warn"/>
     <logger name="bootstrap.liftweb" level="info"/>
     <root level="warn">
