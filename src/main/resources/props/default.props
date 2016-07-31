@@ -16,7 +16,7 @@ radio.selectClass=thickBorder
 radio.unselectClass=thinBorder
 
 # implied with LCBO tests (40 throws and then it can wipe out cache!)
-product.lcboMaxPerPage=20
+product.lcboMaxPerPage=100
 product.query.ByCategoryArgs={"where_not":"is_discontinued,is_dead", "order":"inventory_count.desc"}
 # application product designer believes all items of relevance are not discontinued nor dead, so developer allows him to assign this view at run-time to the concept of "all items".
 # In general our policy or interpretation of how we should use the WEB API should be run-time attributes and not hard coded

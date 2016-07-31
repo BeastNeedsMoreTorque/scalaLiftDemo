@@ -96,13 +96,11 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
              cachedInv <- mapByProductId.get(P_KEY(freshInv.productid));
              dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
     }
-    def logDiscarded(items: Iterable[Inventory]) =
-      if (items.nonEmpty) logger.info(s"discarded ${items.size} duplicate inventory items") // this is normal, that's what they do...
 
     for (items <- Try(collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage));
          dirtyAndNewItems <- Try(itemsByState[Inventory, Inventory](items, get));
-         updatedInventories <- Try(retainSinglesImpure(getUpdatedInvs(dirtyAndNewItems.dirtys))(logDiscarded));
-         newInventories <- Try(retainSinglesImpure(dirtyAndNewItems.news)(logDiscarded));
+         updatedInventories <- Try(retainSinglesImpure(getUpdatedInvs(dirtyAndNewItems.dirtys)));
+         newInventories <- Try(retainSinglesImpure(dirtyAndNewItems.news));
          inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))) yield inventories
   }
 

@@ -51,8 +51,9 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
 
   private def batchTransactor(items: Iterable[T], ORMTransactor: Iterable[T] => Unit): Unit = {
     def feedCache(items: Iterable[T]) = {
-      val akIds = items.map(_.lcboId: Long) // alternate key ids, which are a proxy for our primary key IDs to be evaluated from DB.
-      // select only those we just inserted, hopefully the same set.
+      val akIds = items.map(_.lcboId: Long).toStream.distinct // alternate key ids, which are a proxy for our primary key IDs to be evaluated from DB.
+      // select only those we just inserted, hopefully the same set (cardinality of akIds is expected to be smaller than items
+      // because of repetition at the source).
       val itemsWithAK = from(table)(item => where(item.lcboId.underlying in akIds) select item)
       if (itemsWithAK.size < akIds.size) logger.error(s"feedCache got only ${itemsWithAK.size} items for expected ${akIds.size}")
       cacheItems(itemsWithAK)
