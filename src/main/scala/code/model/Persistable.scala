@@ -4,7 +4,7 @@ import scala.collection.{IndexedSeq, Iterable}
 import net.liftweb.util.Props
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
-import code.model.utils.RetainSingles._
+import code.model.utils.RetainSingles.implicitSeqToRetainSingles
 
 /**
   * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,
@@ -32,9 +32,6 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
   }
 
   private def insert(items: IndexedSeq[T]) = {
-    // default policy on finding duplicates is to log as error, showing key and value for each filtered item (affects removeDupes below).
-    implicit val logDuplicateItems: Iterable[T] => Unit = code.model.utils.RetainSingles.onFailureDefault
-
     // following cannot be val because of table() usage and timing and need for underlying transaction, connection, etc.
     def ormInserter: Iterable[T] => Unit = table.insert _
 
@@ -44,7 +41,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
 
     // removes any duplicate keys and log error if found duplicates
     // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
-    val filtered = items.retainSinglesImpure.filterNot( p => LcboIDs(p.lcboId) )
+    val filtered = items.retainSingles.filterNot( p => LcboIDs(p.lcboId) )
     // break it down in reasonable size transactions, and then serialize the work.
     filtered.grouped(batchSize).foreach { batchTransactor( _ , ormInserter) }
   }

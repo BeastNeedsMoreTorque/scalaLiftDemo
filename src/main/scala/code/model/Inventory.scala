@@ -3,7 +3,7 @@ package code.model
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 import code.model.utils.KeyHolder
-import code.model.utils.RetainSingles.retainSinglesImpure
+import code.model.utils.RetainSingles.implicitSeqToRetainSingles
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.common.Loggable
 import net.liftweb.util.Helpers._
@@ -99,8 +99,8 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
 
     for (items <- Try(collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage));
          dirtyAndNewItems <- Try(itemsByState[Inventory, Inventory](items, get));
-         updatedInventories <- Try(retainSinglesImpure(getUpdatedInvs(dirtyAndNewItems.dirtys)));
-         newInventories <- Try(retainSinglesImpure(dirtyAndNewItems.news));
+         updatedInventories <- Try(getUpdatedInvs(dirtyAndNewItems.dirtys).retainSingles);
+         newInventories <- Try(dirtyAndNewItems.news.retainSingles);
          inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))) yield inventories
   }
 
