@@ -123,25 +123,22 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
-  private def fetchProducts() = {
-      def context(err: String): String =
-        s"Problem loading products into cache with exception error $err"
-      lazy val onEmptyError = "Problem loading products into cache, none found"
-      val theProducts = fetchByStore(lcboId)
-      theProducts.toOption.fold[Unit](
-        theProducts.failed.foreach(f => logger.error(context(f.toString()))))(
+  private def errHandler(t: Try[Throwable], contextErrFormatter: String => String) =
+    t.foreach(throwable => logger.error(contextErrFormatter(throwable.toString())))
+
+  private def fetchProducts(contextErrFormatter: String => String) = {
+    val theProducts = fetchByStore(lcboId)
+    theProducts.toOption.fold(
+      errHandler(theProducts.failed, contextErrFormatter))(
         items => {
-          if (items.isEmpty) logger.error(onEmptyError)
+          if (items.isEmpty) logger.error("Problem loading products into cache, none found")
           addToCaches(items)
         })
-    }
+  }
 
-  private def fetchInventories() = {
+  private def fetchInventories(contextErrFormatter: String => String) = {
       def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update
       def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert
-
-      val context = (err: String) =>
-        s"Problem loading inventories into cache for '$lcboId' with exception error $err"
       // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
       // we chain errors using flatMap (FP fans apparently like this).
       val computation: Try[Unit] =
@@ -162,19 +159,20 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
         })
       }
 
-      computation.toOption.fold[Unit](
-        computation.failed.foreach(f => logger.error(context(f.toString()))))( (Unit) => refreshInventories())
-
+      computation.toOption.fold(
+        errHandler(computation.failed, contextErrFormatter))(
+          (Unit) => refreshInventories())
     }
 
   // generally has side effect to update database with more up to date content from LCBO's (if different)
   private def loadCache(): Unit = {
-
+    val productsContext: String => String = s => s"Problem loading products into cache with exception error $s"
+    val inventoriesContext: String => String = s => s"Problem loading inventories into cache for '$lcboId' with exception error $s"
     val fetches =
-      for (p <- Future(fetchProducts()); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously,
+      for (p <- Future(fetchProducts(productsContext)); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously,
            // so we can use their caches.
-           i <- Future(fetchInventories())) yield i
-    // similarly for inventories and serialize intentionally because of Ref.Integrity  if no exception was thrown
+           // similarly for inventories and serialize products then inventories intentionally because of Ref.Integrity (inventory depends on valid product)
+           i <- Future(fetchInventories(inventoriesContext))) yield i
 
     fetches onComplete {
       case Success(_) => //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
