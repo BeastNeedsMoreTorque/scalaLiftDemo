@@ -16,7 +16,7 @@ class RetainSinglesTest  extends UnitTest {
   behavior of "empty"
   it should s"return empty sequence on empty input" in {
     val empty = Seq.empty[Model]
-    empty.retainSinglesPure.toStream shouldBe empty //have size 0
+    empty.retainSingles.toStream shouldBe empty //have size 0
   }
 
   behavior of "repeats"
@@ -25,10 +25,10 @@ class RetainSinglesTest  extends UnitTest {
   val oddPair = Seq(Philanthropist, Scrooge)
   val many: Seq[Model] = Seq.fill(100)(oddPair).flatten
   it should s"return 2 on normal pair" in {
-    oddPair.retainSinglesPure.toStream should have size 2
+    oddPair.retainSingles.toStream should have size 2
   }
   it should s"return size 2 on duped pair" in {
-    many.retainSinglesPure.toStream should have size 2
+    many.retainSingles.toStream should have size 2
   }
 
 }
