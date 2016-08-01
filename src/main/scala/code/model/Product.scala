@@ -21,12 +21,13 @@ import scala.xml.Node
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
 class Product private() extends LCBOEntity[Product] with IProduct {
+  def getValue(f: OptionalStringField[Product]) = f._1.toOption.fold("")(identity)
+
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   val is_discontinued = new BooleanField(this, false)
-  val `package` = new StringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def optional_? : Boolean = true  // tolerates null in JSON input
+  val `package` = new OptionalStringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
     override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
@@ -37,13 +38,11 @@ class Product private() extends LCBOEntity[Product] with IProduct {
   val name = new StringField(this, 120) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
     override def setFilter = notNull _ :: crop _  :: super.setFilter
   }
-  val image_thumb_url = new StringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def optional_? : Boolean = true  // tolerates null in JSON input
+  val image_thumb_url = new OptionalStringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
     override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
-  val origin = new StringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def optional_? : Boolean = true  // tolerates null in JSON input
+  val origin = new OptionalStringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
     override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
@@ -54,18 +53,15 @@ class Product private() extends LCBOEntity[Product] with IProduct {
     override def optional_? : Boolean = true  // tolerates null in JSON input
     override def defaultValue = ""
   }
-  val varietal = new StringField(this, 100) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def optional_? : Boolean = true  // tolerates null in JSON input
+  val varietal = new OptionalStringField(this, 100) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
     override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
-  val description = new StringField(this, 2000) {// allow dropping some data in order to store/copy without SQL error
-    override def optional_? : Boolean = true  // tolerates null in JSON input
+  val description = new OptionalStringField(this, 2000) {// allow dropping some data in order to store/copy without SQL error
     override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
-  val serving_suggestion = new StringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
-    override def optional_? : Boolean = true  // tolerates null in JSON input
+  val serving_suggestion = new OptionalStringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
     override def defaultValue = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
@@ -84,8 +80,7 @@ class Product private() extends LCBOEntity[Product] with IProduct {
 
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
-  def imageThumbUrl: String = image_thumb_url.get
-  // intentional aliasing allowing more standard naming convention and not having to call get on.
+  def imageThumbUrl: String = getValue(image_thumb_url)
   def Name: String = name.get
 
   def totalPackageUnits: Int = total_package_units.get
@@ -120,17 +115,15 @@ class Product private() extends LCBOEntity[Product] with IProduct {
     ( Attribute("Name:", name.get) ::
       Attribute("Primary Category:", primary_category.get) ::
       Attribute("Secondary Category:", secondary_category.get) ::
-      Attribute("Varietal:", varietal.get) ::
-      Attribute("Package:", Package) ::
+      Attribute("Varietal:", getValue(varietal)) ::
+      Attribute("Package:", getValue(`package`)) ::
       Attribute("Volume:", volumeInLitre) ::
       Attribute("Price:", price) ::
-      Attribute("Description:", description.get) ::
-      Attribute("Serving Suggestion:", serving_suggestion.get) ::
+      Attribute("Description:", getValue(description)) ::
+      Attribute("Serving Suggestion:", getValue(serving_suggestion)) ::
       Attribute("Alcohol content:", alcoholContent) ::
-      Attribute ("Origin:", origin.get) ::
+      Attribute ("Origin:", getValue(origin)) ::
       Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
-
-  def Package: String = `package`.get // alias to avoid back ticks
 
   // Change unit of currency from cents to dollars and Int to String
   def price: String =
