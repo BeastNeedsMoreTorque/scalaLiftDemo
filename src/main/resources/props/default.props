@@ -5,10 +5,6 @@ db.driver=org.postgresql.Driver
 db.url=jdbc:postgresql://localhost:5432
 #specify db.user, db.password for dev if required. Phil Derome's toy environment does not require this.
 
-# time out in ms when we consume a web api.
-http.ClientConnTimeOut=5000
-# different value to prove a point (needs to be high if on a holiday)
-http.ClientReadTimeOut=6000
 lcboDomain=lcboapi.com
 DBWrite.BatchSize=1024
 

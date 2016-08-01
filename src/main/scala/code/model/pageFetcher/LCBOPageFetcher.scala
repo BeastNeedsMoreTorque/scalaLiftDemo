@@ -3,6 +3,7 @@ package code.model.pageFetcher
 import code.Rest.RestClient
 import net.liftweb.json._
 import net.liftweb.util.Props
+import net.liftweb.common.Loggable
 import org.apache.http.client.utils.URIBuilder
 import org.apache.http.{NameValuePair, TruncatedChunkException}
 import scala.annotation.tailrec
@@ -16,7 +17,7 @@ import scala.collection.IndexedSeq
   *      He makes very interesting observations about using Reader Monads in web app and cake pattern at outer edges.
   *
   *      Nice personal observation: after having implemented this,
-  *      the RestClient trait (based on Apache Commons) is buried down at a lower level of abstraction further hidden away.
+  *      the RestClient trait is buried down at a lower level of abstraction further hidden away.
   *      In previous versions of code, the RestClient trait made it all the way to Product and Inventory.
   *
   *      With cake, interface is more explicit, no need to sort out public, private and we don't need
@@ -47,7 +48,7 @@ trait LCBOPageLoader {
     fetcher.collectItemsAsWebClient(webApiRoute, xt, params)(enough)
 }
 
-trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
+trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggable {
   def fetcher: LCBOPageFetcher = new FetcherImpl
 
   // this whole class is hidden from clients. So, who needs to worry about private, public, protected here? No one.
@@ -88,6 +89,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
           baseUri.setParameters(nvps.asJava).build()
         }
         val uri = buildURI(uriBuilder, params ++ Seq(("page", currPage))) // get as many as possible on a page because we could have few matches.
+        logger.trace(s"collectItemsAsWebClient $uri")
         val jsonRoot = parse(get(uri))
         // fyi: throws plenty of varios exceptions.
         val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj.
