@@ -15,7 +15,7 @@ import cats.data.Xor
   * An O-R mapped "User" class that includes first name, last name, password and Liftweb demo would add a "Personal Essay" to it
   */
 class User extends MegaProtoUser[User] {
-  def getSingleton = User
+  def getSingleton: User.type = User
 
   /**
     * consume (persist) a product to database handling insert or update depending on whether the entry exists already or not.
@@ -70,7 +70,7 @@ object User extends User with MetaMegaProtoUser[User] {
   </lift:surround>)
 
   // define the order fields will appear in forms and output
-  override def fieldOrder = List(id, firstName, lastName, email,
+  override def fieldOrder: List[MappedField[_, User]] = List(id, firstName, lastName, email,
     locale, timezone, password) // deleted parameter textArea from demo
 
   // comment this line out to require email validations

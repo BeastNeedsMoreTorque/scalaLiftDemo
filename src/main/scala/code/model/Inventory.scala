@@ -43,6 +43,9 @@ class Inventory private(val storeid: Long,
       case _ => false
     }
 
+  override def hashCode: Int = (storeid.toString + ":" + productid.toString + ":" + updated_on).##
+    // if the names are the same, they're probably the same
+
   override def canEqual(other: Any): Boolean =
     other.isInstanceOf[Inventory]
 
@@ -56,18 +59,18 @@ class Inventory private(val storeid: Long,
   override def toString: String = s"$storeid $productid $quantity $updated_on $is_dead $store_id $product_id"
 }
 
-case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: Iterable[Inventory]) {}
+case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: Iterable[Inventory])
 
 object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper with ORMExecutor with Loggable {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   implicit val formats = net.liftweb.json.DefaultFormats
   val extract: JSitemsExtractor[Inventory] =  { jVal =>
-    for (p <- jVal.children.toIndexedSeq;
-         inv <- p.extractOpt[InventoryAsLCBOJson];
-         sKey <- Store.lcboIdToPKMap.get(LCBO_ID(inv.store_id));
-         pKey <- Product.lcboIdToPKMap.get(LCBO_ID(inv.product_id));
+    for {p <- jVal.children.toIndexedSeq
+         inv <- p.extractOpt[InventoryAsLCBOJson]
+         sKey <- Store.lcboIdToPKMap.get(LCBO_ID(inv.store_id))
+         pKey <- Product.lcboIdToPKMap.get(LCBO_ID(inv.product_id))
          newInv = Inventory.apply(sKey, pKey, inv)
-    ) yield newInv
+    } yield newInv
   }
 
   def apply( sKey: Long, pKey: Long, inv: InventoryAsLCBOJson): Inventory = {
@@ -91,21 +94,21 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
 
     def getUpdatedInvs(items: IndexedSeq[Inventory]) = {
-      { for (freshInv <- items;
-             cachedInv <- mapByProductId.get(P_KEY(freshInv.productid));
-             dirtyInv = cachedInv.copyDiffs(freshInv) ) yield dirtyInv }
+      { for {freshInv <- items
+             cachedInv <- mapByProductId.get(P_KEY(freshInv.productid))
+             dirtyInv = cachedInv.copyDiffs(freshInv) } yield dirtyInv }
     }
 
-    for (items <- Try(collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage));
-         dirtyAndNewItems <- Try(itemsByState[Inventory, Inventory](items, get));
-         updatedInventories <- Try(getUpdatedInvs(dirtyAndNewItems.dirtys).retainSingles);
-         newInventories <- Try(dirtyAndNewItems.news.retainSingles);
-         inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))) yield inventories
+    for {items <- Try(collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage))
+         dirtyAndNewItems <- Try(itemsByState[Inventory, Inventory](items, get))
+         updatedInventories <- Try(getUpdatedInvs(dirtyAndNewItems.dirtys).retainSingles)
+         newInventories <- Try(dirtyAndNewItems.news.retainSingles)
+         inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))} yield inventories
   }
 
   case class InventoryAsLCBOJson(product_id: Long,
                                  store_id: Long,
                                  is_dead: Boolean,
                                  updated_on: String,
-                                 quantity: Long) {}
+                                 quantity: Long)
 }

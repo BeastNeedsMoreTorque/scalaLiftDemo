@@ -26,9 +26,9 @@ trait Consume extends UtilCommands {
     User.currentUser.dmap { S.error("consumeProducts", "unable to process transaction, Login first!"); Noop } { user =>
       val selectedProducts =
         // ExtractOpt avoids MappingException and generates None on failure
-        for (json <- selection.extractOpt[String].map(parse).toIndexedSeq;
-             item <- json.children.toVector;
-             prod <- item.extractOpt[SelectedProduct])
+        for {json <- selection.extractOpt[String].map(parse).toIndexedSeq
+             item <- json.children.toVector
+             prod <- item.extractOpt[SelectedProduct]}
           yield prod
 
       if (selectedProducts.nonEmpty) mayConsume(user, selectedProducts)
@@ -42,9 +42,10 @@ trait Consume extends UtilCommands {
   private def mayConsume(user: User, selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
     // associate primitive browser product details for selected products (SelectedProduct)
     // with full data of same products we should have in cache as pairs
-    val feedback = for(sp <- selectedProds;
-        p <- Product.getItemByLcboId(LCBO_ID(sp.id));
-        f = mayConsumeItem(user, p, sp.quantity)) yield SelectedProductFeedback(sp, f)
+    val feedback =
+      for{sp <- selectedProds
+        p <- Product.getItemByLcboId(LCBO_ID(sp.id))
+        f = mayConsumeItem(user, p, sp.quantity)} yield SelectedProductFeedback(sp, f)
 
     val goodAndBackFeedback = feedback.groupBy(_.feedback.success)
     // splits into errors (false success) and normal confirmations (true success)

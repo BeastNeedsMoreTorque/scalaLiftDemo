@@ -22,7 +22,7 @@ object ConfigPairsRepo { // lo and behold, a module!!! ;-)  Arguably, excessive 
   class propsSeqReader extends ConfigPairsRepo {
     override def getSeq(masterKey: String, default: String = ""): Seq[(String, String)] = {
       val json = parse(Props.get(masterKey, default) )
-      val vals = for (elem <- json.children) yield elem.values // contains List of (String, JString(String))
+      val vals = for {elem <- json.children} yield elem.values // contains List of (String, JString(String))
       vals.map(_.asInstanceOf[(String, String)]) // could throw if contents that are configured are in wrong format
       // (violating assumption of pairs (String,String)...
 

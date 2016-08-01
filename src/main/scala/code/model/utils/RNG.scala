@@ -1,13 +1,13 @@
 package code.model.utils
 
-//Copyright (c) 2012, Manning Publications, Co.
+// Copyright (c) 2012, Manning Publications, Co.
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 // and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-//The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
 // INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -34,10 +34,8 @@ case class State[S, +A](run: S => (A, S)) {
   })
 }
 
-
 trait RNG {
   def nextInt: (Int, RNG) // Should generate a random `Int`. We'll later define other functions in terms of `nextInt`.
-
 }
 
 object RNG {
@@ -94,13 +92,11 @@ object RNG {
       (f(a, b), rc)
     })
 
-
   def ints(n: Int)(rng: RNG): (List[Int], RNG) =
     sequence(List.fill(n)(int)).run(rng)
 
   def randomElement(s: Seq[Int]): Rand[Seq[Int]] =
     flatMap(nonNegativeLessThan(s.size)) { i => unit(Seq(s(i))) }
-
 
   // Algorithm S Sampling by Knuth (Volume 2, Section 3.4.2)
   def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = {
@@ -130,7 +126,6 @@ object RNG {
     })
   }
 
-
   // Algorithm P Shuffling by Knuth (Volume 2, Section 3.4.2). Attributed to Fisher-Yates
   // View the permutation selection as deck of cards shuffling game, which is how it got discovered in the 1930s.
   // Shuffle from last card to first in N steps by selecting another card lower in deck randomly to swap with.
@@ -144,7 +139,7 @@ object RNG {
     State(rng => {
         val a = s.toArray
         var rr = rng
-        for (j <- a.indices.reverse.dropRight(1)) { // without the reverse, we'd need a function to select in range [j N] for index k
+        for {j <- a.indices.reverse.dropRight(1)} { // without the reverse, we'd need a function to select in range [j N] for index k
           val (k, y) = nonNegativeLessThan(j).run(rr)
           rr = y
           swap(a, k, j)
@@ -176,7 +171,6 @@ object State {
 
   def unit[S, A](a: A): State[S, A] =
     State(s => (a, s))
-
 
   // This implementation uses a loop internally and is the same recursion
   // pattern as a left fold. It is quite common with left folds to build

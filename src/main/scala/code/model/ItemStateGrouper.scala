@@ -5,7 +5,7 @@ import scala.collection.IndexedSeq
 /**
   * Created by philippederome on 2016-04-01.
   */
-case class DirtyAndNewSequences[T](dirtys: IndexedSeq[T], news: IndexedSeq[T]) {}
+case class DirtyAndNewSequences[T](dirtys: IndexedSeq[T], news: IndexedSeq[T])
 
 trait ItemStateGrouper {
   // to denote whether an abstract item T (for example Application Lift Record) requires to be inserted (New), updated (Dirty), or is good as is (Clean)

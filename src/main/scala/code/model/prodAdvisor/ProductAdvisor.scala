@@ -101,10 +101,10 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
                             requestSize: Int): Xor[Throwable, Iterable[(IProduct, Long)]] = {
     val scalaTry = Try {
       val inStockItems = {
-        for (p <- initialProductKeys;
-             inv <- invService.inventoryByProductIdMap(p.pKey);
-             q = inv.quantity if q > 0;
-             prod <- invService.getProduct(p.lcboId)) yield (prod, q)
+        for {p <- initialProductKeys
+             inv <- invService.inventoryByProductIdMap(p.pKey)
+             q = inv.quantity if q > 0
+             prod <- invService.getProduct(p.lcboId)} yield (prod, q)
       }
       // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
 
@@ -141,8 +141,8 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       // take a hit of one go to LCBO, querying by category, no more.
       val (permutedIndices, rr) = RNG.shuffle(prods.indices).run(r)
       // stream avoids checking primary category on full collection (the permutation is done though).
-      val stream = for (id <- permutedIndices.toStream;
-                        p = prods(id) if p.primaryCategory == lcboProdCategory) yield p
+      val stream = for {id <- permutedIndices.toStream
+                        p = prods(id) if p.primaryCategory == lcboProdCategory} yield p
       stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
       // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
       // and then zip with list of zeroes because we are too slow to obtain inventories.

@@ -19,4 +19,4 @@ class UserProduct private() extends Record[UserProduct] with KeyedRecord[Long] w
   }
 }
 
-object UserProduct extends UserProduct with MetaRecord[UserProduct] {}
+object UserProduct extends UserProduct with MetaRecord[UserProduct]

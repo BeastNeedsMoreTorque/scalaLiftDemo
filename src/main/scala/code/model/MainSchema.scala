@@ -27,7 +27,7 @@ object MainSchema extends Schema {
   // Foreign-key constraints (see end of file):
 
   // the default constraint for all foreign keys in this schema :
-  override def applyDefaultForeignKeyPolicy(foreignKeyDeclaration: ForeignKeyDeclaration) =
+  override def applyDefaultForeignKeyPolicy(foreignKeyDeclaration: ForeignKeyDeclaration): Unit =
   foreignKeyDeclaration.constrainReference
 
   on(stores) { s =>

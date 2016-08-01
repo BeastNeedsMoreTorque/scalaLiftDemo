@@ -13,7 +13,7 @@ trait KeyKeeper extends KeyHolder {
   def pKey: P_KEY
 }
 
-case class KeyKeeperVals(lcboId: LCBO_ID, pKey: P_KEY){}
+case class KeyKeeperVals(lcboId: LCBO_ID, pKey: P_KEY)
 
 object KeyKeeperVals {
   implicit def toKeyKeeperVals(k: KeyKeeper): KeyKeeperVals = KeyKeeperVals(k.lcboId, k.pKey)

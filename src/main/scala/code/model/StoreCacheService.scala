@@ -31,13 +31,13 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     val productsContext: String => String = s => s"Problem loading products into cache with exception error $s"
     val inventoriesContext: String => String = s => s"Problem loading inventories into cache for '$lcboId' with exception error $s"
     val fetches =
-      for (p <- Future(fetchProducts(productsContext)); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously,
+      for {p <- Future(fetchProducts(productsContext)) // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously,
            // so we can use their caches.
            // similarly for inventories and serialize products then inventories intentionally because of Ref.Integrity (inventory depends on valid product)
-           i <- Future(fetchInventories(inventoriesContext))) yield i
+           i <- Future(fetchInventories(inventoriesContext))} yield i
 
     fetches onComplete {
-      case Success(_) => //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
+      case Success(_) => // We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
         logger.debug(s"loadCache async work succeeded for $lcboId")
         if (emptyInventory) logger.warn(s"got no product inventory for storeId $lcboId !") // No provision for retrying.
       case Failure(f) => logger.info(s"loadCache explicitly failed for $lcboId cause ${f.getMessage}")

@@ -88,7 +88,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggabl
     }
 
     def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
-      //LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
+      // LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
       val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
       val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
       isFinalPage || totalPages < pageNo + 1

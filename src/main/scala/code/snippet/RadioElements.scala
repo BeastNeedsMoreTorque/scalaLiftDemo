@@ -10,7 +10,7 @@ import scala.xml.NodeSeq
   * is active. This RadioElements also contains a title to provide an intuitive tooltip on the image that acts as a button.
   * The name of the RadioElements is what we use to receive the input from the client.
   */
-case class RadioElements(name: String, img: NodeSeq) {}
+case class RadioElements(name: String, img: NodeSeq)
 
 object RadioElements {
   val thickBorder = Props.get("radio.selectClass", "thickBorder")

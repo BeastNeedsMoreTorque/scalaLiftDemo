@@ -1,6 +1,5 @@
 package code.model
 
-
 import scala.language.implicitConversions
 /**
   * Created by philippederome on 2016-04-04.

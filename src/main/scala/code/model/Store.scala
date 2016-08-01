@@ -21,7 +21,7 @@ import scala.xml.Node
 class Store private() extends LCBOEntity[Store] with IStore with StoreCacheService
   with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
 
-  //products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
+  // products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
@@ -70,7 +70,6 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
       case _ => false
     }
 
-
   // following three caches leverage ORM's stateful cache of storeProducts and inventories above
   // (which are not presented as map but as slower sequence;
   // we organize as map for faster access).
@@ -105,12 +104,12 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
 
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
-  case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals) {}
+  case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals)
 }
 
 object Store extends Store with MetaRecord[Store] {
   override val cache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
-  val lcboIdToPKMap: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() //secondary dependent cache, a.k.a. index
+  val lcboIdToPKMap: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() // secondary dependent cache, a.k.a. index
   val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
 
@@ -158,8 +157,8 @@ object Store extends Store with MetaRecord[Store] {
   }
 
   def getCachedItem: IStore => Option[IStore] = s =>
-    for (pKey <- lcboIdToPKMap.get(s.lcboId);
-         ss <- getStore(pKey)) yield ss
+    for {pKey <- lcboIdToPKMap.get(s.lcboId)
+         ss <- getStore(pKey)} yield ss
 
   private def getStores = Try {
       collectItemsAsWebClient("/stores", extract, queryFilterArgs)

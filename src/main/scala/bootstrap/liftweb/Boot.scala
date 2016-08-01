@@ -26,7 +26,7 @@ import net.liftweb.squerylrecord.RecordTypeMode._
   * @see https://wiki.eclipse.org/Jetty/Howto/Configure_JNDI_Datasource, which has details for PostgreSQL
   */
 class Boot {
-  def boot {
+  def boot: Unit = {
     //    DefaultConnectionIdentifier.jndiName = "jdbc/liftinaction"  // can tie to servlet container configuration and thus handle different environments.
     // For example, see https://wiki.eclipse.org/Jetty/Howto/Configure_JNDI_Datasource. That is not our deployment strategy here, we use props files instead
     // (for dev that is main/resources/default.props).
@@ -72,18 +72,19 @@ class Boot {
     // each page, just comment this line out.
     LiftRules.setSiteMapFunc(() => sitemapMutators(sitemap))
 
-    //Init the jQuery module, see http://liftweb.net/jquery for more information.
+    // Init the jQuery module, see http://liftweb.net/jquery for more information.
     LiftRules.jsArtifacts = JQueryArtifacts
     JQueryModule.InitParam.JQuery = JQueryModule.JQuery191
     JQueryModule.init()
 
-    //Show the spinny image when an Ajax call starts
+    val spinnyImmageName= "ajax-loader"
+    // Show the spinny image when an Ajax call starts
     LiftRules.ajaxStart =
-      Full(() => LiftRules.jsArtifacts.show("ajax-loader").cmd)
+      Full(() => LiftRules.jsArtifacts.show(spinnyImmageName).cmd)
 
     // Make the spinny image go away when it ends
     LiftRules.ajaxEnd =
-      Full(() => LiftRules.jsArtifacts.hide("ajax-loader").cmd)
+      Full(() => LiftRules.jsArtifacts.hide(spinnyImmageName).cmd)
 
     // Force the request to be UTF-8
     LiftRules.early.append(_.setCharacterEncoding("UTF-8"))

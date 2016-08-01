@@ -18,13 +18,11 @@ object AppRest extends RestHelper with Loggable {
   def init(): Unit =
     LiftRules.dispatch.append(AppRest)
 
-  /*
-   * Serve the URL, but have a helpful error message when you
+  /* Serve the URL, but have a helpful error message when you
    * return a 404 if the item is not found
    * @see http://simply.liftweb.net/index-5.3.html#prev
    * @see http://simply.liftweb.net/index-Chapter-11.html
-   * @see https://www.assembla.com/spaces/liftweb/wiki/REST_Web_Services
-   */
+   * @see https://www.assembla.com/spaces/liftweb/wiki/REST_Web_Services */
   serve {
     case "stores" :: Nil JsonGet _ =>
       val stores = Store.findAll.map{_.asJValue}

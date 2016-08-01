@@ -3,6 +3,7 @@ package code.snippet.interaction
 import code.model.{IProduct, Product, Store, User}
 import code.model.utils.RNG
 import code.snippet.SessionCache.{theCategory, theRecommendCount}
+import code.model.Attribute
 import net.liftweb.common.{Empty, Full}
 import net.liftweb.http.S
 import net.liftweb.http.js.{JE, JsCmd}
@@ -22,13 +23,12 @@ trait Advise extends UtilCommands {
   val fetchInventoriesJS = JE.Call("inventory.fetchInventories") // let the client deal with incomplete inventories and get them himself
   val showProdDisplayJS =  JsShowId("prodDisplay") & fetchInventoriesJS
 
-  import code.model.Attribute
   def advise(jsStore: JValue): JsCmd = {
     User.currentUser.dmap { S.error("advise", "advise feature unavailable, Login first!"); Noop } { user =>
       val jsCmd =
-        for (s <- jsStore.extractOpt[String].map(parse); // ExtractOpt avoids MappingException and generates None on failure
-             storeId <- s.extractOpt[Long];
-             s <- Store.getStore(storeId)) yield maySelect(s)
+        for {s <- jsStore.extractOpt[String].map(parse) // ExtractOpt avoids MappingException and generates None on failure
+             storeId <- s.extractOpt[Long]
+             s <- Store.getStore(storeId)} yield maySelect(s)
 
       jsCmd.fold {
         S.error("We need to establish your local store first, please wait for local geo to become available")
@@ -86,7 +86,7 @@ trait Advise extends UtilCommands {
   // (visible to user in attributes in any event, but harder for us to get at for computation)
   private def attributesMarkup(prod: IProduct, attrs: IndexedSeq[Attribute]): NodeSeq = {
     val tbody = {
-      for (attr <- attrs)
+      for {attr <- attrs}
         yield <tr>
           <td class="prodAttrHead">
             {attr.key}

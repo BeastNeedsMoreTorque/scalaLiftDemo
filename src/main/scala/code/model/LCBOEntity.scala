@@ -13,14 +13,16 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
   self: T =>
 
   class FilteredOptionalStringField(maxLength: Int) extends OptionalStringField(this, maxLength) {
+    type filterMethodsList = List[(FilteredOptionalStringField.this.ValueType) => FilteredOptionalStringField.this.ValueType]
     override def defaultValue: String = ""
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
+    override def setFilter: filterMethodsList = notNull _ :: crop _ :: super.setFilter
     def getValue: String = _1.toOption.fold("")(identity)
   }
 
   class FilteredMandatoryStringField(maxLength: Int) extends StringField(this, maxLength) {
+    type filterMethodsList = List[(FilteredMandatoryStringField.this.ValueType) => FilteredMandatoryStringField.this.ValueType]
     override def defaultValue: String = ""
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
+    override def setFilter: filterMethodsList = notNull _ :: crop _ :: super.setFilter
   }
 
   // Some LCBO entities require to back patch JSon read in "id" as a separate column in Record (lcbo_id). They do so with the logic below (idFix = transform).
@@ -34,7 +36,7 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
     val nodes = idFix.children
     nodes.foldLeft(ArrayBuffer.empty[T]) {
       (recsBuffer, node) =>
-        for (rec <- meta.fromJValue(node)) {
+        for {rec <- meta.fromJValue(node)} {
           // a lcbo_id can be set here, but not an id (it's kind of "reserved" word by Squeryl while this call is Lift Record).
           recsBuffer += rec
         }
