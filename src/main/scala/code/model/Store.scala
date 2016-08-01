@@ -1,12 +1,10 @@
 package code.model
 
+
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.Inventory.fetchInventoriesByStore
-import code.model.Product.fetchByStore
 import code.model.prodAdvisor.{ProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RNG
 import code.model.utils.RetainSingles.asMap
-
 import cats.data.Xor
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
@@ -18,14 +16,12 @@ import org.squeryl.annotations._
 
 import scala.collection._
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 import scala.language.implicitConversions
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 import scala.xml.Node
 
-
-class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
+class Store private() extends LCBOEntity[Store] with IStore with StoreCacheService
+  with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
 
   //products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)
@@ -45,11 +41,9 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   val city = new StringField(this, 30) {
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
-  private val productsCache = TrieMap[LCBO_ID, IProduct]()
-  private val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()  // don't put whole IProduct in here, just useful keys.
-  private val inventoryByProductId = TrieMap[P_KEY, Inventory]()
-  private val getCachedInventoryItem: Inventory => Option[Inventory] =
-    inv => inventoryByProductId.get(P_KEY(inv.productid))
+  override val productsCache = TrieMap[LCBO_ID, IProduct]()
+  override val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()  // don't put whole IProduct in here, just useful keys.
+  override val inventoryByProductId = TrieMap[P_KEY, Inventory]()
 
   // for Loader and LCBOEntity
   override def table: Table[Store] = Store.table
@@ -96,17 +90,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
     addToCaches(storeProducts.toIndexedSeq)
   }
 
-  private def addToCaches(items: IndexedSeq[IProduct]): Unit = {
-    productsCache ++= asMap(items, {p: IProduct => p.lcboId})
-    // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
-    // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
-    productsCacheByCategory ++= productsCache.values.
-      map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).toIndexedSeq.
-      groupBy(_.category).
-      mapValues(_.map(x => x.keys))
-  }
-
-  def refreshInventories(): Unit = inTransaction {
+  override def refreshInventories(): Unit = inTransaction {
     storeProducts.refresh // key for whole inventory caching to work!
     inventoryByProductId ++= getInventories
   }
@@ -114,7 +98,7 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   private def getInventories: Map[P_KEY, Inventory] =
     asMap(inventories, { i: Inventory => P_KEY(i.productid)} )
 
-  private def inventories = storeProducts.associations
+  override def inventories: Iterable[Inventory] = storeProducts.associations
 
   def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]] =
     advise(rng, this, category, requestSize, runner)
@@ -123,72 +107,10 @@ class Store private() extends LCBOEntity[Store] with IStore with ProductAdvisorD
   // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
-  private def errHandler(t: Try[Throwable], contextErrFormatter: String => String) =
-    t.foreach(throwable => logger.error(contextErrFormatter(throwable.toString())))
-
-  private def fetchProducts(contextErrFormatter: String => String) = {
-    val theProducts = fetchByStore(lcboId)
-    theProducts.toOption.fold(
-      errHandler(theProducts.failed, contextErrFormatter))(
-        items => {
-          if (items.isEmpty) logger.error("Problem loading products into cache, none found")
-          addToCaches(items)
-        })
-  }
-
-  private def fetchInventories(contextErrFormatter: String => String) = {
-      def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update
-      def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert
-      // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
-      // we chain errors using flatMap (FP fans apparently like this).
-      val computation: Try[Unit] =
-        fetchInventoriesByStore(
-          webApiRoute = "/inventories",
-          getCachedInventoryItem,
-          inventoryByProductId.toMap,
-          Seq("store_id" -> lcboId, "where_not" -> "is_dead")).
-      flatMap { inventories =>
-        Try(inTransaction {
-          // bulk update the ones needing an update, having made the change from LCBO input
-          val updatedOrErrors = execute[Inventory](inventories.updatedInvs, inventoryTableUpdater)
-          updatedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
-
-          // bulk insert the ones needing an insert having filtered out duped composite keys
-          val insertedOrErrors = execute[Inventory](inventories.newInvs, inventoryTableInserter)
-          insertedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
-        })
-      }
-
-      computation.toOption.fold(
-        errHandler(computation.failed, contextErrFormatter))(
-          (Unit) => refreshInventories())
-    }
-
-  // generally has side effect to update database with more up to date content from LCBO's (if different)
-  private def loadCache(): Unit = {
-    val productsContext: String => String = s => s"Problem loading products into cache with exception error $s"
-    val inventoriesContext: String => String = s => s"Problem loading inventories into cache for '$lcboId' with exception error $s"
-    val fetches =
-      for (p <- Future(fetchProducts(productsContext)); // fetch and then make sure model/Squeryl classes update to DB and their cache synchronously,
-           // so we can use their caches.
-           // similarly for inventories and serialize products then inventories intentionally because of Ref.Integrity (inventory depends on valid product)
-           i <- Future(fetchInventories(inventoriesContext))) yield i
-
-    fetches onComplete {
-      case Success(_) => //We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
-        logger.debug(s"loadCache async work succeeded for $lcboId")
-        if (emptyInventory) logger.warn(s"got no product inventory for storeId $lcboId !") // No provision for retrying.
-      case Failure(f) => logger.info(s"loadCache explicitly failed for $lcboId cause ${f.getMessage}")
-    }
-    logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
-  }
-
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
-  private def emptyInventory: Boolean = inventories.toIndexedSeq.forall(_.quantity == 0)
 
   case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals) {}
-
 }
 
 object Store extends Store with MetaRecord[Store] {
