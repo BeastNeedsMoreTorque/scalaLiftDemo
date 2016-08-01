@@ -6,6 +6,11 @@
    <parameter name="maxFileLength"><![CDATA[600]]></parameter>
   </parameters>
  </check>
+ <check level="warning" class="org.scalastyle.file.FileLengthChecker" enabled="true">
+    <parameters>
+        <parameter name="maxFileLength"><![CDATA[250]]></parameter>
+    </parameters>
+ </check>
  <check level="warning" class="org.scalastyle.file.HeaderMatchesChecker" enabled="false">
   <parameters>
    <parameter name="header"><![CDATA[// Copyright (C) 2016 the original author or authors.
