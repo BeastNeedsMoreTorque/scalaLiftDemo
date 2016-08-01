@@ -6,7 +6,6 @@ import net.liftweb.common.Full
 import net.liftweb.http.SHtml
 import net.liftweb.util.Helpers._
 import JSUtilities.setBorderJS
-
 import scala.xml.NodeSeq
 /**
   * Created by philippederome on 2015-12-05.

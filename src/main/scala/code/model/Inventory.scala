@@ -14,7 +14,6 @@ import org.squeryl.dsl.CompositeKey2
 import scala.collection.{IndexedSeq, Iterable}
 import scala.util.Try
 
-
 /**
   * Created by philippederome on 2016-03-26.
   * storeid and productid are our composite PK whereas store_id and product_id is the same from LCBO's point of view with their PK.

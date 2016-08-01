@@ -3,9 +3,7 @@ package code.model.prodAdvisor
 import code.model.utils.RNG
 import code.model._
 import net.liftweb.util.Props
-
 import cats.data.Xor
-
 import scala.util.Try
 import scala.collection.{IndexedSeq, Iterable, Seq}
 

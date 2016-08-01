@@ -1,16 +1,14 @@
 package code.model
 
 import java.text.NumberFormat
-
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
-import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField}
+import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField, OptionalStringField}
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 import org.squeryl.Table
 import org.squeryl.annotations._
-
 import scala.collection.concurrent.TrieMap
 import scala.collection.{Seq, _}
 import scala.language.implicitConversions
@@ -22,7 +20,7 @@ import scala.xml.Node
   * Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends LCBOEntity[Product] with IProduct   {
+class Product private() extends LCBOEntity[Product] with IProduct {
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
@@ -80,12 +78,13 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
 
   override def cache: concurrent.Map[P_KEY, Product] = Product.cache
 
-  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY]  = Product.lcboIdToPKMap
+  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = Product.lcboIdToPKMap
 
   override def pKey: P_KEY = P_KEY(idField.get)
 
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
+  def imageThumbUrl: String = image_thumb_url.get
   // intentional aliasing allowing more standard naming convention and not having to call get on.
   def Name: String = name.get
 
@@ -109,10 +108,7 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
 
   def isDiscontinued: Boolean = is_discontinued.get
 
-  def imageThumbUrl: String = image_thumb_url.get
-
-  override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[Product]
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[Product]
 
   /**
     *
@@ -138,7 +134,7 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
 
   // Change unit of currency from cents to dollars and Int to String
   def price: String =
-    formatter format (price_in_cents.get / 100.0) // since we perverted meaning somewhat by changing unit from cents to dollars
+    formatter.format(price_in_cents.get / 100.0) // since we perverted meaning somewhat by changing unit from cents to dollars
 
   // Change scale by 100 to normal conventions, foregoing LCBO's use of Int (for ex. 1200 becomes "12.0%" including the percent sign)
   def alcoholContent: String = {
@@ -151,7 +147,6 @@ class Product private() extends LCBOEntity[Product] with IProduct   {
     val v = volume_in_milliliters.get / 1000.0
     f"$v%1.3f L"
   }
-
 }
 
 /**
@@ -210,4 +205,3 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   protected def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = neverEnough ) =
     collectItemsAsWebClient("/products", extract, Seq("per_page" -> MaxPerPage, "store_id" -> lcboStoreId) ++ seq)
 }
-

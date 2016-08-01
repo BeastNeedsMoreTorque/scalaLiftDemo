@@ -4,12 +4,7 @@ import code.UnitTest
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.ProductAdvisorComponentImpl
 import code.model.utils.RNG
-
-import net.liftweb.common.Full
-
 import scala.collection.IndexedSeq
-
-
 
 /**
   * Created by philippederome on 2016-05-04.
@@ -53,9 +48,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   trait typicalBeerProduct extends IProduct {
     override def primaryCategory: String = "beer"
     override def isDiscontinued: Boolean = false
-    override def totalPackageUnits: Int = 1
     override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
-    override def Package: String = "bottle"
 
     // Change unit of currency from cents to dollars and Int to String
     override def price: String = "$2.00"
@@ -65,9 +58,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   trait typicalWineProduct extends IProduct {
     override def primaryCategory: String = "wine"
     override def isDiscontinued: Boolean = false
-    override def totalPackageUnits: Int = 1
     override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
-    override def Package: String = "bottle"
 
     // Change unit of currency from cents to dollars and Int to String
     override def price: String = "$15.00"

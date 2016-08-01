@@ -1,17 +1,14 @@
-package code
-package model
+package code.model
 
 import code.model.MainSchema._
 import net.liftweb.common.Full
 import net.liftweb.db.DB
 import net.liftweb.mapper._
 import net.liftweb.util.DefaultConnectionIdentifier
-
 import net.liftweb.squerylrecord.RecordTypeMode._
 import scala.xml.Node
 import scala.util.Try
 import cats.data.Xor
-
 
 // This is provided by Liftweb framework as a helper to get started or experiment.
 /**

@@ -5,7 +5,6 @@ import net.liftweb.json._
 import net.liftweb.util.Props
 import org.apache.http.client.utils.URIBuilder
 import org.apache.http.{NameValuePair, TruncatedChunkException}
-
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
 
@@ -73,12 +72,6 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
       * @throws TruncatedChunkException  // that's a brutal one, essentially unrecoverable.
       *
       */
-    @throws(classOf[net.liftweb.json.MappingException])
-    @throws(classOf[net.liftweb.json.JsonParser.ParseException])
-    @throws(classOf[java.io.IOException])
-    @throws(classOf[java.net.SocketTimeoutException])
-    @throws(classOf[java.net.UnknownHostException]) // no wifi/LAN connection for instance
-    @throws(classOf[TruncatedChunkException]) // that's a brutal one.
     def collectItemsAsWebClient[T](path: String,
                                    xt: JSitemsExtractor[T],
                                    params: Seq[(String, Any)] = Seq())
@@ -96,8 +89,8 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
         }
         val uri = buildURI(uriBuilder, params ++ Seq(("page", currPage))) // get as many as possible on a page because we could have few matches.
         val jsonRoot = parse(get(uri))
-        // fyi: throws ParseException, SocketTimeoutException, IOException,TruncatedChunkException or SocketTimeoutException.
-        val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj. Throws MappingException
+        // fyi: throws plenty of varios exceptions.
+        val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj.
         if (isFinalPage(jsonRoot, currPage) || enough(revisedItems.size)) {
           logger.info(uri) // log only last one to be less verbose
           revisedItems
@@ -118,6 +111,5 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent {
       def getName: String = name
       def getValue: String = value
     }
-
   }
 }

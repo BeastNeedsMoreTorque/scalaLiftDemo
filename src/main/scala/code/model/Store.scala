@@ -1,6 +1,5 @@
 package code.model
 
-
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.{ProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RNG
@@ -13,7 +12,6 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Props
 import org.squeryl.Table
 import org.squeryl.annotations._
-
 import scala.collection._
 import scala.collection.concurrent.TrieMap
 import scala.language.implicitConversions
@@ -76,7 +74,8 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
   override def canEqual(other: Any): Boolean =
     other.isInstanceOf[Store]
 
-  // following three caches leverage ORM's stateful cache of storeProducts and inventories above (which are not presented as map but as slower sequence;
+  // following three caches leverage ORM's stateful cache of storeProducts and inventories above
+  // (which are not presented as map but as slower sequence;
   // we organize as map for faster access).
   // They're recomputed when needed by the three helper functions that follow.
   override def getProduct(x: LCBO_ID): Option[IProduct] = productsCache.get(x)
@@ -108,7 +107,6 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
-
 
   case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals) {}
 }
