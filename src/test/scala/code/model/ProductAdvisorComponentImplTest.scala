@@ -44,8 +44,31 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     })
   }
 
+  trait MockProductEquals extends IProduct {
+    // @see Scala in Depth, more for unit testing convenience than anything.
+    override def canEqual(other: Any): Boolean =
+    other.isInstanceOf[IProduct]
+
+    override def hashCode: Int = (Name + price).## // if the names are the same, they're probably the same products, but price is a bit volatile too.
+
+    override def equals(other: Any): Boolean =
+      other match {
+        case that: IProduct =>
+          if (this eq that) true
+          else {
+            that.## == this.## &&
+              that.canEqual(this) &&
+              ( Name == that.Name &&
+                primaryCategory == that.primaryCategory &&
+                isDiscontinued == that.isDiscontinued &&
+                imageThumbUrl == that.imageThumbUrl &&
+                price == that.price )
+          }
+        case _ => false
+      }
+  }
   //val ints = Gen.choose(1, 1000), eventually might use that.
-  trait typicalBeerProduct extends IProduct {
+  trait typicalBeerProduct extends IProduct with MockProductEquals {
     override def primaryCategory: String = "beer"
     override def isDiscontinued: Boolean = false
     override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
@@ -55,7 +78,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     override def streamAttributes: IndexedSeq[Attribute] = Product.streamAttributes
   }
 
-  trait typicalWineProduct extends IProduct {
+  trait typicalWineProduct extends IProduct with MockProductEquals {
     override def primaryCategory: String = "wine"
     override def isDiscontinued: Boolean = false
     override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"

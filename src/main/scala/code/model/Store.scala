@@ -37,6 +37,12 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
   override val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()  // don't put whole IProduct in here, just useful keys.
   override val inventoryByProductId = TrieMap[P_KEY, Inventory]()
 
+  override def Name: String = name.get
+
+  override def isDead: Boolean = is_dead.get
+
+  override def addressLine1: String = address_line_1.get
+
   // for Loader and LCBOEntity
   override def table: Table[Store] = Store.table
 
@@ -47,6 +53,11 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
   override def pKey: P_KEY = P_KEY(idField.get)
 
   override def meta: MetaRecord[Store] = Store
+  // @see Scala in Depth
+  override def canEqual(other: Any): Boolean =
+    other.isInstanceOf[Store]
+
+  override def hashCode: Int = Name.## // if the names are the same, they're probably the same
 
   override def equals(other: Any): Boolean =
     other match {
@@ -59,14 +70,6 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
       case _ => false
     }
 
-  override def Name: String = name.get
-
-  override def isDead: Boolean = is_dead.get
-
-  override def addressLine1: String = address_line_1.get
-
-  override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[Store]
 
   // following three caches leverage ORM's stateful cache of storeProducts and inventories above
   // (which are not presented as map but as slower sequence;

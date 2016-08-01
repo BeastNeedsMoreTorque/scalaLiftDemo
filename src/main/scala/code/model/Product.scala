@@ -59,6 +59,13 @@ class Product private() extends LCBOEntity[Product] with IProduct {
 
   def totalPackageUnits: Int = total_package_units.get
 
+  def primaryCategory: String = primary_category.get
+
+  def isDiscontinued: Boolean = is_discontinued.get
+
+  // @see Scala in Depth
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[Product]
+  override def hashCode: Int = (Name + price).## // if the names are the same, they're probably the same products, but price is a bit volatile too.
   override def equals(other: Any): Boolean =
     other match {
       case that: Product =>
@@ -72,12 +79,6 @@ class Product private() extends LCBOEntity[Product] with IProduct {
           alcohol_content.get == that.alcohol_content.get) // more of an exercise than anything
       case _ => false
     }
-
-  def primaryCategory: String = primary_category.get
-
-  def isDiscontinued: Boolean = is_discontinued.get
-
-  override def canEqual(other: Any): Boolean = other.isInstanceOf[Product]
 
   /**
     *
