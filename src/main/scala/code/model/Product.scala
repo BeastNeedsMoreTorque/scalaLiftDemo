@@ -4,7 +4,7 @@ import java.text.NumberFormat
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
-import net.liftweb.record.field.{BooleanField, IntField, LongField, StringField, OptionalStringField}
+import net.liftweb.record.field.{BooleanField, IntField, LongField}
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 import org.squeryl.Table
@@ -21,50 +21,24 @@ import scala.xml.Node
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
 class Product private() extends LCBOEntity[Product] with IProduct {
-  def getValue(f: OptionalStringField[Product]) = f._1.toOption.fold("")(identity)
-
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   val is_discontinued = new BooleanField(this, false)
-  val `package` = new OptionalStringField(this, 80) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def defaultValue = ""
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
+  val `package` = new FilteredOptionalStringField(80)
   val total_package_units = new IntField(this)
-  val primary_category = new StringField(this, 40) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
-  val name = new StringField(this, 120) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def setFilter = notNull _ :: crop _  :: super.setFilter
-  }
-  val image_thumb_url = new OptionalStringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def defaultValue = ""
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
-  val origin = new OptionalStringField(this, 200) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def defaultValue = ""
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
+  val primary_category = new FilteredMandatoryStringField(40)
+  val name = new FilteredMandatoryStringField(120)
+
+  val image_thumb_url = new FilteredOptionalStringField(200)
+  val origin = new FilteredOptionalStringField(200)
   val price_in_cents = new IntField(this)
   val alcohol_content = new IntField(this)
   val volume_in_milliliters = new IntField(this)
-  val secondary_category = new StringField(this, 80) {
-    override def optional_? : Boolean = true  // tolerates null in JSON input
-    override def defaultValue = ""
-  }
-  val varietal = new OptionalStringField(this, 100) { // allow dropping some data in order to store/copy without SQL error (120 empirically good)
-    override def defaultValue = ""
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
-  val description = new OptionalStringField(this, 2000) {// allow dropping some data in order to store/copy without SQL error
-    override def defaultValue = ""
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
-  val serving_suggestion = new OptionalStringField(this, 300) {// allow dropping some data in order to store/copy without SQL error
-    override def defaultValue = ""
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
+  val secondary_category = new FilteredMandatoryStringField(80)
+  val varietal = new FilteredOptionalStringField(100)
+  val description = new FilteredOptionalStringField(2000)
+  val serving_suggestion = new FilteredOptionalStringField(300)
   val formatter = NumberFormat.getCurrencyInstance() // Not French Canada, which does it differently...
 
   def meta: MetaRecord[Product] = Product
@@ -80,7 +54,7 @@ class Product private() extends LCBOEntity[Product] with IProduct {
 
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
-  def imageThumbUrl: String = getValue(image_thumb_url)
+  def imageThumbUrl: String = image_thumb_url.getValue
   def Name: String = name.get
 
   def totalPackageUnits: Int = total_package_units.get
@@ -115,14 +89,14 @@ class Product private() extends LCBOEntity[Product] with IProduct {
     ( Attribute("Name:", name.get) ::
       Attribute("Primary Category:", primary_category.get) ::
       Attribute("Secondary Category:", secondary_category.get) ::
-      Attribute("Varietal:", getValue(varietal)) ::
-      Attribute("Package:", getValue(`package`)) ::
+      Attribute("Varietal:", varietal.getValue) ::
+      Attribute("Package:", `package`.getValue) ::
       Attribute("Volume:", volumeInLitre) ::
       Attribute("Price:", price) ::
-      Attribute("Description:", getValue(description)) ::
-      Attribute("Serving Suggestion:", getValue(serving_suggestion)) ::
+      Attribute("Description:", description.getValue) ::
+      Attribute("Serving Suggestion:", serving_suggestion.getValue) ::
       Attribute("Alcohol content:", alcoholContent) ::
-      Attribute ("Origin:", getValue(origin)) ::
+      Attribute ("Origin:", origin.getValue) ::
       Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
 
   // Change unit of currency from cents to dollars and Int to String
@@ -179,11 +153,11 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
 
   // side effect to store updates of the products
   def fetchByStore(lcboStoreId: Long): Try[IndexedSeq[IProduct]] = Try {
-      // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
-      // and gives us opportunity to bring our cache up to date about firm wide products.
-      val prods = productWebQuery( lcboStoreId, queryFilterArgs) // take them all from Stream
-      synchDirtyAndNewItems(prods, getCachedItem) // the side effect
-      prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
+    // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
+    // and gives us opportunity to bring our cache up to date about firm wide products.
+    val prods = productWebQuery( lcboStoreId, queryFilterArgs) // take them all from Stream
+    synchDirtyAndNewItems(prods, getCachedItem) // the side effect
+    prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
   }
 
   def getItemByLcboId(id: LCBO_ID): Option[IProduct] =

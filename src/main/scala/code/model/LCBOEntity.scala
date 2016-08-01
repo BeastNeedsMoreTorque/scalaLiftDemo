@@ -4,12 +4,24 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.{IndexedSeq, Seq}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 import net.liftweb.json.JsonAST.{JField, JInt}
+import net.liftweb.record.field.{StringField,OptionalStringField}
 /**
   * Created by philippederome on 2016-04-10. Highest level trait to share between Product and Store that have much logic in common.
   */
 trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
   with CreatedUpdated[T] with LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper {
   self: T =>
+
+  class FilteredOptionalStringField(maxLength: Int) extends OptionalStringField(this, maxLength) {
+    override def defaultValue = ""
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
+    def getValue: String = _1.toOption.fold("")(identity)
+  }
+
+  class FilteredMandatoryStringField(maxLength: Int) extends StringField(this, maxLength) {
+    override def defaultValue = ""
+    override def setFilter = notNull _ :: crop _ :: super.setFilter
+  }
 
   // Some LCBO entities require to back patch JSon read in "id" as a separate column in Record (lcbo_id). They do so with the logic below (idFix = transform).
   // In other words, JSON comes in as id=123 and we need to store that to table.column[lcbo_id]. The crux of problem is Lift Record wanting to use Fields
@@ -32,7 +44,6 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
 
   def getSeq(masterKey: String, default: String = "")(c: ConfigPairsRepo): Seq[(String, String)] =
     c.getSeq(masterKey, default)
-
 
   // type parameter I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class,
   // and it should not return just anything.

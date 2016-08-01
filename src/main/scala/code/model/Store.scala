@@ -30,15 +30,9 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
   val longitude = new DoubleField(this)
-  val name = new StringField(this, 200) {
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
-  val address_line_1 = new StringField(this, 200) {
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
-  val city = new StringField(this, 30) {
-    override def setFilter = notNull _ :: crop _ :: super.setFilter
-  }
+  val name = new FilteredMandatoryStringField(200)
+  val address_line_1 = new FilteredMandatoryStringField(200)
+  val city = new FilteredMandatoryStringField(30)
   override val productsCache = TrieMap[LCBO_ID, IProduct]()
   override val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()  // don't put whole IProduct in here, just useful keys.
   override val inventoryByProductId = TrieMap[P_KEY, Inventory]()

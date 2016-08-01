@@ -7,8 +7,8 @@ db.url=jdbc:postgresql://localhost:5432
 
 # time out in ms when we consume a web api.
 http.ClientConnTimeOut=5000
-# different value to prove a point
-http.ClientReadTimeOut=3000
+# different value to prove a point (needs to be high if on a holiday)
+http.ClientReadTimeOut=6000
 lcboDomain=lcboapi.com
 DBWrite.BatchSize=1024
 
