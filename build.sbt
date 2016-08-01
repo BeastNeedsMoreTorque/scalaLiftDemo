@@ -25,6 +25,12 @@ ideaExcludeFolders += ".idea_modules"
 
 javaOptions in run += "-Xmn2G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+PrintGC -XX:+PrintGCTimeStamps"
 
+lazy val compileScalastyle = taskKey[Unit]("compileScalastyle")
+
+compileScalastyle := org.scalastyle.sbt.ScalastylePlugin.scalastyle.in(Compile).toTask("").value
+
+(compile in Compile) <<= (compile in Compile) dependsOn compileScalastyle
+
 libraryDependencies ++= {
   val liftVersion = "2.6.2"
   val scalaCompiler = "2.11.8"
