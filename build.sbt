@@ -39,7 +39,6 @@ libraryDependencies ++= {
     "net.liftmodules" %% "lift-jquery-module_2.6" % "2.8" withSources(),
     "postgresql"        % "postgresql"          % "9.1-901.jdbc4",
     "org.scalatest"     %% "scalatest"      % "2.2.6"            % Test,
-    "org.apache.httpcomponents" % "httpclient"  % "4.5.2",
     "org.skinny-framework" %% "skinny-http-client" % "2.2.0",
     "org.eclipse.jetty" %  "jetty-webapp" % "9.1.0.v20131115"   % "container,test",  // Needed to run RunWebApp.scala in IDEA
     "org.eclipse.jetty" %  "jetty-plus"   % "9.1.0.v20131115"  % "container,test", // For Jetty Config

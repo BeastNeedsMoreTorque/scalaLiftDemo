@@ -129,6 +129,7 @@ object Store extends Store with MetaRecord[Store] {
   override def load(): Unit = inTransaction {
     def context( ex: String): String =
       s"Problem loading LCBO stores into cache with exception error '$ex'"
+
     lazy val onEmptyError = "Problem loading LCBO stores into cache, none found"
 
     logger.info("load start")

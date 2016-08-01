@@ -13,13 +13,13 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
   self: T =>
 
   class FilteredOptionalStringField(maxLength: Int) extends OptionalStringField(this, maxLength) {
-    override def defaultValue = ""
+    override def defaultValue: String = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
     def getValue: String = _1.toOption.fold("")(identity)
   }
 
   class FilteredMandatoryStringField(maxLength: Int) extends StringField(this, maxLength) {
-    override def defaultValue = ""
+    override def defaultValue: String = ""
     override def setFilter = notNull _ :: crop _ :: super.setFilter
   }
 

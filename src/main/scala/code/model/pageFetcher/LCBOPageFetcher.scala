@@ -2,10 +2,8 @@ package code.model.pageFetcher
 
 import code.Rest.RestClient
 import net.liftweb.json._
-import net.liftweb.util.Props
 import net.liftweb.common.Loggable
-import org.apache.http.client.utils.URIBuilder
-import org.apache.http.{NameValuePair, TruncatedChunkException}
+import net.liftweb.util.Props
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
 
@@ -53,7 +51,6 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggabl
 
   // this whole class is hidden from clients. So, who needs to worry about private, public, protected here? No one.
   class FetcherImpl extends LCBOPageFetcher with RestClient {
-    type BufferOfNameValuePair = scala.collection.mutable.Buffer[NameValuePair]
     val LcboDomain = Props.get("lcboDomain", "")  // set it!
     implicit val formats = net.liftweb.json.DefaultFormats
 
@@ -65,33 +62,21 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggabl
       * @param accumItems accumulator to facilitate tail recursion
       * @param params     a wrapper of all parameter data we need (see case Class)
       * @return an indexed sequence of product items matching the query and size constraint.
-      * @throws java.net.SocketTimeoutException            timeout is reached, slow connection
-      * @throws java.io.IOException                        I/O issue
-      * @throws net.liftweb.json.JsonParser.ParseException parse problem
-      * @throws net.liftweb.json.MappingException          our case class does not match JSon object from API
-      * @throws java.net.UnknownHostException
-      * @throws TruncatedChunkException  // that's a brutal one, essentially unrecoverable.
-      *
       */
     def collectItemsAsWebClient[T](path: String,
                                    xt: JSitemsExtractor[T],
                                    params: Seq[(String, Any)] = Seq())
                                   (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
-      val uriBuilder = new URIBuilder().setScheme("http").setHost(LcboDomain).setPath(path)
+      val uriRoot: String = s"http://$LcboDomain/$path"
       // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise using "closure" as is often found in JS).
       // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same.
       // It has no side effect for sure, other than helpful log.
       @tailrec // in general it's good to make recursion tailrec to avoid stack overflow.
       def go(accumItems: IndexedSeq[T], currPage: Int): IndexedSeq[T] = {
-        def buildURI(baseUri: URIBuilder, params: Seq[(String, Any)]) = {
-          import scala.collection.JavaConverters._
-          val nvps: BufferOfNameValuePair = params.map{ case (n,v) => new URIParam(n, v.toString)}.toBuffer
-          baseUri.setParameters(nvps.asJava).build()
-        }
-        val uri = buildURI(uriBuilder, params ++ Seq(("page", currPage))) // get as many as possible on a page because we could have few matches.
-        logger.trace(s"collectItemsAsWebClient $uri")
-        val jsonRoot = parse(get(uri))
-        // fyi: throws plenty of varios exceptions.
+        // get as many as possible on a page because we could have few matches.
+        val (msg, uri) = get(uriRoot, params ++ Seq(("page", currPage)): _*)
+        val jsonRoot = parse(msg)
+        // fyi: throws plenty of various exceptions.
         val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj.
         if (isFinalPage(jsonRoot, currPage) || enough(revisedItems.size)) {
           logger.info(uri) // log only last one to be less verbose
@@ -107,11 +92,6 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggabl
       val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
       val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
       isFinalPage || totalPages < pageNo + 1
-    }
-
-    case class URIParam(name: String, value: String) extends NameValuePair {
-      def getName: String = name
-      def getValue: String = value
     }
   }
 }
