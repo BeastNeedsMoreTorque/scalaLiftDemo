@@ -25,8 +25,8 @@ trait ItemStateGrouper {
     val x = items.groupBy {
       current => (cached(current), current) match {
         case (None, _) => New
-        case (Some(retrieved), curr) if !retrieved.equals(curr) => Dirty
-        case _ => Clean
+        case (Some(retrieved), curr) if retrieved.equals(curr) => Clean
+        case _ => Dirty
       }
     }
     DirtyAndNewSequences(x.getOrElse(Dirty, empty), x.getOrElse(New, empty))

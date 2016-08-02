@@ -23,10 +23,12 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
 
   // products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)
-  @Column(name="pkid")
-  override val idField = new LongField(this, 0)  // our own auto-generated id
+  @Column(name = "pkid")
+  override val idField = new LongField(this, 0)
+  // our own auto-generated id
   override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => inventoryByProductId.toMap.get(key)
-  val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
+  val lcbo_id = new LongField(this)
+  // we don't share same PK as LCBO!
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
   val longitude = new DoubleField(this)
@@ -34,7 +36,8 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
   val address_line_1 = new FilteredMandatoryStringField(200)
   val city = new FilteredMandatoryStringField(30)
   override val productsCache = TrieMap[LCBO_ID, IProduct]()
-  override val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()  // don't put whole IProduct in here, just useful keys.
+  override val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()
+  // don't put whole IProduct in here, just useful keys.
   override val inventoryByProductId = TrieMap[P_KEY, Inventory]()
 
   override def Name: String = name.get
@@ -48,11 +51,12 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
 
   override def cache: concurrent.Map[P_KEY, Store] = Store.cache
 
-  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY]  = Store.lcboIdToPKMap
+  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = Store.lcboIdToPKMap
 
   override def pKey: P_KEY = P_KEY(idField.get)
 
   override def meta: MetaRecord[Store] = Store
+
   // @see Scala in Depth
   override def canEqual(other: Any): Boolean =
     other.isInstanceOf[Store]
