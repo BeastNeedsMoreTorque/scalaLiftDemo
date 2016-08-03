@@ -15,32 +15,10 @@ trait InventoryService extends KeyKeeper {
 /**
   * Created by philippederome on 2016-03-25.
   */
-trait IStore extends Equals with InventoryService {
+trait IStore extends Equivalent[IStore] with InventoryService {
   def Name: String
   def isDead: Boolean
   def addressLine1: String
 
   def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]]
-
-  // @see Scala in Depth
-  override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[IStore]
-
-  override def hashCode: Int = Name.## // if the names are the same, they're probably the same
-
-  override def equals(other: Any): Boolean = {
-    other match {
-      case that: IStore =>
-        if (this eq that) true
-        else {
-          that.## == this.## &&
-          that.canEqual(this) &&
-          ( Name == that.Name &&
-            isDead == that.isDead &&
-            addressLine1 == that.addressLine1)
-        }
-      case _ => false
-    }
-  }
-
 }

@@ -44,31 +44,9 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     })
   }
 
-  trait MockProductEquals extends IProduct {
-    // @see Scala in Depth, more for unit testing convenience than anything.
-    override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[IProduct]
 
-    override def hashCode: Int = (Name + price).## // if the names are the same, they're probably the same products, but price is a bit volatile too.
-
-    override def equals(other: Any): Boolean =
-      other match {
-        case that: IProduct =>
-          if (this eq that) true
-          else {
-            that.## == this.## &&
-              that.canEqual(this) &&
-              ( Name == that.Name &&
-                primaryCategory == that.primaryCategory &&
-                isDiscontinued == that.isDiscontinued &&
-                imageThumbUrl == that.imageThumbUrl &&
-                price == that.price )
-          }
-        case _ => false
-      }
-  }
-  //val ints = Gen.choose(1, 1000), eventually might use that.
-  trait typicalBeerProduct extends IProduct with MockProductEquals {
+  // val ints = Gen.choose(1, 1000), eventually might use that.
+  trait typicalBeerProduct extends IProduct {
     override def primaryCategory: String = "beer"
     override def isDiscontinued: Boolean = false
     override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
@@ -78,7 +56,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     override def streamAttributes: IndexedSeq[Attribute] = Product.streamAttributes
   }
 
-  trait typicalWineProduct extends IProduct with MockProductEquals {
+  trait typicalWineProduct extends IProduct {
     override def primaryCategory: String = "wine"
     override def isDiscontinued: Boolean = false
     override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
@@ -91,25 +69,37 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   val Heineken = new typicalBeerProduct {
     override def pKey: P_KEY = P_KEY(1)
     override def lcboId: LCBO_ID = LCBO_ID(1)
+    override def alcoholContent: String = "5.0%"
     override def Name: String = "Heineken"
+    override def equivalent(other: IProduct): Boolean =
+      this.Name == other.Name
   }
 
   val MillStLager = new typicalBeerProduct {
     override def pKey: P_KEY = P_KEY(2)
     override def lcboId: LCBO_ID = LCBO_ID(2)
+    override def alcoholContent: String = "5.0%"
     override def Name: String = "Mill Street Lager"
+    override def equivalent(other: IProduct): Boolean =
+      this.Name == other.Name
   }
 
   val OysterBay = new typicalWineProduct {
     override def pKey: P_KEY = P_KEY(1000)
     override def lcboId: LCBO_ID = LCBO_ID(1000)
+    override def alcoholContent: String = "16.0%"
     override def Name: String = "Oyster Bay"
+    override def equivalent(other: IProduct): Boolean =
+      this.Name == other.Name
   }
 
   val ChampagneKrug = new typicalWineProduct {
     override def pKey: P_KEY = P_KEY(1001)
     override def lcboId: LCBO_ID = LCBO_ID(1001)
+    override def alcoholContent: String = "16.0%"
     override def Name: String = "Krug Champagne"
+    override def equivalent(other: IProduct): Boolean =
+      this.Name == other.Name
   }
 
   val singleBeerRunner = new ProductRunner {
@@ -122,7 +112,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     val someBeers =  Seq.fill(63)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(37)( Heineken)
     val someWines = Seq(OysterBay, ChampagneKrug)
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
-    //Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
+    // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
     override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = category match {
       case "beer" => someBeers.toVector
       case "wine" => someWines.toVector
@@ -134,7 +124,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     val someBeers =  Seq.fill(62)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(38)( Heineken)
     val someWines = Seq(OysterBay, ChampagneKrug)
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
-    //Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
+    // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
     override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = category match {
       case "beer" => someBeers.toVector
       case "wine" => someWines.toVector

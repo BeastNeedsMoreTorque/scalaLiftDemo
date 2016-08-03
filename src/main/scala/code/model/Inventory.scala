@@ -26,28 +26,18 @@ class Inventory private(val storeid: Long,
                         var is_dead: Boolean,
                         var store_id: Long=0,
                         var product_id: Long=0)
-  extends Equals with KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
+  extends Equivalent[Inventory] with KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
 
   override def getKey: String = s"$productid:$storeid"
 
   def id: CompositeKey2[Long, Long] = compositeKey(storeid, productid)
 
-  override def equals(other: Any): Boolean =
-    other match {
-      case that: Inventory =>
-        (this eq that) ||
-          (that.canEqual(this) &&
-            quantity == that.quantity &&
-            is_dead == that.is_dead &&
-            updated_on == that.updated_on)
-      case _ => false
-    }
-
-  override def hashCode: Int = (storeid.toString + ":" + productid.toString + ":" + updated_on).##
-    // if the names are the same, they're probably the same
-
-  override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[Inventory]
+  override def equivalent(other: Inventory): Boolean =
+    this.store_id == other.store_id &&
+    this.product_id == other.product_id &&
+    this.quantity == other.quantity &&
+    this.is_dead == other.is_dead &&
+    this.updated_on == other.updated_on
 
   def copyDiffs(inv: Inventory): Inventory = {
     quantity = inv.quantity

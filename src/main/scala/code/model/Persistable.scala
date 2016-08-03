@@ -6,11 +6,15 @@ import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
 import code.model.utils.RetainSingles.implicitSeqToRetainSingles
 
+trait PersistableLimits {
+  def BATCH_SIZE_DFLT: Int = 1024
+}
+
 /**
   * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,
   * so mitigate with access control on methods, one method is protected.
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor with KeyKeeper {
+trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor with KeyKeeper with PersistableLimits {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.
@@ -19,7 +23,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     insert(insertItems)
   }
 
-  private val batchSize = Props.getInt("DBWrite.BatchSize", 1024)
+  private val batchSize = Props.getInt("DBWrite.BatchSize", BATCH_SIZE_DFLT)
 
   // We can afford to be less strict in our data preparation/validation than for the insert.
   private def update(items: Iterable[T]) = {

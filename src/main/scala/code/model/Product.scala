@@ -15,30 +15,43 @@ import scala.language.implicitConversions
 import scala.util.Try
 import scala.xml.Node
 
+trait ProductSizeConstants {
+  def NAME: Int = Props.getInt("product.size.NAME", 0)
+  def ADDRESS: Int = Props.getInt("product.size.ADDRESS", 0)
+  def IMAGE_URL: Int = Props.getInt("product.size.IMAGE_URL", 0)
+  def ORIGIN: Int = Props.getInt("product.size.ORIGIN", 0)
+  def PACKAGE: Int = Props.getInt("product.size.PACKAGE", 0)
+  def PRIMARY_CATEGORY: Int = Props.getInt("product.size.PRIMARY_CATEGORY", 0)
+  def SECONDARY_CATEGORY: Int = Props.getInt("product.size.SECONDARY_CATEGORY", 0)
+  def VARIETAL: Int = Props.getInt("product.size.VARIETAL", 0)
+  def DESCRIPTION: Int = Props.getInt("product.size.DESCRIPTION", 0)
+  def SERVING_SUGGESTION: Int = Props.getInt("product.size.SERVING_SUGGESTION", 0)
+}
+
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper),
   * Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
-class Product private() extends LCBOEntity[Product] with IProduct {
+class Product private() extends LCBOEntity[Product] with IProduct with ProductSizeConstants {
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   val is_discontinued = new BooleanField(this, false)
-  val `package` = new FilteredOptionalStringField(80)
+  val `package` = new FilteredOptionalStringField(PACKAGE)
   val total_package_units = new IntField(this)
-  val primary_category = new FilteredMandatoryStringField(40)
-  val name = new FilteredMandatoryStringField(120)
+  val primary_category = new FilteredMandatoryStringField(PRIMARY_CATEGORY)
+  val name = new FilteredMandatoryStringField(NAME)
 
-  val image_thumb_url = new FilteredOptionalStringField(200)
-  val origin = new FilteredOptionalStringField(200)
+  val image_thumb_url = new FilteredOptionalStringField(IMAGE_URL)
+  val origin = new FilteredOptionalStringField(ORIGIN)
   val price_in_cents = new IntField(this)
   val alcohol_content = new IntField(this)
   val volume_in_milliliters = new IntField(this)
-  val secondary_category = new FilteredMandatoryStringField(80)
-  val varietal = new FilteredOptionalStringField(100)
-  val description = new FilteredOptionalStringField(2000)
-  val serving_suggestion = new FilteredOptionalStringField(300)
+  val secondary_category = new FilteredMandatoryStringField(SECONDARY_CATEGORY)
+  val varietal = new FilteredOptionalStringField(VARIETAL)
+  val description = new FilteredOptionalStringField(DESCRIPTION)
+  val serving_suggestion = new FilteredOptionalStringField(SERVING_SUGGESTION)
   val formatter = NumberFormat.getCurrencyInstance() // Not French Canada, which does it differently...
 
   def meta: MetaRecord[Product] = Product
@@ -63,22 +76,13 @@ class Product private() extends LCBOEntity[Product] with IProduct {
 
   def isDiscontinued: Boolean = is_discontinued.get
 
-  // @see Scala in Depth
-  override def canEqual(other: Any): Boolean = other.isInstanceOf[Product]
-  override def hashCode: Int = (Name + price).## // if the names are the same, they're probably the same products, but price is a bit volatile too.
-  override def equals(other: Any): Boolean =
-    other match {
-      case that: Product =>
-        (this eq that) ||
-        (that.canEqual(this) &&
-          name == that.name &&
-          primaryCategory == that.primaryCategory &&
-          isDiscontinued == that.isDiscontinued &&
-          imageThumbUrl == that.imageThumbUrl &&
-          price == that.price &&
-          alcohol_content.get == that.alcohol_content.get) // more of an exercise than anything
-      case _ => false
-    }
+  override def equivalent(other: IProduct): Boolean =
+    this.Name == other.Name &&
+    this.primaryCategory == other.primaryCategory &&
+    this.isDiscontinued == other.isDiscontinued &&
+    this.imageThumbUrl == other.imageThumbUrl &&
+    this.price == other.price &&
+    this.alcoholContent == other.alcoholContent
 
   /**
     *
@@ -105,7 +109,7 @@ class Product private() extends LCBOEntity[Product] with IProduct {
     formatter.format(price_in_cents.get / 100.0) // since we perverted meaning somewhat by changing unit from cents to dollars
 
   // Change scale by 100 to normal conventions, foregoing LCBO's use of Int (for ex. 1200 becomes "12.0%" including the percent sign)
-  def alcoholContent: String = {
+  override def alcoholContent: String = {
     val a = alcohol_content.get / 100.0
     f"$a%1.1f%%"
   }
@@ -134,6 +138,8 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
 
   def getProduct(id: P_KEY): Option[IProduct] = cache.get(id)
+
+  def toEquivalent(p: IProduct): Equivalent[IProduct] = p
 
   override def table: Table[Product] = MainSchema.products
 

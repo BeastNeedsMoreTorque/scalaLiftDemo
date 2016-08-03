@@ -18,7 +18,13 @@ import scala.language.implicitConversions
 import scala.util.Try
 import scala.xml.Node
 
-class Store private() extends LCBOEntity[Store] with IStore with StoreCacheService
+trait StoreSizeConstants {
+  def NAME: Int = Props.getInt("store.size.NAME", 0)
+  def ADDRESS: Int = Props.getInt("store.size.ADDRESS", 0)
+  def CITY_NAME: Int = Props.getInt("store.size.CITY_NAME", 0)
+}
+
+class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConstants with StoreCacheService
   with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
 
   // products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
@@ -32,9 +38,9 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
   val longitude = new DoubleField(this)
-  val name = new FilteredMandatoryStringField(200)
-  val address_line_1 = new FilteredMandatoryStringField(200)
-  val city = new FilteredMandatoryStringField(30)
+  val name = new FilteredMandatoryStringField(NAME)
+  val address_line_1 = new FilteredMandatoryStringField(ADDRESS)
+  val city = new FilteredMandatoryStringField(CITY_NAME)
   override val productsCache = TrieMap[LCBO_ID, IProduct]()
   override val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()
   // don't put whole IProduct in here, just useful keys.
@@ -57,22 +63,10 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreCacheServi
 
   override def meta: MetaRecord[Store] = Store
 
-  // @see Scala in Depth
-  override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[Store]
-
-  override def hashCode: Int = Name.## // if the names are the same, they're probably the same
-
-  override def equals(other: Any): Boolean =
-    other match {
-      case that: Store =>
-        (this eq that) ||
-        (that.canEqual(this) &&
-          Name == that.Name &&
-          isDead == that.isDead &&
-          addressLine1 == that.addressLine1)
-      case _ => false
-    }
+  override def equivalent(other: IStore): Boolean =
+    this.Name == other.Name &&
+    this.isDead == other.isDead &&
+    this.addressLine1 == other.addressLine1
 
   // following three caches leverage ORM's stateful cache of storeProducts and inventories above
   // (which are not presented as map but as slower sequence;
@@ -118,6 +112,8 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
 
   def findAll: Iterable[Store] = cache.values
+
+  def toEquivalent(s: IStore): Equivalent[IStore] = s
 
   def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = getStore(pKey).map(_.lcboId)
 

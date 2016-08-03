@@ -39,6 +39,17 @@ product.Category=wine
 product.DBBatchSize=512
 product.cacheSize=20000
 
+product.size.NAME=120
+product.size.ADDRESS=200
+product.size.IMAGE_URL=200
+product.size.ORIGIN=200
+product.size.PACKAGE=80
+product.size.PRIMARY_CATEGORY=40
+product.size.SECONDARY_CATEGORY=80
+product.size.VARIETAL=100
+product.size.DESCRIPTION=2000
+product.size.SERVING_SUGGESTION=300
+
 # When going synchronously to select products of a category, we'll request no more than store.maxSampleSize from LCBO
 store.maxSampleSize=60
 # implied with LCBO tests as max we can query on a page
@@ -50,3 +61,7 @@ store.useRandomSeed=false
 # for unit test set to 411
 store.fixedRNGSeed=411
 inventory.lcboMaxPerPage=50
+
+store.size.NAME=200
+store.size.ADDRESS=200
+store.size.CITY_NAME=30
