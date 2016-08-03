@@ -76,13 +76,22 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
 
   def isDiscontinued: Boolean = is_discontinued.get
 
-  override def equivalent(other: IProduct): Boolean =
-    this.Name == other.Name &&
-    this.primaryCategory == other.primaryCategory &&
-    this.isDiscontinued == other.isDiscontinued &&
-    this.imageThumbUrl == other.imageThumbUrl &&
-    this.price == other.price &&
-    this.alcoholContent == other.alcoholContent
+  // @see Scala in Depth
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[Product]
+  override def hashCode: Int = Name.## // if the names are the same, they're probably the same products
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: Product =>
+        (this eq that) ||
+        (that.canEqual(this) &&
+          name == that.name &&
+          price == that.price &&
+          primaryCategory == that.primaryCategory &&
+          isDiscontinued == that.isDiscontinued &&
+          imageThumbUrl == that.imageThumbUrl &&
+          alcohol_content.get == that.alcohol_content.get) // more of an exercise than anything
+      case _ => false
+    }
 
   /**
     *
@@ -138,8 +147,6 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
 
   def getProduct(id: P_KEY): Option[IProduct] = cache.get(id)
-
-  def toEquivalent(p: IProduct): Equivalent[IProduct] = p
 
   override def table: Table[Product] = MainSchema.products
 

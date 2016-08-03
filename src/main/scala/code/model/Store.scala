@@ -63,10 +63,22 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConsta
 
   override def meta: MetaRecord[Store] = Store
 
-  override def equivalent(other: IStore): Boolean =
-    this.Name == other.Name &&
-    this.isDead == other.isDead &&
-    this.addressLine1 == other.addressLine1
+  // @see Scala in Depth
+  override def canEqual(other: Any): Boolean =
+    other.isInstanceOf[Store]
+
+  override def hashCode: Int = Name.## // if the names are the same, they're probably the same
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: Store =>
+        (this eq that) ||
+        (that.canEqual(this) &&
+          Name == that.Name &&
+          isDead == that.isDead &&
+          addressLine1 == that.addressLine1)
+      case _ => false
+    }
 
   // following three caches leverage ORM's stateful cache of storeProducts and inventories above
   // (which are not presented as map but as slower sequence;
@@ -112,8 +124,6 @@ object Store extends Store with MetaRecord[Store] {
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
 
   def findAll: Iterable[Store] = cache.values
-
-  def toEquivalent(s: IStore): Equivalent[IStore] = s
 
   def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = getStore(pKey).map(_.lcboId)
 
