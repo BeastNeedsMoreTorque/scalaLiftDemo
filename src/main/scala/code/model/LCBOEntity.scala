@@ -54,6 +54,6 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
   // and then make sure first DB is brought up to date with that info and synchronously the cache memory as well.
   final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], get: I => Option[I]): Unit = {
     val dirtyAndNewItems = itemsByState[I, T](items, get)
-    updateAndInsert(dirtyAndNewItems.dirtys, dirtyAndNewItems.news) // updates DB AND cache.
+    updateAndInsert(dirtyAndNewItems.updates, dirtyAndNewItems.inserts) // updates DB AND cache.
   }
 }

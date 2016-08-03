@@ -101,9 +101,9 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     }
 
     for {items <- Try(collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage))
-         dirtyAndNewItems <- Try(itemsByState[Inventory, Inventory](items, get))
-         updatedInventories <- Try(getUpdatedInvs(dirtyAndNewItems.dirtys).retainSingles)
-         newInventories <- Try(dirtyAndNewItems.news.retainSingles)
+         updatesAndInserts <- Try(itemsByState[Inventory, Inventory](items, get))
+         updatedInventories <- Try(getUpdatedInvs(updatesAndInserts.updates).retainSingles)
+         newInventories <- Try(updatesAndInserts.inserts.retainSingles)
          inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))} yield inventories
   }
 

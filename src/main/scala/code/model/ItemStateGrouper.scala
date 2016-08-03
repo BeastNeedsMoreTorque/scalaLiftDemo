@@ -5,7 +5,7 @@ import scala.collection.IndexedSeq
 /**
   * Created by philippederome on 2016-04-01.
   */
-case class DirtyAndNewSequences[T](dirtys: IndexedSeq[T], news: IndexedSeq[T])
+case class UpdateAndInsertSequences[T](updates: IndexedSeq[T], inserts: IndexedSeq[T])
 
 trait ItemStateGrouper {
   // to denote whether an abstract item T (for example Application Lift Record) requires to be inserted (New), updated (Dirty), or is good as is (Clean)
@@ -19,7 +19,7 @@ trait ItemStateGrouper {
   // We want I to be an interface of T when using get/isDirty as get usage could be more abstract than type T at client side (possibly retrieving from cache).
   // Returned sequences require to be concrete because that is how our ORM interface is like.
   def itemsByState[I, T <: I](items: IndexedSeq[T],
-                              cached: I => Option[I]): DirtyAndNewSequences[T] = {
+                              cached: I => Option[I]): UpdateAndInsertSequences[T] = {
     def empty = IndexedSeq.empty[T]
 
     val x = items.groupBy {
@@ -29,6 +29,6 @@ trait ItemStateGrouper {
         case _ => Dirty
       }
     }
-    DirtyAndNewSequences(x.getOrElse(Dirty, empty), x.getOrElse(New, empty))
+    UpdateAndInsertSequences(x.getOrElse(Dirty, empty), x.getOrElse(New, empty))
   }
 }
