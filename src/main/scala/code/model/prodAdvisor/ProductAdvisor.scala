@@ -108,14 +108,16 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       }
       // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
 
-      invService.asyncLoadCache() // if we never loaded the cache, do it (fast lock free test). Note: useful even if we have product of matching inventory
+      invService.asyncLoadCache() // if we never loaded the cache, do it. Note: useful even if we have product of matching inventory
+      // to find out up to date inventory
       // Ideally this asyncLoadCache could be a metaphor for a just in time restocking request given that our cache could be empty with cache representing
       // "real inventory".
 
       val (cachedIds, rr) = RNG.collectSample(inStockItems.indices, requestSize).run(rng)
       // shuffle only on the indices not full items (easier on memory mgmt).
+
       if (cachedIds.nonEmpty) cachedIds.map(inStockItems)
-      // get back the items that the ids have been selected (we don't stream because we know inventory > 0)
+      // when nonEmpty, get back the items that the ids have been selected (we don't stream because we know inventory > 0)
       else getSerialResult(invService, runner, requestSize, category, lcboProdCategory, rr)
     }
     Xor.fromTry(scalaTry)

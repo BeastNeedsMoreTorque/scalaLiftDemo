@@ -45,7 +45,7 @@ product.size.DESCRIPTION=2000
 product.size.SERVING_SUGGESTION=300
 
 # implied with LCBO tests as max we can query on a page
-store.lcboMaxPerPage=40
+store.lcboMaxPerPage=100
 # careful observer will notice it's not same value as for product.
 store.query.Filter={"where_not":"is_dead"}
 
@@ -56,9 +56,9 @@ productInteraction.useRandomSeed=true
 productInteraction.fixedRNGSeed=21
 
 # When going synchronously to select products of a category, we'll request no more than advisor.maxSampleSize from LCBO
-advisor.maxSampleSize=60
+advisor.maxSampleSize=100
 
-inventory.lcboMaxPerPage=50
+inventory.lcboMaxPerPage=100
 
 store.size.NAME=200
 store.size.ADDRESS=200

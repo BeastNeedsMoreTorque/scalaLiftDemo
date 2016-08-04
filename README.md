@@ -6,17 +6,21 @@ User registration is as per mechanism of Lift Framework, with whole framework di
 
 The store selection is by usage of Google MAPS API and user's geolocation being volunteered.
 The choice of category is by selection of 6 icons representing each a category, with the set acting as radio buttons.
-The choice of required count of product recommendation is a drop down menu offering numbers of 1,5,10, and 20.
+The choice of required count of product recommendation is a drop down menu offering numbers of 1,5,10, 20, and 50.
 
 ## User actions
-User actions is via 3 icon buttons beneath the category icons. They are `recommend` (question mark image), `cancel` (road no entry sign), and `consume` (a glass of wine).
+User actions is via 3 icon buttons beneath the category icons. They are `advise` (question mark image), `cancel` (road no entry sign), and `consume` (a glass
+ of wine).
 
-The `recommend` action will find matching LCBO products for the given category and store attempting to show as many as requested, one following each other vertically.
+The `advise` action will find matching LCBO products for the given category and store attempting to show as many as requested, one following each other 
+vertically.
 The recommendation may use caching if a user has previously made requests from the current store and there are products and inventories available in the database for that store.
-Alternatively, the recommendation may make an immediate request to LCBO API from the server to obtain a subset of matching products for reasonable quick response.
-In both cases, the recommend action randomly selects a match of products. In the cached case, there may be 3000 items in a given store (e.g. wine), so it does a random
-sample algorithm using required size as parameter (never more than 20, since LCBO API may fail to deliver full messages as promised chunk exception). In the non-cached case, the sample size is chosen by configuration and typically at 100 or less and
-we use a random permutation (shuffle) of the products just obtained and then select the required count from the shuffle. The shuffle works from the indices of the collection.
+Alternatively, the recommendation may make an immediate request to LCBO API from the server to obtain a subset of matching products for reasonable quick 
+response, an exercise in partial degradation of service.
+In both cases, the advise action randomly selects a match of products. In the cached case, there may be 3000 items in a given store (e.g. wine), so it does a 
+random sample algorithm using required size as parameter over cached products of selected category (n choose k problem). In the non-cached case,
+we use a random shuffle of the products just obtained (a permutation select one of n! problem) and then select the required count from the shuffle. The shuffle 
+works from the indices of the collection.
 
 Random algorithms of sampling and shuffling are taken from The Art of Computer Programming by Knuth with minor adjustments to Scala.
 
@@ -31,8 +35,9 @@ The `consume` action is a basic simulation of a shopping cart, allowing user to 
 Test mode is used when executing a sample of Scalatest unit test cases.
 
 - Starting app: in project folder, launch sbt, and then `jetty:start`.
-May also start from Intellij IDEA Community Edition 2016.1. Patience is required when Intellij IDEA CE decides to index your project.
-Runs on localhost:8090 except if launched from IDEA in which case it is localhost:8080. The port number is controlled in build.sbt by containerPort,
+May also start from Intellij IDEA Community Edition 2016.*. Patience is required when Intellij IDEA CE decides to index your project.
+Runs on localhost:8090 except if launched from IDEA in which case it is localhost:8080 (I have yet to find out not to hardcode 8080 when under IDEA control). 
+The port number is controlled in build.sbt by containerPort,
 which is tied to plugin xsbt-web-plugin (project/plugins.sbt)
 
 - web server: runs fine on OS X El Capitan 10.11 (initially developed on Yosemite 10.10.5).
@@ -50,7 +55,7 @@ browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - Lift framework: 2.6.2 but taken care by SBT
 Squeryl, a Scala ORM ((taken care by SBT)
-Apache common for httpclient (taken care by SBT)
+skinny for httpclient (taken care by SBT)
 scalatest for unit testing
 
 - Install PostgresSQL. I use 9.4.5.0
@@ -63,6 +68,7 @@ When LCBO API is accessed from a web server or private script, these keys are no
 
 You need a Google MAPS API key as per following (JS API): https://developers.google.com/maps/documentation/javascript/get-api-key
 Once obtained, use it in `webapp/index.html` at following replacing `GET_A_KEY` with your API key.
+
         `<script async defer src="https://maps.googleapis.com/maps/api/js?key=GET_A_KEY&callback=storeFinder.initMap"`
 
 Install initial SQL tables using `POSTGRES_SCHEMA_INIT.SQL`. What may cause portability issues for other databases in that file are:
@@ -97,7 +103,7 @@ Dependency Injection via Partially applied Functions (`LCBOPageFetcherComponent`
 implicit injection (for type conversion also known as implicit view in Scala in Depth: `P_KEY` and `LCBO_ID` implicitly convert to `Long`, `Store` to XML Node conversion)
 
 Unused Design Patterns:
-stackable traits, duck typing, memoization, type class (via context bounds
+stackable traits, duck typing, memoization, type class (via context bounds, though I tried it in a recent version of ItemStateGrouper)
 
 
 Functional Programming: random number generation is a classical example of side effect and does not lend naturally to repeatable unit testing or pure functions implementation.
