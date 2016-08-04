@@ -69,7 +69,7 @@ When LCBO API is accessed from a web server or private script, these keys are no
 You need a Google MAPS API key as per following (JS API): https://developers.google.com/maps/documentation/javascript/get-api-key
 Once obtained, use it in `webapp/index.html` at following replacing `GET_A_KEY` with your API key.
 
-        `<script async defer src="https://maps.googleapis.com/maps/api/js?key=GET_A_KEY&callback=storeFinder.initMap"`
+        <script async defer src="https://maps.googleapis.com/maps/api/js?key=GET_A_KEY&callback=storeFinder.initMap"
 
 Install initial SQL tables using `POSTGRES_SCHEMA_INIT.SQL`. What may cause portability issues for other databases in that file are:
 Usage of sequences to generate IDs.
