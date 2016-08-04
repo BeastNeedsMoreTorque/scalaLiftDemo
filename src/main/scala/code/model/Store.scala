@@ -24,7 +24,7 @@ trait StoreSizeConstants {
   def CITY_NAME: Int = Props.getInt("store.size.CITY_NAME", 0)
 }
 
-class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConstants with StoreCacheService
+case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConstants with StoreCacheService
   with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
 
   // products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
@@ -62,23 +62,6 @@ class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConsta
   override def pKey: P_KEY = P_KEY(idField.get)
 
   override def meta: MetaRecord[Store] = Store
-
-  // @see Scala in Depth
-  override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[Store]
-
-  override def hashCode: Int = Name.## // if the names are the same, they're probably the same
-
-  override def equals(other: Any): Boolean =
-    other match {
-      case that: Store =>
-        (this eq that) ||
-        (that.canEqual(this) &&
-          Name == that.Name &&
-          isDead == that.isDead &&
-          addressLine1 == that.addressLine1)
-      case _ => false
-    }
 
   // following three caches leverage ORM's stateful cache of storeProducts and inventories above
   // (which are not presented as map but as slower sequence;

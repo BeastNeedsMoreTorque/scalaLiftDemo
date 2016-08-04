@@ -5,7 +5,7 @@ import scala.collection.IndexedSeq
 /**
   * Created by philippederome on 2016-03-25.
   */
-trait IProduct extends Equals with KeyKeeper {
+trait IProduct extends KeyKeeper {
   def Name: String
   def primaryCategory: String
   def isDiscontinued: Boolean

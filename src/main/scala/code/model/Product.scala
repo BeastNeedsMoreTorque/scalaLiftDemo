@@ -76,23 +76,6 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
 
   def isDiscontinued: Boolean = is_discontinued.get
 
-  // @see Scala in Depth
-  override def canEqual(other: Any): Boolean = other.isInstanceOf[Product]
-  override def hashCode: Int = Name.## // if the names are the same, they're probably the same products
-  override def equals(other: Any): Boolean =
-    other match {
-      case that: Product =>
-        (this eq that) ||
-        (that.canEqual(this) &&
-          name == that.name &&
-          price == that.price &&
-          primaryCategory == that.primaryCategory &&
-          isDiscontinued == that.isDiscontinued &&
-          imageThumbUrl == that.imageThumbUrl &&
-          alcohol_content.get == that.alcohol_content.get) // more of an exercise than anything
-      case _ => false
-    }
-
   /**
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product

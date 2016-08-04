@@ -19,7 +19,7 @@ import scala.util.Try
   * storeid and productid are our composite PK whereas store_id and product_id is the same from LCBO's point of view with their PK.
   * We keep it in for referencing. See also case class InventoryAsLCBOJson further down.
   */
-class Inventory private(val storeid: Long,
+case class Inventory private(val storeid: Long,
                         val productid: Long,
                         var quantity: Long,
                         var updated_on: String,
@@ -31,24 +31,6 @@ class Inventory private(val storeid: Long,
   override def getKey: String = s"$productid:$storeid"
 
   def id: CompositeKey2[Long, Long] = compositeKey(storeid, productid)
-
-  override def equals(other: Any): Boolean =
-    other match {
-      case that: Inventory =>
-        (this eq that) ||
-          (that.canEqual(this) &&
-            storeid == that.storeid &&
-            productid == that.productid &&
-            quantity == that.quantity &&
-            is_dead == that.is_dead &&
-            updated_on == that.updated_on)
-      case _ => false
-    }
-
-  override def hashCode: Int = 31*(17* 31 + storeid.toString.##) + productid.toString.##
-
-  override def canEqual(other: Any): Boolean =
-    other.isInstanceOf[Inventory]
 
   def copyDiffs(inv: Inventory): Inventory = {
     quantity = inv.quantity

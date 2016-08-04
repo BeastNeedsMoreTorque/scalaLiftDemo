@@ -15,7 +15,7 @@ trait InventoryService extends KeyKeeper {
 /**
   * Created by philippederome on 2016-03-25.
   */
-trait IStore extends Equals with InventoryService {
+trait IStore extends InventoryService {
   def Name: String
   def isDead: Boolean
   def addressLine1: String
