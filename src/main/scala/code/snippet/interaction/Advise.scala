@@ -105,8 +105,6 @@ trait Advise extends UtilCommands {
   }
 
   private def selectionMarkup(prod: IProduct, inventory: String) = {
-    val imgNS = <img src={prod.imageThumbUrl}/>
-
     // create a checkBox with value being product id (key for lookups) and label's html representing name.
     // The checkbox state is picked up when we call JS in this class
     val lcboId = prod.lcboId.toString
@@ -129,6 +127,7 @@ trait Advise extends UtilCommands {
 
     // this info is redundant in DOM to some extent but makes it more convenient to fetch and we're not using JSON here.
     val hiddenCostNS: NodeSeq = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"/>
+    val imgNS = <img src={prod.imageThumbUrl}/>
     (<div class="span-8 last">{imgNS}<br/>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div>): NodeSeq
   }
 

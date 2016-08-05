@@ -14,19 +14,32 @@ import org.squeryl.dsl.CompositeKey2
 import scala.collection.{IndexedSeq, Iterable}
 import scala.util.Try
 
+class InventoryAsLCBOJson(var product_id: Long,
+                          var store_id: Long,
+                          var is_dead: Boolean,
+                          var updated_on: String,
+                          var quantity: Long) {
+  def notNull(s: String): String = if (s eq null) "" else s  // protection against NullPointerException and LCBO's poisoning us with missing data
+  this.updated_on = notNull(updated_on)
+  def this() =
+    this(0, 0, false, "", 0)
+  def copy(inv: InventoryAsLCBOJson): Unit = {
+    this.product_id = inv.product_id
+    this.store_id = inv.store_id
+    this.is_dead = inv.is_dead
+    this.updated_on = inv.updated_on
+    this.quantity = inv.quantity
+  }
+}
+
 /**
   * Created by philippederome on 2016-03-26.
   * storeid and productid are our composite PK whereas store_id and product_id is the same from LCBO's point of view with their PK.
   * We keep it in for referencing. See also case class InventoryAsLCBOJson further down.
   */
 case class Inventory private(val storeid: Long,
-                        val productid: Long,
-                        var quantity: Long,
-                        var updated_on: String,
-                        var is_dead: Boolean,
-                        var store_id: Long=0,
-                        var product_id: Long=0)
-  extends Equals with KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
+                             val productid: Long)
+  extends InventoryAsLCBOJson with KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
 
   override def getKey: String = s"$productid:$storeid"
 
@@ -50,23 +63,16 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
   val extract: JSitemsExtractor[Inventory] =  { jVal =>
     for {p <- jVal.children.toIndexedSeq
          inv <- p.extractOpt[InventoryAsLCBOJson]
-         sKey <- Store.lcboIdToPKMap.get(LCBO_ID(inv.store_id))
-         pKey <- Product.lcboIdToPKMap.get(LCBO_ID(inv.product_id))
-         newInv = Inventory.apply(sKey, pKey, inv)
+         storeid <- Store.lcboIdToPKMap.get(LCBO_ID(inv.store_id))
+         productid <- Product.lcboIdToPKMap.get(LCBO_ID(inv.product_id))
+         newInv = Inventory(storeid, productid, inv)
     } yield newInv
   }
 
-  def apply( sKey: Long, pKey: Long, inv: InventoryAsLCBOJson): Inventory = {
-    def notNull(s: String) = if (s eq null) "" else s  // protection against NullPointerException and LCBO's poisoning us with missing data
-    new Inventory(
-      storeid = sKey, // apply our composite PK
-      productid = pKey, // apply our composite PK
-      product_id = inv.product_id, // record their composite PK
-      store_id = inv.store_id, // record their composite PK
-      is_dead = inv.is_dead, // normal attributes from here on
-      updated_on = notNull(inv.updated_on),
-      quantity = inv.quantity
-    )
+  def apply(storeid: Long, productid: Long, inv: InventoryAsLCBOJson): Inventory = {
+    val obj = new Inventory(storeid, productid)
+    obj.copy(inv)
+    obj
   }
 
   def fetchInventoriesByStore(webApiRoute: String,
@@ -88,10 +94,4 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
          newInventories <- Try(updatesAndInserts.inserts.retainSingles)
          inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))} yield inventories
   }
-
-  case class InventoryAsLCBOJson(product_id: Long,
-                                 store_id: Long,
-                                 is_dead: Boolean,
-                                 updated_on: String,
-                                 quantity: Long)
 }
