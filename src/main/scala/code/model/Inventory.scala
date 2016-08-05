@@ -20,7 +20,7 @@ class InventoryAsLCBOJson(var product_id: Long,
                           var updated_on: String,
                           var quantity: Long) {
   def notNull(s: String): String = if (s eq null) "" else s  // protection against NullPointerException and LCBO's poisoning us with missing data
-  this.updated_on = notNull(updated_on)
+  this.updated_on = notNull(updated_on) // potentially a work around the Lift JSON parser that should give us a default.
   def this() =
     this(0, 0, false, "", 0)
   def copy(inv: InventoryAsLCBOJson): Unit = {
