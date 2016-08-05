@@ -62,7 +62,7 @@ trait Advise extends UtilCommands {
 
   private def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd = {
     // for each element of qOfProds, build a Div as NodeSeq and concatenate them as a NodeSeq for the several divs
-    val divs = qOfProds.map(getDiv).foldLeft(NodeSeq.Empty)( _ ++ _ )
+    val divs: NodeSeq = <div>{qOfProds.map(getDiv)}</div>
     SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
   }
 
@@ -85,16 +85,11 @@ trait Advise extends UtilCommands {
   // We also add a hiddenCost, so that the cost per item is always available for our calculation
   // (visible to user in attributes in any event, but harder for us to get at for computation)
   private def attributesMarkup(prod: IProduct, attrs: IndexedSeq[Attribute]): NodeSeq = {
-    val tbody = {
-      for {attr <- attrs}
-        yield <tr>
-          <td class="prodAttrHead">
-            {attr.key}
-          </td>
-          <td class={attr.css} name={attr.name}>
-            {attr.value}
-          </td>
-        </tr>
+    def markup(a: Attribute): NodeSeq = {
+      <tr>
+        <td class="prodAttrHead">{a.key}</td>
+        <td class={a.css} name={a.name}>{a.value}</td>
+      </tr>
     }
     <div class="span-8">
       <table>
@@ -104,9 +99,7 @@ trait Advise extends UtilCommands {
             <th>Value</th>
           </tr>
         </thead>
-        <tbody>
-          {tbody}
-        </tbody>
+        <tbody>{attrs.map(markup)}</tbody>
       </table>
     </div>
   }
@@ -130,15 +123,13 @@ trait Advise extends UtilCommands {
 
     // read-only costNS, so user can see it clearly but cannot update it.
     val costNS =
-    <label>Cost:
-      <input type="text" class="prodCost prodSelectInput" value={prod.price} readonly="readonly"/>
-    </label>
+      <label>Cost:
+        <input type="text" class="prodCost prodSelectInput" value={prod.price} readonly="readonly"/>
+      </label>
 
     // this info is redundant in DOM to some extent but makes it more convenient to fetch and we're not using JSON here.
-    val hiddenCostNS = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"/>
-
-    val ns: NodeSeq =  <div class="span-8 last">{imgNS}<br/>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div>
-    ns
+    val hiddenCostNS: NodeSeq = <input type="text" class="hiddenProdCost" value={prod.price} hidden="hidden"/>
+    (<div class="span-8 last">{imgNS}<br/>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div>): NodeSeq
   }
 
   // message is confirmation when successful, error when not
