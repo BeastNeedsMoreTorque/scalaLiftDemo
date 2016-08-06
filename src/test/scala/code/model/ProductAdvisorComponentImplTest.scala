@@ -21,7 +21,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => None
     override def getProduct(x: LCBO_ID): Option[IProduct] = None
     override def getProductKeysByCategory(lcboCategory: String) = IndexedSeq[KeyKeeperVals]()
-    override def asyncLoadCache() = {} // intentional Noop here.
+    override def asyncLoadCache() = () // intentional Noop/Unit here.
   }
 
 
@@ -39,7 +39,9 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   it should s"advise an empty list of products when no products of category can be found" in {
     val categories = Seq("wine", "spirits", "beer", "ciders", "coolers", "non-Alc")
     val rng = RNG.Simple(411)
-    categories.foreach(cat => drunkShuffler.advise(rng, Store, cat, 5, outOfStockRunner).map {
+    val s = Store
+    s.lcbo_id.set(1) // to make web query good
+    categories.foreach(cat => drunkShuffler.advise(rng, s, cat, 5, outOfStockRunner).map {
       x => x.toList shouldBe empty
     })
   }
@@ -152,7 +154,9 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     shuffled.take(1) should equal(Seq(63))
   }
 
-  it should s"get Mill Street Lager or really #63 out of 0 to 100 (64th position in 0-index system, literally 63) if seed is set to 411 with 100 Heinekens out of 101!!!" in
+  it should s"get Mill Street Lager or really #63 out of 0 to 100 (64th position in 0-index system, literally 63)" +
+  "if seed is set to 411 with 100 Heinekens " +
+    s"out of 101!!!" in
     validateSelectedName(HeinekensBut63Runner, rng411, "Mill Street Lager")
 
   it should s"get Heineken as Mill Street Lager is not in special spot of index value 63 among 101, 100 of which are Heineken!" in
