@@ -85,7 +85,7 @@ trait Advise extends UtilCommands {
   // We also add a hiddenCost, so that the cost per item is always available for our calculation
   // (visible to user in attributes in any event, but harder for us to get at for computation)
   private def attributesMarkup(prod: IProduct, attrs: IndexedSeq[Attribute]): NodeSeq = {
-    def markup(a: Attribute): NodeSeq = {
+    def rowMarkup(a: Attribute): NodeSeq = {
       <tr>
         <td class="prodAttrHead">{a.key}</td>
         <td class={a.css} name={a.name}>{a.value}</td>
@@ -99,7 +99,7 @@ trait Advise extends UtilCommands {
             <th>Value</th>
           </tr>
         </thead>
-        <tbody>{attrs.map(markup)}</tbody>
+        <tbody>{attrs.map(rowMarkup)}</tbody>
       </table>
     </div>
   }

@@ -113,7 +113,7 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       // Ideally this asyncLoadCache could be a metaphor for a just in time restocking request given that our cache could be empty with cache representing
       // "real inventory".
 
-      val (cachedIds, rr) = RNG.collectSample(inStockItems.indices, requestSize).run(rng)
+      val (rr, cachedIds) = RNG.collectSample(inStockItems.indices, requestSize).run(rng).value
       // shuffle only on the indices not full items (easier on memory mgmt).
 
       if (cachedIds.nonEmpty) cachedIds.map(inStockItems)
@@ -141,7 +141,7 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
 
       val prods = runner.fetchByStoreCategory(invService.lcboId, category, MaxSampleSize)
       // take a hit of one go to LCBO, querying by category, no more.
-      val (permutedIndices, rr) = RNG.shuffle(prods.indices).run(r)
+      val (rr, permutedIndices) = RNG.shuffle(prods.indices).run(r).value
       // stream avoids checking primary category on full collection (the permutation is done though).
       val stream = for {id <- permutedIndices.toStream
                         p = prods(id) if p.primaryCategory == lcboProdCategory} yield p

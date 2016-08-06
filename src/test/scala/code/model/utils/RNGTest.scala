@@ -2,7 +2,6 @@ package code.model.utils
 
 import scala.util.Random
 import RNG._
-import State._
 import code.UnitTest
 import code.SlowTest
 
@@ -35,20 +34,9 @@ class RNGTest extends UnitTest {
       (0), (1), (-1), (Int.MaxValue), (Int.MinValue))
     forAll(tests)(test)
   }
-  private def testNonNegativeInt(n: Int) = nonNegativeInt.run(Simple(n))._1 should be >= 0
+  private def testNonNegativeInt(n: Int) = nonNegativeInt.run(Simple(n)).value._2 should be >= 0
+
   it should "work for corner cases" in testCornerCases(testNonNegativeInt)
-
-  val seed0 = 10
-  val r0 = Simple(seed0)
-  val sampleSize = 5000
-  val (samples, _) = sequence(List.fill(sampleSize)(nonNegativeInt)).run(r0)
-  it should s"return only actual non-negatives on 'large' input when setting specific Simple" in {
-    every(samples) should be >= 0  // uses Scalatest matchers (every)
-  }
-
-  it should s"check that sample size of results has no repeats (same as sampleSize $sampleSize)" in {
-    samples.toSet.size shouldBe sampleSize
-  }
 
   behavior of "Shuffle"
   // Actual values of Expected Shuffled values (exp_shuffled) are more to show the deterministic nature of the tests (pure functions using fixed seed)
@@ -59,7 +47,7 @@ class RNGTest extends UnitTest {
   val shuffleRange = (0 to 9).map( _ + shuffleOffset)
   it should s"predict correctly permutation of $shuffleRange when setting specific Simple" in {
     val seed1 = 20
-    val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed1))
+    val (_, shuffled) = shuffle(shuffleRange).run(Simple(seed1)).value
     val expected_shuffled = Array(103, 106, 107, 109, 102, 108, 104, 100, 101, 105)
     shuffled should equal(expected_shuffled)
   }
@@ -67,49 +55,47 @@ class RNGTest extends UnitTest {
   // this one is not truly "behaviour". It's better to use "properties" and generators instead as per ScalaCheck
   it should s"predict correctly permutation of $shuffleRange when setting with other specific Simple" in {
     val seed2 = 10
-    val (shuffled, _) = shuffle(shuffleRange).run(Simple(seed2))
+    val (_, shuffled) = shuffle(shuffleRange).run(Simple(seed2)).value
     val expected_shuffled = Array(102, 100, 105, 101, 103, 108, 109, 104, 106, 107)
     shuffled should equal(expected_shuffled)
   }
 
   it should s"return same element on permuting 1 element when setting with random seed" in new randomRNG with randomInt {
-    val (shuffled, _) = shuffle(List(elem)).run(seed)
+    val (_, shuffled) = shuffle(List(elem)).run(seed).value
     val expected_shuffled = List(elem)
     shuffled should equal(expected_shuffled)
   }
 
   it should s"return empty sequence on permuting 0 element when setting with random seed" in new randomRNG {
-    val (shuffled, _) = shuffle(Nil).run(seed)
+    val (_, shuffled) = shuffle(Seq.empty[Int]).run(seed).value
     shuffled shouldBe empty
   }
 
   // Warning: very moderately slow.
   it should s"return sequence with no duplicates on permuting large sequence with random seed" taggedAs(SlowTest) in new randomRNG {
     val N = 10000
-    val (shuffled, _) = shuffle(1 to N).run(seed)
+    val (_, shuffled) = shuffle(1 to N).run(seed).value
     shuffled.toSet should have size N
   }
 
   behavior of "CollectSample"
-  val bigSample = 1 to 5000
+  val bigSample: Seq[Int] = 1 to 5000
 
   // this one is not truly "behaviour". It's better to use "properties" and generators instead as per ScalaCheck
   it should s"predict pick 20 distinct elements from 1 to 5000 exactly on specific seed Simple" in {
     val k1 = 20
     val seed3 = 50
-    val (selected, newSimple) = collectSample(bigSample, k1).run(Simple(seed3))
+    val (newSimple, selected) = collectSample(bigSample, k1).run(Simple(seed3)).value
     val expected_shuffled = List(107, 288, 472, 844, 867, 885, 1515, 1696, 1905, 2080, 2300, 2453, 2841, 3329, 3422, 3788, 4150, 4416, 4552, 4775)
     (selected, newSimple) should equal((expected_shuffled, Simple(281348911128875L)))
   }
 
   it should "get empty Sequence on choosing 0 item from non empty list with any random input" in new randomRNG {
-    val (seq, _) = collectSample(bigSample, 0).run(seed)
-    seq shouldBe empty
+    collectSample(bigSample, 0).run(seed).value._2 shouldBe empty
   }
 
   it should "get empty Sequence on choosing 10 items from empty list with any random input" in new randomRNG {
-    val (seq, _) = collectSample(Seq[Int](), 10).run(seed)
-    seq shouldBe empty
+    collectSample(Seq[Int](), 10).run(seed).value._2 shouldBe empty
   }
 
 }
