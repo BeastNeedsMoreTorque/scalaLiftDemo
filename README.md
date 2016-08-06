@@ -53,6 +53,10 @@ browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - Jetty
 
+- Cats for State Monad and Xor error handling
+
+- Skinny for WEBAPI client
+
 - Lift framework: 2.6.2 but taken care by SBT
 Squeryl, a Scala ORM ((taken care by SBT)
 skinny for httpclient (taken care by SBT)
@@ -90,7 +94,7 @@ Behavioral Design Patterns:
 template method design pattern (used for loading up caches generically upon a database store)
 
 Functional Design Patterns:
-monad (for `RNG`, `State` in `RNG.scala`). They are also found with Options, collections, Futures. Pretty pervasive.
+State monad from Cats (for `RNG`, `State` in `RNG.scala`). They are also found with Options, collections, Futures. Pretty pervasive.
 
 Scala-specific design patterns:
 enrich my library (`RetainSingles`), similar to C# extension methods
