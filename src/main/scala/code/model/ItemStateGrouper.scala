@@ -18,6 +18,8 @@ trait ItemStateGrouper {
 
   // We want I to be an interface of T when using get/isDirty as get usage could be more abstract than type T at client side (possibly retrieving from cache).
   // Returned sequences require to be concrete because that is how our ORM interface is like.
+  // In places like this, (implicit evI: TypeTag[I], evT: TypeTag[T])
+  // could be used all the way to concrete class users to identify possible info on type parameter
   def itemsByState[I, T <: I](items: IndexedSeq[T],
                               cached: I => Option[I]): UpdateAndInsertSequences[T] = {
     def empty = IndexedSeq.empty[T]

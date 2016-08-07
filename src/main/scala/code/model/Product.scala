@@ -34,6 +34,7 @@ trait ProductSizeConstants {
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
 class Product private() extends LCBOEntity[Product] with IProduct with ProductSizeConstants {
+  // fields corresponding to columns for our schema
   @Column(name="pkid")
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
@@ -42,7 +43,6 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
   val total_package_units = new IntField(this)
   val primary_category = new FilteredMandatoryStringField(PRIMARY_CATEGORY)
   val name = new FilteredMandatoryStringField(NAME)
-
   val image_thumb_url = new FilteredOptionalStringField(IMAGE_URL)
   val origin = new FilteredOptionalStringField(ORIGIN)
   val price_in_cents = new IntField(this)
@@ -52,6 +52,7 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
   val varietal = new FilteredOptionalStringField(VARIETAL)
   val description = new FilteredOptionalStringField(DESCRIPTION)
   val serving_suggestion = new FilteredOptionalStringField(SERVING_SUGGESTION)
+
   val formatter = NumberFormat.getCurrencyInstance() // Not French Canada, which does it differently...
 
   def meta: MetaRecord[Product] = Product
