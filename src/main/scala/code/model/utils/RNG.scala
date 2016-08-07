@@ -133,5 +133,5 @@ object RNG {
     }
 
   def randomElement(s: Seq[Int]): Rand[Seq[Int]] =
-      flatMap(nonNegativeLessThan(s.size)) { i => unit(Seq(s(i))) }
+    flatMap(nonNegativeLessThan(s.size)) { i => unit(Seq(s(i))) }
 }

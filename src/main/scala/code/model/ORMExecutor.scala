@@ -17,11 +17,11 @@ trait ORMExecutor {
       Xor.Right(items) // e.g. insert, update, delete
     } catch {
       case se: SQLException =>
-        val err = s"SQLException $items " +
-          s"Code: ${se.getErrorCode} " +
-          s"SqlState: ${se.getSQLState} " +
-          s"Error Message: ${se.getMessage} " +
-          s"NextException: ${se.getNextException}"
+        val err = s"""SQLException $items
+          Code: ${se.getErrorCode}
+          SqlState: ${se.getSQLState}
+          Error Message: ${se.getMessage}
+          NextException: ${se.getNextException}"""
         Xor.Left(err)
       case other: Throwable =>
         Xor.Left(other.toString())
