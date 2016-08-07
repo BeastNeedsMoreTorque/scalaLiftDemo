@@ -81,6 +81,23 @@ object RNG {
       (rc, f(a, b))
     })
 
+  def ints(n: Int)(rng: RNG): (RNG, List[Int]) =
+    sequence(List.fill(n)(int)).run(rng).value
+
+  def rawSequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
+    @tailrec
+    def go(s: S, actions: List[State[S,A]], acc: List[A]): (S, List[A]) =
+      actions match {
+        case Nil => (s, acc)
+        case h :: t => h.run(s).value match { case (s2, a) => go(s2, t, a :: acc) }
+      }
+
+    State((s: S) => go(s,sas,List()))
+  }
+
+  // the preferred interface by far as it preserves associativity rules
+  def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] =
+    rawSequence(sas).map( _.reverse)
 
   // Algorithm S Sampling by Knuth (Volume 2, Section 3.4.2)
   def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = {

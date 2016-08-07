@@ -35,8 +35,19 @@ class RNGTest extends UnitTest {
     forAll(tests)(test)
   }
   private def testNonNegativeInt(n: Int) = nonNegativeInt.run(Simple(n)).value._2 should be >= 0
-
   it should "work for corner cases" in testCornerCases(testNonNegativeInt)
+
+  val seed0 = 10
+  val r0 = Simple(seed0)
+  val sampleSize = 5000
+  val (_, samples) = sequence(List.fill(sampleSize)(nonNegativeInt)).run(r0).value
+  it should s"return only actual non-negatives on 'large' input when setting specific Simple" in {
+    every(samples) should be >= 0  // uses Scalatest matchers (every)
+  }
+
+  it should s"check that sample size of results has no repeats (same as sampleSize $sampleSize)" in {
+    samples.toSet.size shouldBe sampleSize
+  }
 
   behavior of "Shuffle"
   // Actual values of Expected Shuffled values (exp_shuffled) are more to show the deterministic nature of the tests (pure functions using fixed seed)

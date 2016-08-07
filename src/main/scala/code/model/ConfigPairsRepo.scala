@@ -17,15 +17,12 @@ trait ConfigPairsRepo {
 object ConfigPairsRepo { // lo and behold, a module!!! ;-)  Arguably, excessive design for such a small app, but it shows the way.
   implicit def configPairsRepoPropsImpl: ConfigPairsRepo = new propsSeqReader // client wants this specific one
   implicit val defaultInstance = new propsSeqReader // client does not care about which one
-  implicit val formats = net.liftweb.json.DefaultFormats
-  case class PairOfStrings(first: String, second: String)
   // provide as many implementations as required.
   class propsSeqReader extends ConfigPairsRepo {
     override def getSeq(masterKey: String, default: String = ""): Seq[(String, String)] = {
       val json = parse(Props.get(masterKey, default) )
-      for {elem <- json.children
-           pair <- elem.extractOpt[PairOfStrings]
-      } yield (pair.first, pair.second)
+      val pairs = for {elem <- json.children} yield elem.values // contains List of (String, JString(String))
+      pairs.collect { case (pair: (String, String)) => pair }
     }
   }
 }
