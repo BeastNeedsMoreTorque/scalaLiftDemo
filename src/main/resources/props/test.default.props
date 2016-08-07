@@ -2,10 +2,6 @@
 
 product.shortCategories={"wine":"Wine","spirits":"Spirits","beer":"Beer"}
 
-
-
-
-
 db.driver=org.postgresql.Driver
 
 # choose available port and suitable host and driver url (liftweb offered "jdbc:h2:lift_proto.db;AUTO_SERVER=TRUE")
