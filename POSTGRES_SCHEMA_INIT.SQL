@@ -53,7 +53,7 @@ create sequence "s_product_pkid";
 alter table product alter column pkid set default nextval('s_product_pkid');
 -- indexes on product
 create unique index "lcbo_id_idx" on "product" ("lcbo_id");
-create table "Inventory" (
+create table "inventory" (
 "quantity" bigint not null,
 "updated_on" varchar(128) not null,
 "store_id" bigint not null,
@@ -77,9 +77,9 @@ create index "userproduct_product" on "userproduct" ("productid");
 create index "userproduct_user" on "userproduct" ("userid");
 -- foreign key constraints :
 alter table "userproduct" add constraint "userproductFK3" foreign key ("productid") references "product"("pkid");
-alter table "Inventory" add constraint "InventoryFK1" foreign key ("storeid") references "store"("pkid");
-alter table "Inventory" add constraint "InventoryFK2" foreign key ("productid") references "product"("pkid");
+alter table inventory add constraint "InventoryFK1" foreign key ("storeid") references "store"("pkid");
+alter table inventory add constraint "InventoryFK2" foreign key ("productid") references "product"("pkid");
 -- composite key indexes :
-alter table "Inventory" add primary key ("storeid","productid");
+alter table inventory add primary key ("storeid","productid");
 -- column group indexes :
 create unique index "user_prod_idx" on "userproduct" ("userid","productid");

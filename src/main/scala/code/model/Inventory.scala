@@ -15,7 +15,7 @@ import scala.collection.{IndexedSeq, Iterable}
 import scala.util.Try
 
 object DefaultDateAsNow {
-  def defaultDate: String = formattedDateNow.replace('/', '-')
+  def defaultDate: String = formattedDateNow.replace('/', '-') // Lift uses / but LCBO uses - so standardizes it for minimal changes.
 }
 class InventoryAsLCBOJson(var product_id: Long,
                           var store_id: Long,
