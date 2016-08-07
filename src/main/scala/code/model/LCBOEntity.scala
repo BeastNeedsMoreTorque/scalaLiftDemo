@@ -12,17 +12,17 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
   with CreatedUpdated[T] with LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper {
   self: T =>
 
-  val EmptyString = ""
+  private def emptyString = ""
   class FilteredOptionalStringField(maxLength: Int) extends OptionalStringField(this, maxLength) {
     type filterMethodsList = List[(FilteredOptionalStringField.this.ValueType) => FilteredOptionalStringField.this.ValueType]
-    override def defaultValue: String = EmptyString
+    override def defaultValue: String = emptyString
     override def setFilter: filterMethodsList = notNull _ :: crop _ :: super.setFilter
     def getValue: String = _1.toOption.fold(defaultValue)(identity)
   }
 
   class FilteredMandatoryStringField(maxLength: Int) extends StringField(this, maxLength) {
     type filterMethodsList = List[(FilteredMandatoryStringField.this.ValueType) => FilteredMandatoryStringField.this.ValueType]
-    override def defaultValue: String = EmptyString
+    override def defaultValue: String = emptyString
     override def setFilter: filterMethodsList = notNull _ :: crop _ :: super.setFilter
   }
 

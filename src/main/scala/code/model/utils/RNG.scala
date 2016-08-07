@@ -28,7 +28,7 @@ trait RNG {
 }
 
 object RNG {
-   type Rand[A] = State[RNG, A]
+  type Rand[A] = State[RNG, A]
   case class Simple(seed: Long) extends RNG {
     def nextInt: (RNG, Int) = {
       val newSeed: Long = (seed * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL // `&` is bitwise AND. We use the current seed to generate a new seed.
@@ -81,56 +81,57 @@ object RNG {
       (rc, f(a, b))
     })
 
-    // Algorithm S Sampling by Knuth (Volume 2, Section 3.4.2)
-    def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = {
-      // Don Knuth: Algorithm S (Selection sampling technique) N: total size, t visited (visiting item t+1), m selected, n requested/desired.
-      // avail is assumed to be the numbers we select from randomly
-      @tailrec
-      def sampleIter(N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (RNG, Seq[T]) =  {
-        val (y, u) = double.run(rng).value
-        // Knuth's method is not "functional" here (does not return a state capturing RNG) otherwise it's conceptually the same
-        val sampleSuccess = (N - t) * u <= n - m
-        if (sampleSuccess && m + 1 == n) {
-          (y, selected ++ Seq(avail(t)))
-        }
-        else {
-          // do this "trick" to satisfy tailrec.
-          val (newSel, newM) = if (sampleSuccess) (selected ++ Seq(avail(t)), m + 1) else (selected, m)
-          sampleIter(N, n, newM, t + 1, avail, newSel, y)
-        }
-      }
 
-      State(rng => {
-        if (s.isEmpty || k <= 0) {
-          (rng, Seq())
-        }  // allow client not to check for empty sequence (or specify k <= 0), robust and flexible.
-        else {
-          sampleIter(s.size, k, 0, 0, s.toVector, Seq(), rng)
-        }
-      })
+  // Algorithm S Sampling by Knuth (Volume 2, Section 3.4.2)
+  def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = {
+    // Don Knuth: Algorithm S (Selection sampling technique) N: total size, t visited (visiting item t+1), m selected, n requested/desired.
+    // avail is assumed to be the numbers we select from randomly
+    @tailrec
+    def sampleIter(N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (RNG, Seq[T]) =  {
+      val (y, u) = double.run(rng).value
+      // Knuth's method is not "functional" here (does not return a state capturing RNG) otherwise it's conceptually the same
+      val sampleSuccess = (N - t) * u <= n - m
+      if (sampleSuccess && m + 1 == n) {
+        (y, selected ++ Seq(avail(t)))
+      }
+      else {
+        // do this "trick" to satisfy tailrec.
+        val (newSel, newM) = if (sampleSuccess) (selected ++ Seq(avail(t)), m + 1) else (selected, m)
+        sampleIter(N, n, newM, t + 1, avail, newSel, y)
+      }
     }
 
-    // Algorithm P Shuffling by Knuth (Volume 2, Section 3.4.2). Attributed to Fisher-Yates
-    // View the permutation selection as deck of cards shuffling game, which is how it got discovered in the 1930s.
-    // Shuffle from last card to first in N steps by selecting another card lower in deck randomly to swap with.
-    def shuffle( s: Seq[Int]): Rand[Seq[Int]] = {
-      def swap[T](xs: Array[T], i: Int, j: Int) = {
-        val t = xs(i)
-        xs(i) = xs(j)
-        xs(j) = t
+    State(rng => {
+      if (s.isEmpty || k <= 0) {
+        (rng, Seq())
+      }  // allow client not to check for empty sequence (or specify k <= 0), robust and flexible.
+      else {
+        sampleIter(s.size, k, 0, 0, s.toVector, Seq(), rng)
       }
+    })
+  }
 
-      State(rng => {
-          val a = s.toArray
-          var rr = rng
-          for {j <- a.indices.reverse.dropRight(1)} { // without the reverse, we'd need a function to select in range [j N] for index k
-            val (y, k) = nonNegativeLessThan(j).run(rr).value
-            rr = y
-            swap(a, k, j)
-          }
-          (rr, a)
-      })
+  // Algorithm P Shuffling by Knuth (Volume 2, Section 3.4.2). Attributed to Fisher-Yates
+  // View the permutation selection as deck of cards shuffling game, which is how it got discovered in the 1930s.
+  // Shuffle from last card to first in N steps by selecting another card lower in deck randomly to swap with.
+  def shuffle( s: Seq[Int]): Rand[Seq[Int]] = {
+    def swap[T](xs: Array[T], i: Int, j: Int) = {
+      val t = xs(i)
+      xs(i) = xs(j)
+      xs(j) = t
     }
+
+    State(rng => {
+        val a = s.toArray
+        var rr = rng
+        for {j <- a.indices.reverse.dropRight(1)} { // without the reverse, we'd need a function to select in range [j N] for index k
+          val (y, k) = nonNegativeLessThan(j).run(rr).value
+          rr = y
+          swap(a, k, j)
+        }
+        (rr, a)
+    })
+  }
 
   def randomElement(s: Seq[Int]): Rand[Seq[Int]] =
     flatMap(nonNegativeLessThan(s.size)) { i => unit(Seq(s(i))) }

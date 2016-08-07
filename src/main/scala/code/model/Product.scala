@@ -67,14 +67,14 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
 
   override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
 
-  def imageThumbUrl: String = image_thumb_url.getValue
-  def Name: String = name.get
+  override def imageThumbUrl: String = image_thumb_url.getValue
+  override def Name: String = name.get
 
   def totalPackageUnits: Int = total_package_units.get
 
-  def primaryCategory: String = primary_category.get
+  override def primaryCategory: String = primary_category.get
 
-  def isDiscontinued: Boolean = is_discontinued.get
+  override def isDiscontinued: Boolean = is_discontinued.get
 
   /**
     *
@@ -97,7 +97,7 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
       Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
 
   // Change unit of currency from cents to dollars and Int to String
-  def price: String =
+  override def price: String =
     formatter.format(price_in_cents.get / 100.0) // since we perverted meaning somewhat by changing unit from cents to dollars
 
   // Change scale by 100 to normal conventions, foregoing LCBO's use of Int (for ex. 1200 becomes "12.0%" including the percent sign)
@@ -117,8 +117,6 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
   *
   */
 object Product extends Product with MetaRecord[Product] with ProductRunner  {
-  override type GotEnough_? = Int => Boolean
-
   // thread-safe lock free objects
   override val cache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB!
   val lcboIdToPKMap: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
