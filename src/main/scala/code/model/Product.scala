@@ -16,18 +16,17 @@ import scala.util.Try
 import scala.xml.Node
 
 trait ProductSizeConstants {
-  def NAME: Int = Props.getInt("product.size.NAME", 0)
-  def ADDRESS: Int = Props.getInt("product.size.ADDRESS", 0)
-  def IMAGE_URL: Int = Props.getInt("product.size.IMAGE_URL", 0)
-  def ORIGIN: Int = Props.getInt("product.size.ORIGIN", 0)
-  def PACKAGE: Int = Props.getInt("product.size.PACKAGE", 0)
-  def PRIMARY_CATEGORY: Int = Props.getInt("product.size.PRIMARY_CATEGORY", 0)
-  def SECONDARY_CATEGORY: Int = Props.getInt("product.size.SECONDARY_CATEGORY", 0)
-  def VARIETAL: Int = Props.getInt("product.size.VARIETAL", 0)
-  def DESCRIPTION: Int = Props.getInt("product.size.DESCRIPTION", 0)
-  def SERVING_SUGGESTION: Int = Props.getInt("product.size.SERVING_SUGGESTION", 0)
+  def nameSize: Int = Props.getInt("product.size.NAME", 0)
+  def addressSize: Int = Props.getInt("product.size.ADDRESS", 0)
+  def imageUrlSize: Int = Props.getInt("product.size.IMAGE_URL", 0)
+  def originSize: Int = Props.getInt("product.size.ORIGIN", 0)
+  def packageSize: Int = Props.getInt("product.size.PACKAGE", 0)
+  def primaryCategorySize: Int = Props.getInt("product.size.PRIMARY_CATEGORY", 0)
+  def secondaryCategorySize: Int = Props.getInt("product.size.SECONDARY_CATEGORY", 0)
+  def varietalSize: Int = Props.getInt("product.size.VARIETAL", 0)
+  def descriptionSize: Int = Props.getInt("product.size.DESCRIPTION", 0)
+  def servingSuggestionSize: Int = Props.getInt("product.size.SERVING_SUGGESTION", 0)
 }
-
 /**
   * Created by philippederome on 15-11-01. Modified 16-01-01 for Record+Squeryl (to replace Mapper),
   * Record being open to NoSQL and Squeryl providing ORM service.
@@ -39,19 +38,19 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
   override val idField = new LongField(this, 0)  // our own auto-generated id
   val lcbo_id = new LongField(this) // we don't share same PK as LCBO!
   val is_discontinued = new BooleanField(this, false)
-  val `package` = new FilteredOptionalStringField(PACKAGE)
+  val `package` = new FilteredOptionalStringField(packageSize)
   val total_package_units = new IntField(this)
-  val primary_category = new FilteredMandatoryStringField(PRIMARY_CATEGORY)
-  val name = new FilteredMandatoryStringField(NAME)
-  val image_thumb_url = new FilteredOptionalStringField(IMAGE_URL)
-  val origin = new FilteredOptionalStringField(ORIGIN)
+  val primary_category = new FilteredMandatoryStringField(primaryCategorySize)
+  val name = new FilteredMandatoryStringField(nameSize)
+  val image_thumb_url = new FilteredOptionalStringField(imageUrlSize)
+  val origin = new FilteredOptionalStringField(originSize)
   val price_in_cents = new IntField(this)
   val alcohol_content = new IntField(this)
   val volume_in_milliliters = new IntField(this)
-  val secondary_category = new FilteredMandatoryStringField(SECONDARY_CATEGORY)
-  val varietal = new FilteredOptionalStringField(VARIETAL)
-  val description = new FilteredOptionalStringField(DESCRIPTION)
-  val serving_suggestion = new FilteredOptionalStringField(SERVING_SUGGESTION)
+  val secondary_category = new FilteredMandatoryStringField(secondaryCategorySize)
+  val varietal = new FilteredOptionalStringField(varietalSize)
+  val description = new FilteredOptionalStringField(descriptionSize)
+  val serving_suggestion = new FilteredOptionalStringField(servingSuggestionSize)
 
   val formatter = NumberFormat.getCurrencyInstance() // Not French Canada, which does it differently...
 

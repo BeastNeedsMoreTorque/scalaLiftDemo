@@ -19,9 +19,9 @@ import scala.util.Try
 import scala.xml.Node
 
 trait StoreSizeConstants {
-  def NAME: Int = Props.getInt("store.size.NAME", 0)
-  def ADDRESS: Int = Props.getInt("store.size.ADDRESS", 0)
-  def CITY_NAME: Int = Props.getInt("store.size.CITY_NAME", 0)
+  def nameSize: Int = Props.getInt("store.size.NAME", 0)
+  def addressSize: Int = Props.getInt("store.size.ADDRESS", 0)
+  def cityNameSize: Int = Props.getInt("store.size.CITY_NAME", 0)
 }
 
 case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConstants with StoreCacheService
@@ -38,9 +38,9 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   val is_dead = new BooleanField(this, false)
   val latitude = new DoubleField(this)
   val longitude = new DoubleField(this)
-  val name = new FilteredMandatoryStringField(NAME)
-  val address_line_1 = new FilteredMandatoryStringField(ADDRESS)
-  val city = new FilteredMandatoryStringField(CITY_NAME)
+  val name = new FilteredMandatoryStringField(nameSize)
+  val address_line_1 = new FilteredMandatoryStringField(addressSize)
+  val city = new FilteredMandatoryStringField(cityNameSize)
   override val productsCache = TrieMap[LCBO_ID, IProduct]()
   override val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()
   // don't put whole IProduct in here, just useful keys.
@@ -154,7 +154,7 @@ object Store extends Store with MetaRecord[Store] {
          ss <- getStore(pKey)} yield ss
 
   private def getStores = Try {
-      collectItemsAsWebClient("/stores", extract, queryFilterArgs)
+    collectItemsAsWebClient("/stores", extract, queryFilterArgs)
     // nice to know if it's empty, so we can log an error in that case.
-    }
+  }
 }
