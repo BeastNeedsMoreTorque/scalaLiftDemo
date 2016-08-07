@@ -49,6 +49,13 @@ class RNGTest extends UnitTest {
     samples.toSet.size shouldBe sampleSize
   }
 
+  behavior of "ints"
+
+  val (_, randomInts) = ints(sampleSize)(r0)
+  it should s"check that sample size of results for positive/negative ints has no repeats (same as sampleSize $sampleSize)" in {
+    randomInts.toSet.size shouldBe sampleSize
+  }
+
   behavior of "Shuffle"
   // Actual values of Expected Shuffled values (exp_shuffled) are more to show the deterministic nature of the tests (pure functions using fixed seed)
   // In actual fact, a different implementation of the shuffle with same inputs could well be expected to yield different outputs.
