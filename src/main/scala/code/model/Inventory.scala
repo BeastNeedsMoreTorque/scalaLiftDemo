@@ -14,14 +14,16 @@ import org.squeryl.dsl.CompositeKey2
 import scala.collection.{IndexedSeq, Iterable}
 import scala.util.Try
 
+object DefaultDateAsNow {
+  def defaultDate: String = formattedDateNow.replace('/', '-')
+}
 class InventoryAsLCBOJson(var product_id: Long,
                           var store_id: Long,
                           var is_dead: Boolean,
-                          var updated_on: String,
-                          var quantity: Long) {
-  def notNull(s: String): String = if (s eq null) "" else s  // protection against NullPointerException and LCBO's poisoning us with missing data
-  this.updated_on = notNull(updated_on) // potentially a work around the Lift JSON parser that should give us a default.
-  def this() = this(0, 0, false, "", 0)
+                          var updated_on: Option[String], // Not always provided by LCBO
+                          var quantity: Long)  {
+  this.updated_on = Some(updated_on.fold(DefaultDateAsNow.defaultDate)(identity)) // provide default of today when not provided.
+  def this() = this(0, 0, false, Some(DefaultDateAsNow.defaultDate), 0)
   def copy(inv: InventoryAsLCBOJson): Unit = {
     this.product_id = inv.product_id
     this.store_id = inv.store_id
