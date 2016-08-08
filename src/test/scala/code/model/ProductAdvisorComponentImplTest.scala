@@ -150,7 +150,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   }
   // this more primitive test on shuffling indices motivates the next two material examples that do shuffling on products.
   it should s"predict take 1st element from 0 to 100 randomly permuted exactly on specific seed Simple at 63" in {
-    val (_, shuffled) = RNG.shuffle((0 to 100)).run(rng411).value
+    val shuffled = RNG.shuffle((0 to 100)).runA(rng411).value
     shuffled.take(1) should equal(Seq(63))
   }
 

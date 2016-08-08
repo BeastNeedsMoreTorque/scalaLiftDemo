@@ -23,41 +23,43 @@ trait Advise extends UtilCommands {
   val fetchInventoriesJS = JE.Call("inventory.fetchInventories") // let the client deal with incomplete inventories and get them himself
   val showProdDisplayJS =  JsShowId("prodDisplay") & fetchInventoriesJS
 
-  def advise(jsStore: JValue): JsCmd = {
+  def advise(jsStore: JValue): JsCmd =
     User.currentUser.dmap { S.error("advise", "advise feature unavailable, Login first!"); Noop } { user =>
-      val jsCmd =
+      val cmd =
         for {s <- jsStore.extractOpt[String].map(parse) // ExtractOpt avoids MappingException and generates None on failure
              storeId <- s.extractOpt[Long]
-             s <- Store.getStore(storeId)} yield maySelect(s)
+             s <- Store.getStore(storeId)
+             advice <- maySelect(s)
+        } yield advice
 
-      jsCmd.fold {
-        S.error("We need to establish your local store first, please wait for local geo to become available")
-        Noop } { identity }
+      cmd.fold {
+        S.error("We need to establish your local store first, please wait for local geo to become available"); Noop }
+      { identity } // normal case
     }
-  }
 
-  private def maySelect(s: Store): JsCmd = {
+  private def maySelect(s: Store): Option[JsCmd] = {
     val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
-    val successToProducts: Iterable[(IProduct, Long)] => Option[Iterable[(IProduct, Long)]] = {
+    lazy val successToProducts: Iterable[(IProduct, Long)] => Option[Iterable[(IProduct, Long)]] = {
       pairs: Iterable[(IProduct, Long)] =>
         if (pairs.isEmpty) S.error(s"Unable to find a product of category ${theCategory.is}")
         // we're reloading into cache to make up for that issue!
         Full(pairs) // returns prod and quantity in inventory normally, regardless of emptyness)
     }
-    val errorToProducts: Throwable => Option[Iterable[(IProduct, Long)]] = {
+    lazy val errorToProducts: Throwable => Option[Iterable[(IProduct, Long)]] = {
       t: Throwable =>
         S.error(s"Unable to choose product of category ${theCategory.is} with exception error ${t.toString()}")
         Empty
     }
-    val advisedProductsSeq = s.advise(rng, theCategory.is, theRecommendCount.is, Product)
-
-    val prodQtySeq = advisedProductsSeq.fold(errorToProducts, successToProducts)
-
-    prodQtySeq.fold { Noop } // we gave notice of error already via JS, nothing else to do
-    { pairs => // normal case
-      S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-      prodDisplayJS( pairs.map{case (p, q) => QuantityOfProduct(q, p)})
+    val advice = {
+      val advisedProductsSeq = s.advise(rng, theCategory.is, theRecommendCount.is, Product)
+      val prodQtySeq = advisedProductsSeq.fold(errorToProducts, successToProducts)
+      prodQtySeq.fold { Noop } // we gave notice of error already via JS, nothing else to do
+      { pairs => // normal case
+        S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
+        prodDisplayJS(pairs.map { case (p, q) => QuantityOfProduct(q, p) })
+      }
     }
+    Some(advice)
   }
 
   private def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd = {

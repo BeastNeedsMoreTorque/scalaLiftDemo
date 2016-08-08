@@ -141,7 +141,7 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
 
       val prods = runner.fetchByStoreCategory(invService.lcboId, category, MaxSampleSize)
       // take a hit of one go to LCBO, querying by category, no more.
-      val (rr, permutedIndices) = RNG.shuffle(prods.indices).run(r).value
+      val permutedIndices = RNG.shuffle(prods.indices).runA(r).value
       // stream avoids checking primary category on full collection (the permutation is done though).
       val stream = for {id <- permutedIndices.toStream
                         p = prods(id) if p.primaryCategory == lcboProdCategory} yield p
