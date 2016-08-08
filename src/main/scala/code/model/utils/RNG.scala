@@ -17,7 +17,7 @@ package code.model.utils
 // Edited and modified by Phil Derome, abiding by above copyright from Manning Publications, Co. Modified Software is provided "AS IS" as per above as well.
 
 // Apparently, this State,Action and combinator idea is in line of thought of Scalaz (authors probably contributed to Scalaz).
-// So I ported it to successor of Scalaz, i.e. Cats State.
+// So I ported it to successor of Scalaz, i.e. TypeLevel Cats (specifically using Cats State monad).
 
 // This code is more of a showcase of State, Action then being real pragmatic alternative to scala Random class/trait (no such aim to outdo it).
 import scala.annotation.tailrec
