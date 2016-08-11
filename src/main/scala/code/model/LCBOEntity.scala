@@ -7,6 +7,7 @@ import net.liftweb.json.JsonAST.{JField, JInt}
 import net.liftweb.record.field.{StringField,OptionalStringField}
 /**
   * Created by philippederome on 2016-04-10. Highest level trait to share between Product and Store that have much logic in common.
+  * @see F-bounded polymorphism
   */
 trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
   with CreatedUpdated[T] with LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper {
@@ -37,10 +38,8 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
     val nodes = idFix.children
     nodes.foldLeft(ArrayBuffer.empty[T]) {
       (recsBuffer, node) =>
-        for {rec <- meta.fromJValue(node)} {
-          // a lcbo_id can be set here, but not an id (it's kind of "reserved" word by Squeryl while this call is Lift Record).
-          recsBuffer += rec
-        }
+        meta.fromJValue(node).foreach(record => recsBuffer += record)
+        // a lcbo_id can be set here, but not an id (it's kind of "reserved" word by Squeryl while this call is Lift Record).
         recsBuffer
     }.toIndexedSeq
   }

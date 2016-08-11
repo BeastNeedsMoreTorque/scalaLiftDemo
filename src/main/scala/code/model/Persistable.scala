@@ -9,6 +9,7 @@ import code.model.utils.RetainSingles.implicitSeqToRetainSingles
 /**
   * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,
   * so mitigate with access control on methods, one method is protected.
+  * @see F-bounded polymorphism
   */
 trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor with KeyKeeper {
   self: T =>

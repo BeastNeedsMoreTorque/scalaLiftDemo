@@ -141,7 +141,7 @@ object RNG {
     State(rng => {
         val a = s.toArray
         var rr = rng
-        for {j <- a.indices.reverse.dropRight(1)} { // without the reverse, we'd need a function to select in range [j N] for index k
+        a.indices.reverse.dropRight(1).foreach { j => // without the reverse, we'd need a function to select in range [j N] for index k
           val (y, k) = nonNegativeLessThan(j).run(rr).value
           rr = y
           swap(a, k, j)

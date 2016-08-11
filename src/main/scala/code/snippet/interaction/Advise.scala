@@ -19,7 +19,7 @@ import scala.xml.NodeSeq
   * Created by philippederome on 2016-07-31.
   */
 trait Advise extends UtilCommands {
-  implicit val formats2 = net.liftweb.json.DefaultFormats
+  implicit val formatsAdvise = net.liftweb.json.DefaultFormats
   val fetchInventoriesJS = JE.Call("inventory.fetchInventories") // let the client deal with incomplete inventories and get them himself
   val showProdDisplayJS =  JsShowId("prodDisplay") & fetchInventoriesJS
 
@@ -28,8 +28,8 @@ trait Advise extends UtilCommands {
       val cmd =
         for {s <- jsStore.extractOpt[String].map(parse) // ExtractOpt avoids MappingException and generates None on failure
              storeId <- s.extractOpt[Long]
-             s <- Store.getStore(storeId)
-             advice <- maySelect(s)
+             ss <- Store.getStore(storeId)
+             advice <- maySelect(ss)
         } yield advice
 
       cmd.fold {

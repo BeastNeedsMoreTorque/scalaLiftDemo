@@ -156,8 +156,8 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   }
 
   def getItemByLcboId(id: LCBO_ID): Option[IProduct] =
-    for {dbId <- lcboIdToPKMap.get(id)
-         p <- cache.get(dbId)} yield p
+    for {pKey <- lcboIdToPKMap.get(id)
+         ip <- cache.get(pKey)} yield ip
 
   def getCachedItem: IProduct => Option[IProduct] = s => getItemByLcboId(s.lcboId)
 

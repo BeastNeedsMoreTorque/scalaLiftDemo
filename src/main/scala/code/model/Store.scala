@@ -151,7 +151,7 @@ object Store extends Store with MetaRecord[Store] {
 
   def getCachedItem: IStore => Option[IStore] = s =>
     for {pKey <- lcboIdToPKMap.get(s.lcboId)
-         ss <- getStore(pKey)} yield ss
+         is <- getStore(pKey)} yield is
 
   private def getStores = Try {
     collectItemsAsWebClient("/stores", extract, queryFilterArgs)
