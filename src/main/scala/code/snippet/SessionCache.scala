@@ -11,5 +11,5 @@ import net.liftweb.util.Props
 object SessionCache {
   val defaultCategory = Props.get("product.Category", "wine")
   object theCategory extends SessionVar[String](defaultCategory)
-  object theRecommendCount extends SessionVar[Int](1)
+  object theAdviseCount extends SessionVar[Int](1)
 }

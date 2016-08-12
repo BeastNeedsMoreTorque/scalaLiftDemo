@@ -2,7 +2,7 @@ package code.snippet.interaction
 
 import code.model.{IProduct, Product, Store, User}
 import code.model.utils.RNG
-import code.snippet.SessionCache.{theCategory, theRecommendCount}
+import code.snippet.SessionCache.{theCategory, theAdviseCount}
 import code.model.Attribute
 import net.liftweb.common.{Empty, Full}
 import net.liftweb.http.S
@@ -17,12 +17,21 @@ import scala.xml.NodeSeq
 
 /**
   * Created by philippederome on 2016-07-31.
+  *
+  * Handler for Advise (question mark icon gif) button.
   */
 trait Advise extends UtilCommands {
   implicit val formatsAdvise = net.liftweb.json.DefaultFormats
   val fetchInventoriesJS = JE.Call("inventory.fetchInventories") // let the client deal with incomplete inventories and get them himself
   val showProdDisplayJS =  JsShowId("prodDisplay") & fetchInventoriesJS
 
+  /**
+    * The prodDisplayJS and getDiv function below can be thought as an Action callback that mixes up markup and Scala.
+    * The structure deliberately follows the markup of index.html.
+    *
+    * @param jsStore
+    * @return
+    */
   def advise(jsStore: JValue): JsCmd =
     User.currentUser.dmap { S.error("advise", "advise feature unavailable, Login first!"); Noop } { user =>
       val cmd =
@@ -51,7 +60,7 @@ trait Advise extends UtilCommands {
         Empty
     }
     val advice = {
-      val advisedProductsSeq = s.advise(rng, theCategory.is, theRecommendCount.is, Product)
+      val advisedProductsSeq = s.advise(rng, theCategory.is, theAdviseCount.is, Product)
       val prodQtySeq = advisedProductsSeq.fold(errorToProducts, successToProducts)
       prodQtySeq.fold { Noop } // we gave notice of error already via JS, nothing else to do
       { pairs => // normal case
