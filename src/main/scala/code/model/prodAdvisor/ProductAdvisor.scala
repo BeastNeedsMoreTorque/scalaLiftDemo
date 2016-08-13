@@ -4,7 +4,6 @@ import code.model.utils.RNG
 import code.model._
 import net.liftweb.util.Props
 import cats.data.Xor
-import scala.util.Try
 import scala.collection.{IndexedSeq, Iterable, Seq}
 
 /**
@@ -14,7 +13,15 @@ import scala.collection.{IndexedSeq, Iterable, Seq}
   */
 trait ProductAdvisorComponent {
   /**
-    *
+    * Selection is an iterable of product along with a count of many there are
+    */
+  type Selection = Iterable[(IProduct, Long)]
+  /**
+    * captures exceptions as errors in Xor if any, otherwise a selection
+    */
+  type ValidateSelection = Xor[Throwable, Selection]
+
+  /**
     * @return a ProductAvisor who can provide advice on products
     */
   def agent: ProductAdvisor
@@ -30,21 +37,20 @@ trait ProductAdvisorComponent {
       * @param requestSize the desired request size for the advice, which need not be fulfilled but should be on best efforts basis
       * @param runner a service agent that can select products of a given category in a store; think of the agent
       *               running around a counter for which clients have no access, in the back office.
-      * @return a collection of products available with their counts wrapped up in error handling Xor
+      * @return ValidateSelection matching the request input parameters
       */
     def advise(rng: RNG,
                invService: InventoryService,
                category: String,
                requestSize: Int,
-               runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]]
+               runner: ProductRunner): ValidateSelection
   }
-
 }
 
 /**
   * implements ProductAdvisor delegating to a polymorphic intermediary (agent) that actually provides the service.
   */
-trait ProductAdvisorDispatcher   {
+trait ProductAdvisorDispatcher {
   this: ProductAdvisorComponent =>
 
   /**
@@ -55,13 +61,13 @@ trait ProductAdvisorDispatcher   {
     * @param requestSize the desired request size for the advice, which need not be fulfilled but should be on best efforts basis
     * @param runner a service agent that can select products of a given category in a store; think of the agent
     *               running around a counter for which clients have no access, in the back office.
-    * @return a collection of products available with their counts wrapped up in error handling Xor, delegating to the agent
+    * @return ValidateSelection
     */
   def advise(rng: RNG,
              invService: InventoryService,
              category: String,
              requestSize: Int,
-             runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]] =
+             runner: ProductRunner): ValidateSelection =
     agent.advise(rng, invService, category, requestSize, runner)
 }
 
@@ -70,7 +76,6 @@ trait ProductAdvisorDispatcher   {
   */
 trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
   /**
-    *
     * @return a ProductAdvisor object, which selects products randomly without consideration about user preferences.
     */
   def agent: ProductAdvisor = {
@@ -99,19 +104,18 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
       *                    or an asset category (for query only not to compare results and filter!).
       * @param requestSize a number representing how many items we need to propose as recommendation
       * @param runner a ProductRunner, responsible to obtain products in a store for a given vategory.
-      * @return quantity found in inventory for product and the product, wrapped up in Xor to force clients
-      *         to deal with possible error status
+      * @return ValidateSelection
       */
     def advise(rng: RNG,
                invService: InventoryService,
                category: String,
                requestSize: Int,
-               runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]] = {
-
+               runner: ProductRunner): ValidateSelection = {
       val lcboProdCategory = liquorCategory.toPrimaryCategory(category)
       // the shuffling in getShuffledProducts is predetermined by rng (and not other class calls to random generation routines),
       // and when cache fails, it is predetermined by the actual contents we get from LCBO via getSerialResult.
-      getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
+      getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory),
+        category, lcboProdCategory, requestSize)
     }
 
     /**
@@ -130,8 +134,7 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO.
       *                         It's been known that they would send a Wiser's Whiskey on a wine request.
       * @param requestSize amount of items the client is requesting for a recommendation/advice
-      * @return Xor[Throwable, Iterable[(IProduct, Long)]]  captures exceptions as errors in Xor if any, otherwise an Iterable of IProducts with their
-      *         quantities.
+      * @return ValidateSelection.
       */
     private def getShuffledProducts(invService: InventoryService,
                             runner: ProductRunner,
@@ -139,8 +142,7 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
                             initialProductKeys: IndexedSeq[KeyKeeperVals],
                             category: String,
                             lcboProdCategory: String,
-                            requestSize: Int): Xor[Throwable, Iterable[(IProduct, Long)]] = {
-      val prods = {
+                            requestSize: Int): ValidateSelection = {
         val inStockItems = {
           for {p <- initialProductKeys
                inv <- invService.inventoryByProductIdMap(p.pKey)
@@ -157,11 +159,9 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
         val (rr, cachedIds) = RNG.collectSample(inStockItems.indices, requestSize).run(rng).value
         // shuffle only on the indices not full items (easier on memory mgmt).
 
-        if (cachedIds.nonEmpty) Try {cachedIds.map(inStockItems)}
+        if (cachedIds.nonEmpty) Xor.Right(cachedIds.map(inStockItems))
         // when nonEmpty, get back the items that the ids have been selected (we don't stream because we know inventory > 0)
         else getSerialResult(invService, runner, requestSize, category, lcboProdCategory, rr)
-      }
-      Xor.fromTry(prods)
     }
 
     /**
@@ -172,26 +172,25 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO.
       *                         It's been known that they would send a Wiser's Whiskey on a wine request.
       * @param r a Random Number Generator state item.
-      * @return 0 or quantity found in inventory for product (unknown to be resolved in JS) and the product
-      *         wrapped up in a Try to force clients to deal with error or bubble it up (since there's web client
-      *         calls mae here).
+      * @return ValidateSelection (since there's web client dependency, need to capture exceptions low level exceptions here).
       */
     private def getSerialResult(invService: InventoryService,
                         runner: ProductRunner,
                         requestSize: Int,
                         category: String,
                         lcboProdCategory: String,
-                        r: RNG): Try[Iterable[(IProduct, Long)]] =
-    for {
-      prods <- runner.fetchByStoreCategory(invService.lcboId, category, maxSampleSize)
-      // take a hit of one go to LCBO, querying by category, no more.
-      permutedIndices = RNG.shuffle(prods.indices).runA(r).value
-      // stream avoids checking primary category on full collection (the permutation is done though).
-      stream = for {id <- permutedIndices.toStream
-                    p = prods(id) if p.primaryCategory == lcboProdCategory} yield p
-      res = stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
-    // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
-    // and then zip with list of zeroes because we are too slow to obtain inventories.
-    } yield res
+                        r: RNG): ValidateSelection = {
+      for {
+        prods <- Xor.fromTry(runner.fetchByStoreCategory(invService.lcboId, category, maxSampleSize))
+        // take a hit of one go to LCBO, querying by category, no more.
+        permutedIndices = RNG.shuffle(prods.indices).runA(r).value
+        // stream avoids checking primary category on full collection (the permutation is done though).
+        stream = for {id <- permutedIndices.toStream
+                      p = prods(id) if p.primaryCategory == lcboProdCategory} yield p
+        res = stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
+      // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
+      // and then zip with list of zeroes because we are too slow to obtain inventories.
+      } yield res
+    }
   }
 }
