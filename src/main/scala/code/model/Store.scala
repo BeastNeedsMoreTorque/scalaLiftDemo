@@ -1,7 +1,7 @@
 package code.model
 
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.prodAdvisor.{ProductAdvisorComponentImpl, ProductAdvisorDispatcher}
+import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RNG
 import code.model.utils.RetainSingles.asMap
 import cats.data.Xor
@@ -25,7 +25,7 @@ trait StoreSizeConstants {
 }
 
 case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConstants with StoreCacheService
-  with ProductAdvisorDispatcher with ProductAdvisorComponentImpl {
+  with ProductAdvisorDispatcher with MonteCarloProductAdvisorComponentImpl {
 
   // products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)

@@ -2,7 +2,7 @@ package code.model
 
 import code.UnitTest
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
-import code.model.prodAdvisor.ProductAdvisorComponentImpl
+import code.model.prodAdvisor.MonteCarloProductAdvisorComponentImpl
 import code.model.utils.RNG
 import scala.collection.IndexedSeq
 import scala.util.Try
@@ -10,10 +10,10 @@ import scala.util.Try
 /**
   * Created by philippederome on 2016-05-04.
   */
-class ProductAdvisorComponentImplTest extends UnitTest {
-  class ProductAdvisorComponentImplTest extends ProductAdvisorComponentImpl
+class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
+  class MonteCarloProductAdvisorComponentImplTest extends MonteCarloProductAdvisorComponentImpl
 
-  val instance = new ProductAdvisorComponentImplTest
+  val instance = new MonteCarloProductAdvisorComponentImplTest
   val drunkShuffler = instance.agent
 
   val NullInventoryService = new InventoryService {

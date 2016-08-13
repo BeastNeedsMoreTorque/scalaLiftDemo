@@ -11,14 +11,27 @@ import scala.collection.{IndexedSeq, Iterable, Seq}
   * Created by philippederome on 2016-05-02. Cake Pattern style.
   * Note that objects of type RNG are always called on methods that return objects and the meaningful
   * return a new RNG (pattern state transformations, apparently common in Scalaz). This is inspired by Functional Programming in Scala Chapter 6.
-  * Abstracted out in May from Store so that pieces of functionality can be testable from a unit perspective.
-  * First cut of MonteCarloAdvisor is indeed almost testable! In its original form, it was impossible to test well with side effects and concrete
-  * classes standing in the way.
   */
 trait ProductAdvisorComponent {
+  /**
+    *
+    * @return a ProductAvisor who can provide advice on products
+    */
   def agent: ProductAdvisor
 
+  /**
+    * An interface to provide advice (recommendation) for LCBO products modelled by a simple single method.
+    */
   trait ProductAdvisor {
+    /**
+      * @param rng a Random Number Generator state item.
+      * @param invService an entity capable of determining number of items for each product that can be sold
+      * @param category category of products to advise on (this is deliberately coarse to simplify application)
+      * @param requestSize the desired request size for the advice, which need not be fulfilled but should be on best efforts basis
+      * @param runner a service agent that can select products of a given category in a store; think of the agent
+      *               running around a counter for which clients have no access, in the back office.
+      * @return a collection of products available with their counts wrapped up in error handling Xor
+      */
     def advise(rng: RNG,
                invService: InventoryService,
                category: String,
@@ -28,9 +41,22 @@ trait ProductAdvisorComponent {
 
 }
 
+/**
+  * implements ProductAdvisor delegating to a polymorphic intermediary (agent) that actually provides the service.
+  */
 trait ProductAdvisorDispatcher   {
   this: ProductAdvisorComponent =>
 
+  /**
+    *
+    * @param rng a Random Number Generator state item.
+    * @param invService an entity capable of determining number of items for each product that can be sold
+    * @param category category of products to advise on (this is deliberately coarse to simplify application)
+    * @param requestSize the desired request size for the advice, which need not be fulfilled but should be on best efforts basis
+    * @param runner a service agent that can select products of a given category in a store; think of the agent
+    *               running around a counter for which clients have no access, in the back office.
+    * @return a collection of products available with their counts wrapped up in error handling Xor, delegating to the agent
+    */
   def advise(rng: RNG,
              invService: InventoryService,
              category: String,
@@ -39,8 +65,14 @@ trait ProductAdvisorDispatcher   {
     agent.advise(rng, invService, category, requestSize, runner)
 }
 
-// the suggested implementation below is for fun. A more realistic/commercial one would use proper analytics instead.
-trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
+/**
+  * the suggested implementation below is for fun. A more realistic/commercial one would use proper analytics instead.
+  */
+trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
+  /**
+    *
+    * @return a ProductAdvisor object, which selects products randomly without consideration about user preferences.
+    */
   def agent: ProductAdvisor = {
     // manual Dependency Injection,specifying dependencies as parameters to MonteCarloAdvisor
     val liquorCategory = LiquorCategory(ConfigPairsRepo.configPairsRepoPropsImpl)
@@ -48,21 +80,27 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
     new MonteCarloAdvisor(liquorCategory, maxSampleSize)
   }
 
-  // beware: this advisor could be hammered! To do: Find a more practical, corporate alternative instead.
+  /**
+    * beware: this advisor could be hammered! To do: Find a more practical, corporate alternative instead with some ML analytics.
+    * @param liquorCategory has info/context about LCBO categories
+    * @param maxSampleSize the maximum number of product items to request synchronously from LCBO, an excessively high value
+    *                      will compromise usability since thisis synchronous.
+    */
   class MonteCarloAdvisor(liquorCategory: LiquorCategory,
                           maxSampleSize: Int) extends ProductAdvisor {
 
     /**
       * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
       * Select a random product that matches the parameters subject to a max sample size.
-      *
-      * @param invService    a InventoryService trait that has a few abstract methods about inventory in stock or
+      * @param rng a Random Number Generator state item.
+      * @param invService  a InventoryService trait that has a few abstract methods about inventory in stock or
       *                      ability to sync cache from LCBO Web API (theoretically inventory update or provisioning).
       * @param category    a String such as beer, wine, mostly matching primary_category at LCBO,
       *                    or an asset category (for query only not to compare results and filter!).
       * @param requestSize a number representing how many items we need to propose as recommendation
       * @param runner a ProductRunner, responsible to obtain products in a store for a given vategory.
-      * @return quantity found in inventory for product and the product
+      * @return quantity found in inventory for product and the product, wrapped up in Xor to force clients
+      *         to deal with possible error status
       */
     def advise(rng: RNG,
                invService: InventoryService,
@@ -83,10 +121,10 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       * and has no side effect (by default it caches).
       * So this is "pure" relative to implementations of InventoryService and ProductRunner making guarantees to being pure on the methods we use here.
       * That guarantee could be provided in a unit test environment.
-      * @param invService an inventory service instance
+      * @param invService an inventory service instance that allows us to obtain inventory info for products in a store
       * @param runner a ProductRunner instance
       * @param rng a Random Number Generator state item.
-      * @param initialProducts a tentative collection of products that would satisfy user request. If it does, we random sample from it,
+      * @param initialProductKeys a tentative collection of products that would satisfy user request. If it does, we random sample from it,
       *                        otherwise we go to LCBO to get some fresh ones synchronously and shuffle them.
       * @param category the category of the product
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO.
@@ -134,7 +172,9 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO.
       *                         It's been known that they would send a Wiser's Whiskey on a wine request.
       * @param r a Random Number Generator state item.
-      * @return 0 quantity found in inventory for product (unknown to be resolved in JS) and the product
+      * @return 0 or quantity found in inventory for product (unknown to be resolved in JS) and the product
+      *         wrapped up in a Try to force clients to deal with error or bubble it up (since there's web client
+      *         calls mae here).
       */
     private def getSerialResult(invService: InventoryService,
                         runner: ProductRunner,
