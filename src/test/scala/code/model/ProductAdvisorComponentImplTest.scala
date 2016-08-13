@@ -28,7 +28,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
 
   behavior of "No product available empty list"
   val outOfStockRunner = new ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: Long,
+    override def fetchByStoreCategory(lcboStoreId: LCBO_ID,
                                       category: String,
                                       requiredSize: Int): Try[IndexedSeq[IProduct]] = Try { IndexedSeq[Product]() }
   }
@@ -99,7 +99,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   }
 
   val singleBeerRunner = new ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): Try[IndexedSeq[IProduct]] =
+    override def fetchByStoreCategory(lcboStoreId: LCBO_ID, category: String, requiredSize: Int): Try[IndexedSeq[IProduct]] =
       Try { if (category == "beer") Vector(Heineken) else Vector() }
   }
 
@@ -109,7 +109,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     val someWines = Seq(OysterBay, ChampagneKrug)
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
-    override def fetchByStoreCategory(lcboStoreId: Long,
+    override def fetchByStoreCategory(lcboStoreId: LCBO_ID,
                                       category: String,
                                       requiredSize: Int): Try[IndexedSeq[IProduct]] = Try {
       category match {
@@ -126,7 +126,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     val someWines = Seq(OysterBay, ChampagneKrug)
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
-    override def fetchByStoreCategory(lcboStoreId: Long,
+    override def fetchByStoreCategory(lcboStoreId: LCBO_ID,
                                       category: String,
                                       requiredSize: Int): Try[IndexedSeq[IProduct]] =
     Try {

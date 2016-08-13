@@ -140,7 +140,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   * URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage> (+ details on where_not and order)
   * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
   */
-  override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): Try[IndexedSeq[IProduct]] = {
+  override def fetchByStoreCategory(lcboStoreId: LCBO_ID, category: String, requiredSize: Int): Try[IndexedSeq[IProduct]] = {
     implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize)
     // don't fetch more than required size.
     productWebQuery(lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs)

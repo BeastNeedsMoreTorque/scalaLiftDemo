@@ -41,12 +41,16 @@ trait ProductAdvisorDispatcher   {
 
 // the suggested implementation below is for fun. A more realistic/commercial one would use proper analytics instead.
 trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
-  def agent: ProductAdvisor = new MonteCarloAdvisor
+  def agent: ProductAdvisor = {
+    // manual Dependency Injection,specifying dependencies as parameters to MonteCarloAdvisor
+    val liquorCategory = LiquorCategory(ConfigPairsRepo.configPairsRepoPropsImpl)
+    val maxSampleSize = Props.getInt("advisor.maxSampleSize", 0)
+    new MonteCarloAdvisor(liquorCategory, maxSampleSize)
+  }
 
   // beware: this advisor could be hammered! To do: Find a more practical, corporate alternative instead.
-  class MonteCarloAdvisor extends ProductAdvisor {
-    val liquorCategory = new LiquorCategory(ConfigPairsRepo.configPairsRepoPropsImpl)
-    val MaxSampleSize = Props.getInt("advisor.maxSampleSize", 0)
+  class MonteCarloAdvisor(liquorCategory: LiquorCategory,
+                          maxSampleSize: Int) extends ProductAdvisor {
 
     /**
       * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
@@ -70,7 +74,6 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
       // the shuffling in getShuffledProducts is predetermined by rng (and not other class calls to random generation routines),
       // and when cache fails, it is predetermined by the actual contents we get from LCBO via getSerialResult.
       getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)
-
     }
 
     /**
@@ -138,18 +141,17 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
                         requestSize: Int,
                         category: String,
                         lcboProdCategory: String,
-                        r: RNG): Try[Iterable[(IProduct, Long)]] = {
-      for {
-        prods <- runner.fetchByStoreCategory(invService.lcboId, category, MaxSampleSize)
-        // take a hit of one go to LCBO, querying by category, no more.
-        permutedIndices = RNG.shuffle(prods.indices).runA(r).value
-        // stream avoids checking primary category on full collection (the permutation is done though).
-        stream = for {id <- permutedIndices.toStream
-                      p = prods(id) if p.primaryCategory == lcboProdCategory} yield p
-        res = stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
-      // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
-      // and then zip with list of zeroes because we are too slow to obtain inventories.
-      } yield res
-    }
+                        r: RNG): Try[Iterable[(IProduct, Long)]] =
+    for {
+      prods <- runner.fetchByStoreCategory(invService.lcboId, category, maxSampleSize)
+      // take a hit of one go to LCBO, querying by category, no more.
+      permutedIndices = RNG.shuffle(prods.indices).runA(r).value
+      // stream avoids checking primary category on full collection (the permutation is done though).
+      stream = for {id <- permutedIndices.toStream
+                    p = prods(id) if p.primaryCategory == lcboProdCategory} yield p
+      res = stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
+    // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
+    // and then zip with list of zeroes because we are too slow to obtain inventories.
+    } yield res
   }
 }
