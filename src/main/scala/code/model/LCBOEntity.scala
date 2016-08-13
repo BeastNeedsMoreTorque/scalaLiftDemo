@@ -44,8 +44,8 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
     }.toIndexedSeq
   }
 
-  def getSeq(masterKey: String, default: String = "")(c: ConfigPairsRepo): Seq[(String, String)] =
-    c.getSeq(masterKey, default)
+  def getSeq(masterKey: String)(c: ConfigPairsRepo): Seq[(String, String)] =
+    c.getSeq(masterKey)
 
   // type parameter I should be an interface of T, so that getCachedItem can return an interface rather than a concrete class,
   // and it should not return just anything.

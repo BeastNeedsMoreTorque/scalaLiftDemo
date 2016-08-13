@@ -44,8 +44,8 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
   def agent: ProductAdvisor = new MonteCarloAdvisor
 
   // beware: this advisor could be hammered! To do: Find a more practical, corporate alternative instead.
-  class MonteCarloAdvisor  extends ProductAdvisor {
-
+  class MonteCarloAdvisor extends ProductAdvisor {
+    val liquorCategory = new LiquorCategory(ConfigPairsRepo.configPairsRepoPropsImpl)
     val MaxSampleSize = Props.getInt("advisor.maxSampleSize", 0)
 
     /**
@@ -66,7 +66,7 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
                requestSize: Int,
                runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]] = {
 
-      val lcboProdCategory = LiquorCategory.toPrimaryCategory(category)
+      val lcboProdCategory = liquorCategory.toPrimaryCategory(category)
       // the shuffling in getShuffledProducts is predetermined by rng (and not other class calls to random generation routines),
       // and when cache fails, it is predetermined by the actual contents we get from LCBO via getSerialResult.
       getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory), category, lcboProdCategory, requestSize)

@@ -1,6 +1,6 @@
 package code.snippet
 
-import code.model.LiquorCategory
+import code.model.{ConfigPairsRepo, LiquorCategory}
 import code.snippet.SessionCache.theCategory
 import net.liftweb.common.Full
 import net.liftweb.http.SHtml
@@ -11,12 +11,15 @@ import scala.xml.NodeSeq
   * Created by philippederome on 2015-12-05.
   */
 class CategorySelect {
-  private val categoryImg = LiquorCategory.toImg(SessionCache.defaultCategory)
+  private val liquorCategory = new LiquorCategory(ConfigPairsRepo.defaultInstance)
+  // hardcoded effectively as Lift does not provide parameters to classes it instantiates
+
+  private val categoryImg = liquorCategory.toImg(SessionCache.defaultCategory)
   private val defaultOption = RadioElements.selectOption(SessionCache.defaultCategory, categoryImg)
   // selected with style that frames it
 
   private val radioOptions: Seq[RadioElements] =
-    RadioElements.radioOptions( LiquorCategory.categoriesSeq, SessionCache.defaultCategory, LiquorCategory.toImg)
+    RadioElements.radioOptions( liquorCategory.categoriesSeq, SessionCache.defaultCategory, liquorCategory.toImg)
 
   /**
     * save radio button selection as next default to avoid annoying resetting to original default and make it session persistent
