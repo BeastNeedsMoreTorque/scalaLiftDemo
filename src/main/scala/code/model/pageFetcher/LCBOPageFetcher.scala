@@ -72,6 +72,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggabl
       // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise using "closure" as is often found in JS).
       // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same.
       // It has no side effect for sure, other than helpful log.
+      // @throws HTTPException
       @tailrec // in general it's good to make recursion tailrec to avoid stack overflow.
       def go(accumItems: IndexedSeq[T], currPage: Int): IndexedSeq[T] = {
         // get as many as possible on a page because we could have few matches.

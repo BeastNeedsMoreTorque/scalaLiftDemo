@@ -1,7 +1,7 @@
 package code.Rest
 
 import net.liftweb.util.Props
-import skinny.http._
+import skinny.http.{HTTPException, _}
 
 /**
   * Created by philippederome on 2015-12-19.
@@ -16,6 +16,7 @@ trait RestClient {
     *
     * @param uri A uri with full path and protocol but without query parameters, such as "http://foo.com/bar
     * @param params a sequence of value pairs that will become ?param1=val1&param2=val2...&paramn=valn"
+    * @throws HTTPException
     * @return a pair of JSon String obtained from REST site and the uri we just built
     */
   def get(uri: String, params: (String, Any)*): (String, String) = {
