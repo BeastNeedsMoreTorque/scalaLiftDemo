@@ -38,7 +38,7 @@ trait Advise extends UtilCommands {
         for {s <- jsStore.extractOpt[String].map(parse) // ExtractOpt avoids MappingException and generates None on failure
              storeId <- s.extractOpt[Long]
              ss <- Store.getStore(storeId)
-             advice <- maySelect(ss)
+             advice = maySelect(ss)
         } yield advice
 
       cmd.fold {
@@ -46,29 +46,26 @@ trait Advise extends UtilCommands {
       { identity } // normal case
     }
 
-  private def maySelect(s: Store): Option[JsCmd] = {
+  private def maySelect(s: Store): JsCmd = {
     val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
     lazy val successToProducts: Iterable[(IProduct, Long)] => Option[Iterable[(IProduct, Long)]] = {
       pairs: Iterable[(IProduct, Long)] =>
         if (pairs.isEmpty) S.error(s"Unable to find a product of category ${theCategory.is}")
         // we're reloading into cache to make up for that issue!
-        Full(pairs) // returns prod and quantity in inventory normally, regardless of emptyness)
+        Full(pairs) // returns prod and quantity in inventory normally, regardless of emptiness)
     }
     lazy val errorToProducts: Throwable => Option[Iterable[(IProduct, Long)]] = {
       t: Throwable =>
         S.error(s"Unable to choose product of category ${theCategory.is} with exception error ${t.toString()}")
         Empty
     }
-    val advice = {
-      val advisedProductsSeq = s.advise(rng, theCategory.is, theAdviseCount.is, Product)
-      val prodQtySeq = advisedProductsSeq.fold(errorToProducts, successToProducts)
-      prodQtySeq.fold { Noop } // we gave notice of error already via JS, nothing else to do
-      { pairs => // normal case
-        S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-        prodDisplayJS(pairs.map { case (p, q) => QuantityOfProduct(q, p) })
-      }
+    val advisedProductsSeq = s.advise(rng, theCategory.is, theAdviseCount.is, Product)
+    val prodQtySeq = advisedProductsSeq.fold(errorToProducts, successToProducts)
+    prodQtySeq.fold { Noop } // we gave notice of error already via JS, nothing else to do
+    { pairs => // normal case
+      S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
+      prodDisplayJS(pairs.map { case (p, q) => QuantityOfProduct(q, p) })
     }
-    Some(advice)
   }
 
   private def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd = {

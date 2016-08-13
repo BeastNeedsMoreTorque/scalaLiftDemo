@@ -140,19 +140,21 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   * URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage> (+ details on where_not and order)
   * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
   */
-  override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = {
+  override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): Try[IndexedSeq[IProduct]] = {
     implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize)
     // don't fetch more than required size.
     productWebQuery(lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs)
   }
 
   // side effect to store updates of the products
-  def fetchByStore(lcboStoreId: Long): Try[IndexedSeq[IProduct]] = Try {
+  def fetchByStore(lcboStoreId: Long): Try[IndexedSeq[IProduct]] = {
     // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
     // and gives us opportunity to bring our cache up to date about firm wide products.
-    val prods = productWebQuery( lcboStoreId, queryFilterArgs) // take them all from Stream
-    synchDirtyAndNewItems(prods, getCachedItem) // the side effect
-    prods.map{ _.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
+    for {
+      as <- productWebQuery(lcboStoreId, queryFilterArgs) // take them all from Stream
+      bs <- Try(synchDirtyAndNewItems(as, getCachedItem)) // the side effect
+      cs = bs.map{_.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
+    } yield cs
   }
 
   def getItemByLcboId(id: LCBO_ID): Option[IProduct] =

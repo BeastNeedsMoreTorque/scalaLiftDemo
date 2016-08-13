@@ -5,6 +5,7 @@ import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.ProductAdvisorComponentImpl
 import code.model.utils.RNG
 import scala.collection.IndexedSeq
+import scala.util.Try
 
 /**
   * Created by philippederome on 2016-05-04.
@@ -27,7 +28,9 @@ class ProductAdvisorComponentImplTest extends UnitTest {
 
   behavior of "No product available empty list"
   val outOfStockRunner = new ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = IndexedSeq[Product]()
+    override def fetchByStoreCategory(lcboStoreId: Long,
+                                      category: String,
+                                      requiredSize: Int): Try[IndexedSeq[IProduct]] = Try { IndexedSeq[Product]() }
   }
   it should s"advise an empty list of products when using dummy InventoryService and ProductRunner when no products of category can be found" in {
     val rng = RNG.Simple(411)
@@ -96,8 +99,8 @@ class ProductAdvisorComponentImplTest extends UnitTest {
   }
 
   val singleBeerRunner = new ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] =
-      if (category == "beer") Vector(Heineken) else Vector()
+    override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): Try[IndexedSeq[IProduct]] =
+      Try { if (category == "beer") Vector(Heineken) else Vector() }
   }
 
   val HeinekensBut63Runner = new ProductRunner {
@@ -106,22 +109,32 @@ class ProductAdvisorComponentImplTest extends UnitTest {
     val someWines = Seq(OysterBay, ChampagneKrug)
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
-    override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = category match {
-      case "beer" => someBeers.toVector
-      case "wine" => someWines.toVector
-      case _ => Vector()
+    override def fetchByStoreCategory(lcboStoreId: Long,
+                                      category: String,
+                                      requiredSize: Int): Try[IndexedSeq[IProduct]] = Try {
+      category match {
+        case "beer" => someBeers.toVector
+        case "wine" => someWines.toVector
+        case _ => Vector()
+      }
     }
   }
+
   val HeinekensBut62Runner = new ProductRunner {
     // depends precisely on  props store.fixedRNGSeed=411. Mill St is at a different spot!
     val someBeers =  Seq.fill(62)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(38)( Heineken)
     val someWines = Seq(OysterBay, ChampagneKrug)
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
-    override def fetchByStoreCategory(lcboStoreId: Long, category: String, requiredSize: Int): IndexedSeq[IProduct] = category match {
-      case "beer" => someBeers.toVector
-      case "wine" => someWines.toVector
-      case _ => Vector()
+    override def fetchByStoreCategory(lcboStoreId: Long,
+                                      category: String,
+                                      requiredSize: Int): Try[IndexedSeq[IProduct]] =
+    Try {
+      category match {
+        case "beer" => someBeers.toVector
+        case "wine" => someWines.toVector
+        case _ => Vector()
+      }
     }
   }
 

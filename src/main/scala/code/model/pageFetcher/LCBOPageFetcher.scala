@@ -6,6 +6,7 @@ import net.liftweb.common.Loggable
 import net.liftweb.util.Props
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
+import scala.util.Try
 
 /**
   * Created by philippederome on 2016-03-30.
@@ -32,7 +33,7 @@ trait LCBOPageFetcherComponent  {
     def collectItemsAsWebClient[T](webApiRoute: String,
                                    xt: JSitemsExtractor[T],
                                    params: Seq[(String, Any)] = Seq())
-                                  (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T]
+                                  (implicit enough: GotEnough_? = neverEnough): Try[IndexedSeq[T]]
   }
 }
 
@@ -42,7 +43,7 @@ trait LCBOPageLoader {
   def collectItemsAsWebClient[T](webApiRoute: String,
                                  xt: JSitemsExtractor[T],
                                  params: Seq[(String, Any)] = Seq())
-                                (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] =
+                                (implicit enough: GotEnough_? = neverEnough): Try[IndexedSeq[T]] =
     fetcher.collectItemsAsWebClient(webApiRoute, xt, params)(enough)
 }
 
@@ -66,7 +67,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggabl
     def collectItemsAsWebClient[T](path: String,
                                    xt: JSitemsExtractor[T],
                                    params: Seq[(String, Any)] = Seq())
-                                  (implicit enough: GotEnough_? = neverEnough): IndexedSeq[T] = {
+                                  (implicit enough: GotEnough_? = neverEnough): Try[IndexedSeq[T]] = Try {
       val uriRoot: String = s"http://$LcboDomain/$path"
       // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise using "closure" as is often found in JS).
       // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same.

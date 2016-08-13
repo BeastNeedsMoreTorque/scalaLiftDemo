@@ -52,8 +52,9 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
   // Some LCBO entities also have a similar pattern of identifying new info from LCBO (items being provided from a query),
   // reconciling/interpreting as new or dirty (or clean/unchanged)
   // and then make sure first DB is brought up to date with that info and synchronously the cache memory as well.
-  final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], get: I => Option[I]): Unit = {
+  final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], get: I => Option[I]): IndexedSeq[T] = {
     val dirtyAndNewItems = itemsByState[I, T](items, get)
     updateAndInsert(dirtyAndNewItems.updates, dirtyAndNewItems.inserts) // updates DB AND cache.
+    items
   }
 }

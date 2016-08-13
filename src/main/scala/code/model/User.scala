@@ -10,9 +10,9 @@ import scala.xml.Node
 import scala.util.Try
 import cats.data.Xor
 
-// This is provided by Liftweb framework as a helper to get started or experiment.
 /**
   * An O-R mapped "User" class that includes first name, last name, password and Liftweb demo would add a "Personal Essay" to it
+  * This is provided by Liftweb framework as a helper to get started or experiment. I left screenwrap in Object companion but not using it.
   */
 class User extends MegaProtoUser[User] {
   def getSingleton: User.type = User
@@ -23,6 +23,7 @@ class User extends MegaProtoUser[User] {
     * Atomicity provided by liftweb in boot.scala (normally would be S.addAround(DB.buildLoanWrapper)), but done differently for Squeryl specifically.
     *
     * @param p a product representing the Record object that was created after serialization from LCBO.
+    * @param quantity the quantity of the product we are recording for user.
     * @see Lift in Action, Chapter 10-11 (Mapper and mostly Record), Section 10.3.2 Transactions
     * @return the number of times the user has purchased this product as a pair/tuple.
     *         May throw but would be caught as a Throwable within Xor to be consumed higher up.
@@ -62,9 +63,8 @@ class User extends MegaProtoUser[User] {
   * The singleton that has methods for accessing the database
   */
 object User extends User with MetaMegaProtoUser[User] {
-  override def dbTableName: String = "users"
+  override def dbTableName: String = "users" // define the DB table name
 
-  // define the DB table name
   override def screenWrap: Full[Node] = Full(<lift:surround with="default" at="content">
     <lift:bind/>
   </lift:surround>)

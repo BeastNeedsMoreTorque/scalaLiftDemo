@@ -89,7 +89,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
              dirtyInv = cachedInv.copyDiffs(freshInv) } yield dirtyInv }
     }
 
-    for {items <- Try(collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage))
+    for {items <- collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
          updatesAndInserts <- Try(itemsByState[Inventory, Inventory](items, get))
          updatedInventories <- Try(getUpdatedInvs(updatesAndInserts.updates).retainSingles)
          newInventories <- Try(updatesAndInserts.inserts.retainSingles)

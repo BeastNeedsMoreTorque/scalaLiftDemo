@@ -153,8 +153,6 @@ object Store extends Store with MetaRecord[Store] {
     for {pKey <- lcboIdToPKMap.get(s.lcboId)
          is <- getStore(pKey)} yield is
 
-  private def getStores = Try {
-    collectItemsAsWebClient("/stores", extract, queryFilterArgs)
+  private def getStores = collectItemsAsWebClient("/stores", extract, queryFilterArgs)
     // nice to know if it's empty, so we can log an error in that case.
-  }
 }

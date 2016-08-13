@@ -99,29 +99,30 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
                             category: String,
                             lcboProdCategory: String,
                             requestSize: Int): Xor[Throwable, Iterable[(IProduct, Long)]] = {
-    val scalaTry = Try {
-      val inStockItems = {
-        for {p <- initialProductKeys
-             inv <- invService.inventoryByProductIdMap(p.pKey)
-             q = inv.quantity if q > 0
-             prod <- invService.getProduct(p.lcboId)} yield (prod, q)
+      val prods = {
+        val inStockItems = {
+          for {p <- initialProductKeys
+               inv <- invService.inventoryByProductIdMap(p.pKey)
+               q = inv.quantity if q > 0
+               prod <- invService.getProduct(p.lcboId)} yield (prod, q)
+        }
+        // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
+
+        invService.asyncLoadCache() // if we never loaded the cache, do it. Note: useful even if we have product of matching inventory
+        // to find out up to date inventory
+        // Ideally this asyncLoadCache could be a metaphor for a just in time restocking request given that our cache could be empty with cache representing
+        // "real inventory".
+
+        val (rr, cachedIds) = RNG.collectSample(inStockItems.indices, requestSize).run(rng).value
+        // shuffle only on the indices not full items (easier on memory mgmt).
+
+        if (cachedIds.nonEmpty) Try {cachedIds.map(inStockItems)}
+        // when nonEmpty, get back the items that the ids have been selected (we don't stream because we know inventory > 0)
+        else getSerialResult(invService, runner, requestSize, category, lcboProdCategory, rr)
       }
-      // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
-
-      invService.asyncLoadCache() // if we never loaded the cache, do it. Note: useful even if we have product of matching inventory
-      // to find out up to date inventory
-      // Ideally this asyncLoadCache could be a metaphor for a just in time restocking request given that our cache could be empty with cache representing
-      // "real inventory".
-
-      val (rr, cachedIds) = RNG.collectSample(inStockItems.indices, requestSize).run(rng).value
-      // shuffle only on the indices not full items (easier on memory mgmt).
-
-      if (cachedIds.nonEmpty) cachedIds.map(inStockItems)
-      // when nonEmpty, get back the items that the ids have been selected (we don't stream because we know inventory > 0)
-      else getSerialResult(invService, runner, requestSize, category, lcboProdCategory, rr)
+      Xor.fromTry(prods)
     }
-    Xor.fromTry(scalaTry)
-  }
+
     /**
       * @param invService an inventory service instance
       * @param runner a ProductRunner instance
@@ -137,17 +138,18 @@ trait ProductAdvisorComponentImpl extends ProductAdvisorComponent {
                         requestSize: Int,
                         category: String,
                         lcboProdCategory: String,
-                        r: RNG) = {
-
-      val prods = runner.fetchByStoreCategory(invService.lcboId, category, MaxSampleSize)
-      // take a hit of one go to LCBO, querying by category, no more.
-      val permutedIndices = RNG.shuffle(prods.indices).runA(r).value
-      // stream avoids checking primary category on full collection (the permutation is done though).
-      val stream = for {id <- permutedIndices.toStream
-                        p = prods(id) if p.primaryCategory == lcboProdCategory} yield p
-      stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
+                        r: RNG): Try[Iterable[(IProduct, Long)]] = {
+      for {
+        prods <- runner.fetchByStoreCategory(invService.lcboId, category, MaxSampleSize)
+        // take a hit of one go to LCBO, querying by category, no more.
+        permutedIndices = RNG.shuffle(prods.indices).runA(r).value
+        // stream avoids checking primary category on full collection (the permutation is done though).
+        stream = for {id <- permutedIndices.toStream
+                      p = prods(id) if p.primaryCategory == lcboProdCategory} yield p
+        res = stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
       // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
       // and then zip with list of zeroes because we are too slow to obtain inventories.
+      } yield res
     }
   }
 }
