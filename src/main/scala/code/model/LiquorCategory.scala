@@ -3,7 +3,7 @@ package code.model
 import net.liftweb.util.Props
 /**
   * Created by philippederome on 15-10-26.
-  * LiquorCategory: provides sequence of product categories to display to client, which is configurable via config,
+  * Provides sequence of product categories to display to client, which is configurable via config,
   * additionally, provides a mapping of queryable pattern-categories to those used as primary categories in LCBO catalog
   * @param config provides configuration object that gives us the sequence of product categories
   */

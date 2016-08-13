@@ -6,7 +6,7 @@ import scala.collection.Seq
 
 /**
   * Created by philippederome on 2016-04-08.
-  * ConfigPairsRepo: interface to get a sequence of key values that are related by a masterKey.
+  * Interface to get a sequence of key values that are related by a masterKey.
   */
 trait ConfigPairsRepo {
   /**
@@ -19,7 +19,7 @@ trait ConfigPairsRepo {
 
 /**
   * Created by philippederome on 2016-04-08.
-  * ConfigPairsRepo: a module offering several possible different implementations of ConfigPairsRepo
+  * A module offering several possible different implementations of ConfigPairsRepo
   */
 object ConfigPairsRepo {
   // provide as many implementations of ConfigPairsRepo as required.
