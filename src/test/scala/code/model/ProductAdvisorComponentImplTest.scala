@@ -57,7 +57,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
 
     // Change unit of currency from cents to dollars and Int to String
     override def price: String = "$2.00"
-    override def streamAttributes: IndexedSeq[Attribute] = Product.streamAttributes
+    override def streamAttributes: IndexedSeq[AttributeHtmlData] = Product.streamAttributes
   }
 
   trait typicalWineProduct extends IProduct  {
@@ -67,7 +67,7 @@ class ProductAdvisorComponentImplTest extends UnitTest {
 
     // Change unit of currency from cents to dollars and Int to String
     override def price: String = "$15.00"
-    override def streamAttributes: IndexedSeq[Attribute] = Product.streamAttributes
+    override def streamAttributes: IndexedSeq[AttributeHtmlData] = Product.streamAttributes
   }
 
   val Heineken = new typicalBeerProduct {

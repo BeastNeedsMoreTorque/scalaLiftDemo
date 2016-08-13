@@ -13,6 +13,6 @@ trait IProduct extends KeyKeeper {
   def alcoholContent: String
   // Change unit of currency from cents to dollars and Int to String
   def price: String
-  def streamAttributes: IndexedSeq[Attribute]
+  def streamAttributes: IndexedSeq[AttributeHtmlData]
 }
 

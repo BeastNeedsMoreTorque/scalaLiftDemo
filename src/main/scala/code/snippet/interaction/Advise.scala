@@ -3,7 +3,7 @@ package code.snippet.interaction
 import code.model.{IProduct, Product, Store, User}
 import code.model.utils.RNG
 import code.snippet.SessionCache.{theCategory, theAdviseCount}
-import code.model.Attribute
+import code.model.AttributeHtmlData
 import net.liftweb.common.{Empty, Full}
 import net.liftweb.http.S
 import net.liftweb.http.js.{JE, JsCmd}
@@ -77,7 +77,7 @@ trait Advise extends UtilCommands {
   private def getDiv(qOfProd: QuantityOfProduct): NodeSeq = {
     val prod = qOfProd.product
     val inventory = qOfProd.quantity.toString
-    val invAttribute = Attribute(key="Quantity:", value=inventory, css="prodAttrContentInventory", name=prod.lcboId.toString)
+    val invAttribute = AttributeHtmlData(key="Quantity:", value=inventory, css="prodAttrContentInventory", name=prod.lcboId.toString)
     // label it as prodAttrContentInventory for client to interpret and identify easily
     // similarly, assigning the prodId to name helps identify it in browser JS.
     val allAttributes = prod.streamAttributes :+ invAttribute
@@ -92,8 +92,8 @@ trait Advise extends UtilCommands {
   // selectionMarkup is top to bottom: image, then checkbox, quantity and cost input text fields right justified (CSS class prodSelectInput).
   // We also add a hiddenCost, so that the cost per item is always available for our calculation
   // (visible to user in attributes in any event, but harder for us to get at for computation)
-  private def attributesMarkup(prod: IProduct, attrs: IndexedSeq[Attribute]): NodeSeq = {
-    def rowMarkup(a: Attribute): NodeSeq = {
+  private def attributesMarkup(prod: IProduct, attrs: IndexedSeq[AttributeHtmlData]): NodeSeq = {
+    def rowMarkup(a: AttributeHtmlData): NodeSeq = {
       <tr>
         <td class="prodAttrHead">{a.key}</td>
         <td class={a.css} name={a.name}>{a.value}</td>

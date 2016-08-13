@@ -1,6 +1,6 @@
 package code.snippet.interaction
 
-import code.model.{Attribute => _, _}
+import code.model.AttributeHtmlData
 import code.snippet.JSUtilities._
 import code.snippet.SessionCache._
 import net.liftweb.common._

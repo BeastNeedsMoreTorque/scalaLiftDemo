@@ -80,20 +80,20 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
-  def streamAttributes: IndexedSeq[Attribute] =
+  def streamAttributes: IndexedSeq[AttributeHtmlData] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database
   // or in web design. This assumes order can be fairly static.
-    ( Attribute("Name:", name.get) ::
-      Attribute("Primary Category:", primary_category.get) ::
-      Attribute("Secondary Category:", secondary_category.get) ::
-      Attribute("Varietal:", varietal.getValue) ::
-      Attribute("Package:", `package`.getValue) ::
-      Attribute("Volume:", volumeInLitre) ::
-      Attribute("Price:", price) ::
-      Attribute("Description:", description.getValue) ::
-      Attribute("Serving Suggestion:", serving_suggestion.getValue) ::
-      Attribute("Alcohol content:", alcoholContent) ::
-      Attribute ("Origin:", origin.getValue) ::
+    ( AttributeHtmlData("Name:", name.get) ::
+      AttributeHtmlData("Primary Category:", primary_category.get) ::
+      AttributeHtmlData("Secondary Category:", secondary_category.get) ::
+      AttributeHtmlData("Varietal:", varietal.getValue) ::
+      AttributeHtmlData("Package:", `package`.getValue) ::
+      AttributeHtmlData("Volume:", volumeInLitre) ::
+      AttributeHtmlData("Price:", price) ::
+      AttributeHtmlData("Description:", description.getValue) ::
+      AttributeHtmlData("Serving Suggestion:", serving_suggestion.getValue) ::
+      AttributeHtmlData("Alcohol content:", alcoholContent) ::
+      AttributeHtmlData ("Origin:", origin.getValue) ::
       Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
 
   // Change unit of currency from cents to dollars and Int to String
