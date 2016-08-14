@@ -10,7 +10,6 @@ import net.liftweb.http.S
 import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds.{SetHtml, _}
 import net.liftweb.json.JsonAST.JValue
-import net.liftweb.json.JsonParser._
 import net.liftweb.util.Props
 
 import scala.util.Random
@@ -22,23 +21,37 @@ import scala.xml.NodeSeq
   * Rendering handler for the Advise button (question mark icon gif).
   */
 trait Advise extends UtilCommands {
+  /**
+    * to make JSON parsing work
+    */
   implicit val formatsAdvise = net.liftweb.json.DefaultFormats
-  val fetchInventoriesJS = JE.Call("inventory.fetchInventories") // let the client deal with incomplete inventories and get them himself
+
+  /**
+    * A call to browser (invoking Javascript) when we are done to ask it to deal with incomplete inventories and get them himself
+    * if we cannot send them all in a timely fashion
+    */
+  val fetchInventoriesJS = JE.Call("inventory.fetchInventories")
+
+  /**
+    * A call to browser (invoking Javascript) when we are done to show the products to display and back patch
+    * inventory calculation initiated by browser (it will go to LCBO API if needed)
+    */
   val showProdDisplayJS =  JsShowId("prodDisplay") & fetchInventoriesJS
 
   /**
     * The prodDisplayJS and getDiv function below can be thought as an Action callback that mixes up markup and Scala.
     * The structure deliberately follows the markup of index.html.
     *
-    * @param jsStore
-    * @return
+    * @param jsStore input parameter from browser that specifies the store chosen by user (sent as plain number by browser and given as JInt by Lift)
+    * @return JSCmd a JavaScript command that Lift Framework will get browser to execute once we are done handling this method
+    *         In particular on error nothing gets done (other than earlier instructions to send notices via S state handler)
+    *         But in normal case of successful selection, build html elements to display product selections with tables, images, and checkboxes.
     */
   def advise(jsStore: JValue): JsCmd =
     User.currentUser.dmap { S.error("advise", "advise feature unavailable, Login first!"); Noop } { user =>
       val cmd =
-        for {s <- jsStore.extractOpt[String].map(parse) // ExtractOpt avoids MappingException and generates None on failure
-             storeId <- s.extractOpt[Long]
-             ss <- Store.getStore(storeId)
+        for {storeId <- jsStore.extractOpt[Long]
+             ss <- Store.getStore(storeId)  // no result here or earlier on will lead to error below as cmd will be None
              advice = maySelect(ss)
         } yield advice
 
@@ -142,11 +155,26 @@ trait Advise extends UtilCommands {
     (<div class="span-8 last">{imgNS}<br/>{checkBoxNS}{quantityNS}{costNS}{hiddenCostNS}</div>): NodeSeq
   }
 
-  // message is confirmation when successful, error when not
-  case class QuantityOfProduct(quantity: Long, product: IProduct)  // quantity available at the current store for a product (store is implied by context)
+  /**
+    * a quantity indicating how many items of given product is understood to be currently available at the store of user's interest.
+    * @param quantity the quantity of product
+    * @param product a product we track of for user
+    */
+  case class QuantityOfProduct(quantity: Long, product: IProduct)
 
+  /**
+    * contains configuration values as to whether we want to use a random see and if instead we use a fixed one its value
+    * the FixedRNGSeed is to enable unit testing.
+    */
   object Shuffler  {
+    /**
+      * When true we use standard (non functional have side effect) random number generation, but when false we use value of FixedRNGSeed.
+      * When false, FixedRNGSeed's value is ignored.
+      */
     val UseRandomSeed = Props.getBool("productInteraction.useRandomSeed", true)
+    /**
+      * the seed to use when we want to bypass standard rand and control the random number generation
+      */
     val FixedRNGSeed = Props.getInt("productInteraction.fixedRNGSeed", 0)
   }
 
