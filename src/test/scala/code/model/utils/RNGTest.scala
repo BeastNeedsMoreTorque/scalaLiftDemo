@@ -108,6 +108,10 @@ class RNGTest extends UnitTest {
     (selected, newSimple) should equal((expected_shuffled, Simple(281348911128875L)))
   }
 
+  it should "get unit Sequence on choosing 10 items from a small list (1 item) with any random input" in new randomRNG {
+    collectSample(Vector(5), 10).runA(seed).value shouldBe Vector(5)
+  }
+
   it should "get empty Sequence on choosing 0 item from non empty list with any random input" in new randomRNG {
     collectSample(bigSample, 0).runA(seed).value shouldBe empty
   }
