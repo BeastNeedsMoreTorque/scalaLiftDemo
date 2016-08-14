@@ -139,8 +139,8 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     loadAndCache.fold[Unit](failure, success)
   }
 
-  private def errHandler(t: Throwable, contextErrFormatter: String => String) =
-    logger.error(contextErrFormatter(t.toString()))
+  private def errHandler(t: Throwable, formatter: StringFormatter) =
+    logger.error(formatter(t.toString()))
 
   private def emptyInventory: Boolean = inventories.toIndexedSeq.forall(_.quantity == 0)
 }
