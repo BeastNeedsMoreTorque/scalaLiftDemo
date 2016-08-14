@@ -7,7 +7,6 @@ import net.liftweb.mapper._
 import net.liftweb.util.DefaultConnectionIdentifier
 import net.liftweb.squerylrecord.RecordTypeMode._
 import scala.xml.Node
-import scala.util.Try
 import cats.data.Xor
 
 /**
@@ -28,34 +27,31 @@ class User extends MegaProtoUser[User] {
     * @return the number of times the user has purchased this product as a pair/tuple.
     *         May throw but would be caught as a Throwable within Xor to be consumed higher up.
     */
-  def consume(p: IProduct, quantity: Long): Xor[Throwable, Long] = {
+  def consume(p: IProduct, quantity: Long): Xor[Throwable, Long] = Xor.catchNonFatal {
     // update it with new details; we could verify that there is a difference between LCBO and our version first...
     // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
     // Try captures database provider errors (column size too small for example, reporting it as an Throwable in Xor)
-    val scalaTry = Try {
-      DB.use(DefaultConnectionIdentifier) { connection =>
-        // avoids two/three round-trips to store to DB.
-        val updatedCount = Product.getProduct(p.pKey).fold {
-          throw new IllegalStateException(s"User.consume on unsaved product $p missing key ${p.pKey} expected to be found")
-        } { pp =>
-          val prodId: Long = pp.pKey // coerce type conversion as Squeryl needs a Long to convert to NumericType and P_KEY does not.
-          val userProd = userProducts.where(u => u.userid === id.get and u.productid === prodId).forUpdate.headOption
-          userProd.fold {
-            // (Product would be stored in DB with no previous user interest)
-            UserProduct.createRecord.userid(id.get).productid(pp.pKey).selectionscount(quantity).save // cascade save dependency using Active Record pattern.
-            quantity.toLong
-          } { up =>
-              val updatedQuantity = up.selectionscount.get + quantity
-              up.selectionscount.set(updatedQuantity)
-              up.updated.set(up.updated.defaultValue)
-              up.update // Active Record pattern, no need to specify table explicitly.
-              updatedQuantity
-          }
+    DB.use(DefaultConnectionIdentifier) { connection =>
+      // avoids two/three round-trips to store to DB.
+      val updatedCount = Product.getProduct(p.pKey).fold {
+        throw new RuntimeException(s"User.consume on unsaved product $p missing key ${p.pKey} expected to be found")
+      } { pp =>
+        val prodId: Long = pp.pKey // coerce type conversion as Squeryl needs a Long to convert to NumericType and P_KEY does not.
+        val userProd = userProducts.where(u => u.userid === id.get and u.productid === prodId).forUpdate.headOption
+        userProd.fold {
+          // (Product would be stored in DB with no previous user interest)
+          UserProduct.createRecord.userid(id.get).productid(pp.pKey).selectionscount(quantity).save // cascade save dependency using Active Record pattern.
+          quantity.toLong
+        } { up =>
+            val updatedQuantity = up.selectionscount.get + quantity
+            up.selectionscount.set(updatedQuantity)
+            up.updated.set(up.updated.defaultValue)
+            up.update // Active Record pattern, no need to specify table explicitly.
+            updatedQuantity
         }
-        updatedCount
       }
+      updatedCount
     }
-    Xor.fromTry(scalaTry)
   }
 }
 

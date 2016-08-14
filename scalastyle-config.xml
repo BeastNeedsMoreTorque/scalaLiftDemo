@@ -107,7 +107,7 @@
  <check level="error" class="org.scalastyle.scalariform.UppercaseLChecker" enabled="true"></check>
  <check enabled="true" class="org.scalastyle.scalariform.RedundantIfChecker" level="error"/>
  <check enabled="true" class="org.scalastyle.scalariform.ReturnChecker" level="error"/>
- <check enabled="false" class="org.scalastyle.scalariform.ScalaDocChecker" level="warning"/>
+ <check enabled="true" class="org.scalastyle.scalariform.ScalaDocChecker" level="warning"/>
  <check enabled="true" class="org.scalastyle.scalariform.LowercasePatternMatchChecker" level="error"/>
  <check enabled="true" class="org.scalastyle.scalariform.MultipleStringLiteralsChecker" level="warning">
     <parameters>

@@ -1,5 +1,6 @@
 package code.model
 
+import cats.data.Xor
 import code.model.Product.fetchByStore
 import code.model.Inventory.fetchInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
@@ -11,7 +12,7 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 import scala.collection.{IndexedSeq, Iterable}
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -57,12 +58,13 @@ trait StoreCacheService extends ORMExecutor with Loggable {
 
   private def fetchProducts(contextErrFormatter: String => String) = {
     val theProducts = fetchByStore(lcboId)
-    theProducts.toOption.fold(
-      errHandler(theProducts.failed, contextErrFormatter))(
-      items => {
+    val fail = { t: Throwable => errHandler(t, contextErrFormatter) }
+    val success = { items: IndexedSeq[IProduct] =>
         if (items.isEmpty) logger.error("Problem loading products into cache, none found")
         addToCaches(items)
-      })
+      }
+
+    theProducts.fold[Unit]( fail, success)
   }
 
   private def fetchInventories(contextErrFormatter: String => String) = {
@@ -70,34 +72,33 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert
     // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
     // we chain errors using flatMap (FP fans apparently like this).
-    val computation: Try[Unit] =
-    fetchInventoriesByStore(
+    def storeInventories(inventories: UpdatedAndNewInventories): Throwable Xor Unit =
+      Xor.catchNonFatal(inTransaction {
+        // bulk update the ones needing an update, having made the change from LCBO input
+        val updatedOrErrors = execute[Inventory](inventories.updatedInvs, inventoryTableUpdater)
+        updatedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
+
+        // bulk insert the ones needing an insert having filtered out duped composite keys
+        val insertedOrErrors = execute[Inventory](inventories.newInvs, inventoryTableInserter)
+        insertedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
+      })
+
+    val getAndStoreInventories = fetchInventoriesByStore(
       webApiRoute = "/inventories",
       getCachedInventoryItem,
       inventoryByProductId.toMap,
-      Seq("store_id" -> lcboId, "where_not" -> "is_dead")).
-      flatMap { inventories =>
-        Try(inTransaction {
-          // bulk update the ones needing an update, having made the change from LCBO input
-          val updatedOrErrors = execute[Inventory](inventories.updatedInvs, inventoryTableUpdater)
-          updatedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
+      Seq("store_id" -> lcboId, "where_not" -> "is_dead")).flatMap(storeInventories)
 
-          // bulk insert the ones needing an insert having filtered out duped composite keys
-          val insertedOrErrors = execute[Inventory](inventories.newInvs, inventoryTableInserter)
-          insertedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
-        })
-      }
-
-    computation.toOption.fold(
-      errHandler(computation.failed, contextErrFormatter))(
-      (Unit) => refreshInventories())
+    val failure = { t: Throwable => errHandler(t, contextErrFormatter) }
+    val success = { u: Unit => refreshInventories() }
+    getAndStoreInventories.fold[Unit](failure, success)
   }
 
   private val getCachedInventoryItem: Inventory => Option[Inventory] =
     inv => inventoryByProductId.get(P_KEY(inv.productid))
 
-  private def errHandler(t: Try[Throwable], contextErrFormatter: String => String) =
-    t.foreach(throwable => logger.error(contextErrFormatter(throwable.toString())))
+  private def errHandler(t: Throwable, contextErrFormatter: String => String) =
+    logger.error(contextErrFormatter(t.toString()))
 
   private def emptyInventory: Boolean = inventories.toIndexedSeq.forall(_.quantity == 0)
 }

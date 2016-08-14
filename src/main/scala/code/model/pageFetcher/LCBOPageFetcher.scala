@@ -1,12 +1,12 @@
 package code.model.pageFetcher
 
+import cats.data.Xor
 import code.Rest.RestClient
 import net.liftweb.json._
 import net.liftweb.common.Loggable
 import net.liftweb.util.Props
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
-import scala.util.Try
 
 /**
   * Created by philippederome on 2016-03-30.
@@ -25,6 +25,7 @@ import scala.util.Try
 trait LCBOPageFetcherComponent  {
   type JSitemsExtractor[T] = JValue => IndexedSeq[T]
   type GotEnough_? = (Int) => Boolean
+  type ValidateItems[T] = Xor[Throwable, IndexedSeq[T]]
   val neverEnough: GotEnough_? = { x => false }
 
   def fetcher: LCBOPageFetcher
@@ -33,7 +34,7 @@ trait LCBOPageFetcherComponent  {
     def collectItemsAsWebClient[T](webApiRoute: String,
                                    xt: JSitemsExtractor[T],
                                    params: Seq[(String, Any)] = Seq())
-                                  (implicit enough: GotEnough_? = neverEnough): Try[IndexedSeq[T]]
+                                  (implicit enough: GotEnough_? = neverEnough): ValidateItems[T]
   }
 }
 
@@ -43,7 +44,7 @@ trait LCBOPageLoader {
   def collectItemsAsWebClient[T](webApiRoute: String,
                                  xt: JSitemsExtractor[T],
                                  params: Seq[(String, Any)] = Seq())
-                                (implicit enough: GotEnough_? = neverEnough): Try[IndexedSeq[T]] =
+                                (implicit enough: GotEnough_? = neverEnough): ValidateItems[T] =
     fetcher.collectItemsAsWebClient(webApiRoute, xt, params)(enough)
 }
 
@@ -60,14 +61,15 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggabl
       *
       * @see https://github.com/lift/lift/tree/master/framework/lift-base/lift-json/
       *      Uses tail recursion.
-      * @param accumItems accumulator to facilitate tail recursion
+      * @param path the path we use for web client query e.g. http://<hostname>:<port>/<apipath> excluding query parameters
+      * @param xt a mechanisms to extract items[T] from JSON
       * @param params     a wrapper of all parameter data we need (see case Class)
       * @return an indexed sequence of product items matching the query and size constraint.
       */
     def collectItemsAsWebClient[T](path: String,
                                    xt: JSitemsExtractor[T],
                                    params: Seq[(String, Any)] = Seq())
-                                  (implicit enough: GotEnough_? = neverEnough): Try[IndexedSeq[T]] = Try {
+                                  (implicit enough: GotEnough_? = neverEnough): ValidateItems[T] = Xor.catchNonFatal {
       val uriRoot: String = s"http://$LcboDomain/$path"
       // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise using "closure" as is often found in JS).
       // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same.

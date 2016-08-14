@@ -4,7 +4,6 @@ import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RNG
 import code.model.utils.RetainSingles.asMap
-import cats.data.Xor
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field._
@@ -15,7 +14,6 @@ import org.squeryl.annotations._
 import scala.collection._
 import scala.collection.concurrent.TrieMap
 import scala.language.implicitConversions
-import scala.util.Try
 import scala.xml.Node
 
 trait StoreSizeConstants {
@@ -134,7 +132,7 @@ object Store extends Store with MetaRecord[Store] {
     val refreshed = getStores  // improves our cache of stores with latest info from LCBO. In real-world,
     // we might have the app run for long and call getStores async once in a while
     refreshed.toOption.fold[Unit](
-      refreshed.failed.foreach(f => logger.error(context(f.toString()))))(
+      refreshed.leftMap(f => logger.error(context(f.toString()))))(
       items => {
         if (items.isEmpty) logger.error(onEmptyError)
         synchDirtyAndNewItems(items, getCachedItem)

@@ -12,7 +12,8 @@ import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 
 import scala.collection.{IndexedSeq, Iterable}
-import scala.util.Try
+import cats.syntax.xor._
+import cats.data.Xor
 
 object DefaultDateAsNow {
   def defaultDate: String = formattedDateNow.replace('/', '-') // Lift uses / but LCBO uses - so standardizes it for minimal changes.
@@ -79,7 +80,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
   def fetchInventoriesByStore(webApiRoute: String,
                               get: (Inventory) => Option[Inventory],
                               mapByProductId: Map[P_KEY, Inventory],
-                              params: Seq[(String, Any)]): Try[UpdatedAndNewInventories] =  {
+                              params: Seq[(String, Any)]): Throwable Xor UpdatedAndNewInventories =  {
     // set up some functional transformers first, then get ready for real work.
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
 
@@ -90,9 +91,9 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     }
 
     for {items <- collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
-         updatesAndInserts <- Try(itemsByState[Inventory, Inventory](items, get))
-         updatedInventories <- Try(getUpdatedInvs(updatesAndInserts.updates).retainSingles)
-         newInventories <- Try(updatesAndInserts.inserts.retainSingles)
-         inventories <- Try(UpdatedAndNewInventories(updatedInventories, newInventories))} yield inventories
+      updatesAndInserts <- (itemsByState[Inventory, Inventory](items, get)).right[Throwable]
+      updatedInventories <- (getUpdatedInvs(updatesAndInserts.updates).retainSingles).right[Throwable]
+      newInventories <- updatesAndInserts.inserts.retainSingles.right[Throwable]
+      inventories <- UpdatedAndNewInventories(updatedInventories, newInventories).right[Throwable]} yield inventories
   }
 }
