@@ -31,6 +31,7 @@ trait RNG {
 
 object RNG {
   type Rand[A] = State[RNG, A]
+
   case class Simple(seed: Long) extends RNG {
     def nextInt: (RNG, Int) = {
       val newSeed: Long = (seed * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL // `&` is bitwise AND. We use the current seed to generate a new seed.
@@ -43,7 +44,7 @@ object RNG {
   val int: Rand[Int] = State(_.nextInt)
 
   def unit[A](a: A): Rand[A] =
-    State( rng => (rng, a))
+    State(rng => (rng, a))
 
   def nonNegativeInt: Rand[Int] = State(rng => {
     val (r, i) = rng.nextInt
@@ -51,7 +52,7 @@ object RNG {
     (r, ii)
   })
 
-  def map[A,B](s: Rand[A])(f: A => B): Rand[B] =
+  def map[A, B](s: Rand[A])(f: A => B): Rand[B] =
     State(rng => {
       val (rng2, a) = s.run(rng).value
       (rng2, f(a))
@@ -88,14 +89,17 @@ object RNG {
 
   // the preferred interface by far as it preserves associativity rules
   def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] =
-    sas.sequenceU
+  sas.sequenceU
 
-  // Algorithm S Sampling by Knuth (Volume 2, Section 3.4.2)
-  def collectSample[T](s: Seq[T], k: Int): Rand[Seq[T]] = {
+  /**
+    *   Algorithm S Sampling by Knuth (Volume 2, Section 3.4.2)
+    *   We tolerate k being larger than size of s in which case we do a permutation on s.
+    */
+  def collectSample[T](s: IndexedSeq[T], k: Int): Rand[IndexedSeq[T]] = {
     // Don Knuth: Algorithm S (Selection sampling technique) N: total size, t visited (visiting item t+1), m selected, n requested/desired.
     // avail is assumed to be the numbers we select from randomly
     @tailrec
-    def sampleIter(N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: Seq[T], rng: RNG): (RNG, Seq[T]) =  {
+    def sampleIter(N: Int, n: Int, m: Int, t: Int, avail: Vector[T], selected: IndexedSeq[T], rng: RNG): (RNG, IndexedSeq[T]) = {
       val (y, u) = double.run(rng).value
       // Knuth's method is not "functional" here (does not return a state capturing RNG) otherwise it's conceptually the same
       val sampleSuccess = (N - t) * u <= n - m
@@ -108,13 +112,16 @@ object RNG {
         sampleIter(N, n, newM, t + 1, avail, newSel, y)
       }
     }
-
     State(rng => {
-      if (s.isEmpty || k <= 0) {
-        (rng, Seq())
-      }  // allow client not to check for empty sequence (or specify k <= 0), robust and flexible.
+       if (s.length < k) { // allow client not to check for k being too large
+          val (newRng, permutedIndices ) = shuffle(s.indices).run(rng).value
+          (newRng, permutedIndices.map(s(_)))
+        }
+        else  if (k <= 0) {
+        (rng, IndexedSeq())
+      }  // allow client to specify k <= 0
       else {
-        sampleIter(s.size, k, 0, 0, s.toVector, Seq(), rng)
+        sampleIter(s.size, k, 0, 0, s.toVector, IndexedSeq(), rng)
       }
     })
   }
@@ -122,7 +129,7 @@ object RNG {
   // Algorithm P Shuffling by Knuth (Volume 2, Section 3.4.2). Attributed to Fisher-Yates
   // View the permutation selection as deck of cards shuffling game, which is how it got discovered in the 1930s.
   // Shuffle from last card to first in N steps by selecting another card lower in deck randomly to swap with.
-  def shuffle( s: Seq[Int]): Rand[Seq[Int]] = {
+  def shuffle( s: IndexedSeq[Int]): Rand[IndexedSeq[Int]] = {
     def swap[T](xs: Array[T], i: Int, j: Int) = {
       val t = xs(i)
       xs(i) = xs(j)

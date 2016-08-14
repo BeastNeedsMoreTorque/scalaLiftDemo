@@ -99,16 +99,20 @@ trait Advise extends UtilCommands {
     val allAttributes = prod.streamAttributes :+ invAttribute
 
     // tag the div with misc attributes to facilitate reconciling related data within browser JS
-    <div class="prodIdRoot" name={prod.lcboId.toString}>{attributesMarkup(prod, allAttributes)}{selectionMarkup(prod, inventory)}</div><hr/>
+    <div class="prodIdRoot" name={prod.lcboId.toString}>{attributesMarkup(allAttributes)}{selectionMarkup(prod)}</div><hr/>
   }
 
-  // layout description:
-  // attributes in center column (Blueprint class span-8, width 8 not to side) as attributesMarkup
-  // and to its right (Blueprint classes span-8 last) other data containing img and selection details as selectionMarkup.
-  // selectionMarkup is top to bottom: image, then checkbox, quantity and cost input text fields right justified (CSS class prodSelectInput).
-  // We also add a hiddenCost, so that the cost per item is always available for our calculation
-  // (visible to user in attributes in any event, but harder for us to get at for computation)
-  private def attributesMarkup(prod: IProduct, attrs: IndexedSeq[AttributeHtmlData]): NodeSeq = {
+  /**
+    *
+    * @param attrs the attributes that we mark up as HTML
+    * @return layout description:
+    * attributes in center column (Blueprint class span-8, width 8 not to side) as attributesMarkup
+    * and to its right (Blueprint classes span-8 last) other data containing img and selection details as selectionMarkup.
+    * selectionMarkup is top to bottom: image, then checkbox, quantity and cost input text fields right justified (CSS class prodSelectInput).
+    * We also add a hiddenCost, so that the cost per item is always available for our calculation
+    * (visible to user in attributes in any event, but harder for us to get at for computation)
+    */
+  private def attributesMarkup(attrs: IndexedSeq[AttributeHtmlData]): NodeSeq = {
     def rowMarkup(a: AttributeHtmlData): NodeSeq = {
       <tr>
         <td class="prodAttrHead">{a.key}</td>
@@ -128,13 +132,18 @@ trait Advise extends UtilCommands {
     </div>
   }
 
-  private def selectionMarkup(prod: IProduct, inventory: String) = {
-    // create a checkBox with value being product id (key for lookups) and label's html representing name.
-    // The checkbox state is picked up when we call JS in this class
-    val lcboId = prod.lcboId.toString
+  /**
+    * Create a selection markup consisting of a check box to confirm multi-selection, a quantity input field,
+    * and a cost read-only field.
+    * Create a checkBox with value being product id (key for lookups) and label's html representing name.
+    * The checkbox state is picked up when we call JS in the container snippet
+    * @param prod
+    * @return NodeSeq consisting of the markup for check box, quantity of product, and cost of product*quantity
+    */
+  private def selectionMarkup(prod: IProduct) = {
     val checkBoxNS =
       <label>
-        <input type="checkbox" class="prodSelectInput" value={lcboId}/>
+        <input type="checkbox" class="prodSelectInput" value={prod.lcboId.toString}/>
         {prod.Name}
       </label><br/>
 

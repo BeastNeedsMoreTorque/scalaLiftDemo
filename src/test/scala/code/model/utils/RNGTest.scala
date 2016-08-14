@@ -79,13 +79,13 @@ class RNGTest extends UnitTest {
   }
 
   it should s"return same element on permuting 1 element when setting with random seed" in new randomRNG with randomInt {
-    val shuffled = shuffle(List(elem)).runA(seed).value
-    val expected_shuffled = List(elem)
+    val shuffled = shuffle(Vector(elem)).runA(seed).value
+    val expected_shuffled = Vector(elem)
     shuffled should equal(expected_shuffled)
   }
 
   it should s"return empty sequence on permuting 0 element when setting with random seed" in new randomRNG {
-    val shuffled = shuffle(Seq.empty[Int]).runA(seed).value
+    val shuffled = shuffle(Vector.empty[Int]).runA(seed).value
     shuffled shouldBe empty
   }
 
@@ -97,7 +97,7 @@ class RNGTest extends UnitTest {
   }
 
   behavior of "CollectSample"
-  val bigSample: Seq[Int] = 1 to 5000
+  val bigSample: Vector[Int] = (1 to 5000).toVector
 
   // this one is not truly "behaviour". It's better to use "properties" and generators instead as per ScalaCheck
   it should s"predict pick 20 distinct elements from 1 to 5000 exactly on specific seed Simple" in {
@@ -113,7 +113,7 @@ class RNGTest extends UnitTest {
   }
 
   it should "get empty Sequence on choosing 10 items from empty list with any random input" in new randomRNG {
-    collectSample(Seq[Int](), 10).runA(seed).value shouldBe empty
+    collectSample(Vector[Int](), 10).runA(seed).value shouldBe empty
   }
 
 }
