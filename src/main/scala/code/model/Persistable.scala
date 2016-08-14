@@ -58,10 +58,10 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
     }
 
     // Seems high enough to report error to log as it appears a little messy to push it up further.
-    val context = (err: String) =>
+    lazy val context = (err: String) =>
       s"Problem with batchTransactor, exception error $err"
 
-    val executedOrErrors = execute[T](items, ORMTransactor)
-    executedOrErrors.fold[Unit](err => logger.error(context(err)), feedCache)
+    execute(ORMTransactor, items).
+      fold[Unit](err => logger.error(context(err)), feedCache)
   }
 }

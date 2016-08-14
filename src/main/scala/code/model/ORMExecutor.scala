@@ -11,7 +11,7 @@ import scala.collection.Iterable
   * and we can identify the error neatly right here.
   */
 trait ORMExecutor {
-  def execute[T](items: Iterable[T], apply: (Iterable[T]) => Unit): Xor[String, Iterable[T]] =
+  def execute[T](apply: Iterable[T] => Unit, items: Iterable[T]): Xor[String, Iterable[T]] =
     try {
       apply(items)
       Xor.Right(items) // e.g. insert, update, delete

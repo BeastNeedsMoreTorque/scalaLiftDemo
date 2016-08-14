@@ -1,8 +1,9 @@
 package code.model
 
 import cats.data.Xor
+import cats.kernel.Semigroup
 import code.model.Product.fetchByStore
-import code.model.Inventory.fetchInventoriesByStore
+import code.model.Inventory.loadInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.Store.CategoryKeyKeeperVals
 import code.model.utils.RetainSingles._
@@ -65,7 +66,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
   /**
     * Assuming data may be stale, loads products and inventories, indexing products by category by querying the LCBO using its REST API.
     * Generally has side effect to update database with more up to date content from LCBO's (if different)
-    * @return nothing (Unit), side effect is to update caches
+    * @return nothing (Unit), side effect is to update caches. This is done asynchronously.
     */
   def loadCache(): Unit = {
     val productsContext: StringFormatter = s => s"Problem loading products into cache with exception error $s"
@@ -75,9 +76,9 @@ trait StoreCacheService extends ORMExecutor with Loggable {
       loadInventories(iFormat)
       // serialize products then inventories intentionally because of Ref.Integrity (inventory depends on valid product)
     }
-    val fetches = Future(loadProdsAndInvs(productsContext, inventoriesContext))
+    val loads = Future(loadProdsAndInvs(productsContext, inventoriesContext))
     logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
-    fetches onComplete {
+    loads onComplete {
       case Success(_) => // We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
         logger.debug(s"loadCache async work succeeded for $lcboId")
         if (emptyInventory) logger.warn(s"got no product inventory for storeId $lcboId !") // No provision for retrying.
@@ -97,12 +98,12 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     categoryIndex ++= productsCache.values.
       map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).toIndexedSeq.
       groupBy(_.category).
-      mapValues(_.map(x => x.keys))
+      mapValues(_.map(_.keys))
   }
 
-  private def loadProducts(contextErrFormatter: String => String): Unit = {
+  private def loadProducts(formatter: StringFormatter): Unit = {
     val theProducts = fetchByStore(lcboId)
-    val logErrorOnFail = { t: Throwable => errHandler(t, contextErrFormatter) }
+    val logErrorOnFail = { t: Throwable => errHandler(t, formatter) }
     val cacheOnSuccess = { items: IndexedSeq[IProduct] =>
         if (items.isEmpty) logger.error("Problem loading products into cache, none found")
         addToCaches(items)
@@ -111,31 +112,31 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     theProducts.fold[Unit]( logErrorOnFail, cacheOnSuccess)
   }
 
-  private def loadInventories(contextErrFormatter: String => String): Unit = {
-    def inventoryTableUpdater: (Iterable[Inventory]) => Unit = MainSchema.inventories.update
-    def inventoryTableInserter: (Iterable[Inventory]) => Unit = MainSchema.inventories.insert
-    // fetch @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
-    // we chain errors using flatMap (FP fans apparently like this).
-    def storeInventories(inventories: UpdatedAndNewInventories): Throwable Xor Unit =
+  private def loadInventories(formatter: StringFormatter): Unit = {
+    implicit val iterInvSemigroup = new Semigroup[Iterable[Inventory]]{
+      override def combine(x: Iterable[Inventory], y: Iterable[Inventory]): Iterable[Inventory] = x ++ y
+    }
+    def cacheInventoriesWithORM(inventories: UpdatedAndNewInventories): Throwable Xor Unit =
       Xor.catchNonFatal(inTransaction {
-        // bulk update the ones needing an update, having made the change from LCBO input
-        val updatedOrErrors = execute[Inventory](inventories.updatedInvs, inventoryTableUpdater)
-        updatedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
-
-        // bulk insert the ones needing an insert having filtered out duped composite keys
-        val insertedOrErrors = execute[Inventory](inventories.newInvs, inventoryTableInserter)
-        insertedOrErrors.fold[Unit]({err: String => throw new Throwable(err)}, items => ())
+        // bulk update the ones needing an update and then bulk insert the ones
+        // MainSchema actions of update and insert provide an update to database combined to ORM caching, transparent to us
+        execute(MainSchema.inventories.update, inventories.updatedInvs).
+          combine(execute(MainSchema.inventories.insert, inventories.newInvs)).
+          fold[Unit]({err: String => throw new Throwable(err)}, _ => ())
       })
 
-    val getAndStoreInventories = fetchInventoriesByStore(
+    // load @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
+    // we chain errors using flatMap (FP style).
+    val loadAndCache = loadInventoriesByStore(
       webApiRoute = "/inventories",
       getCachedInventoryItem,
       inventoryByProductId.toMap,
-      Seq("store_id" -> lcboId, "where_not" -> "is_dead")).flatMap(storeInventories)
+      Seq("store_id" -> lcboId, "where_not" -> "is_dead")).
+      flatMap(cacheInventoriesWithORM)
 
-    val failure = { t: Throwable => errHandler(t, contextErrFormatter) }
+    val failure = { t: Throwable => errHandler(t, formatter) }
     val success = { u: Unit => refreshInventories() }
-    getAndStoreInventories.fold[Unit](failure, success)
+    loadAndCache.fold[Unit](failure, success)
   }
 
   private def errHandler(t: Throwable, contextErrFormatter: String => String) =

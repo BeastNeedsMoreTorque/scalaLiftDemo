@@ -77,7 +77,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     obj
   }
 
-  def fetchInventoriesByStore(webApiRoute: String,
+  def loadInventoriesByStore(webApiRoute: String,
                               get: (Inventory) => Option[Inventory],
                               mapByProductId: Map[P_KEY, Inventory],
                               params: Seq[(String, Any)]): Throwable Xor UpdatedAndNewInventories =  {
