@@ -181,13 +181,13 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
                         lcboProdCategory: String,
                         r: RNG): ValidateSelection = {
       for {
-        prods <- Xor.fromTry(runner.fetchByStoreCategory(invService.lcboId, category, maxSampleSize))
+        prods <- runner.fetchByStoreCategory(invService.lcboId, category, maxSampleSize)
         // take a hit of one go to LCBO, querying by category, no more.
-        permutedIndices = RNG.shuffle(prods.indices).runA(r).value
+        permutedIndices <- Xor.Right(RNG.shuffle(prods.indices).runA(r).value)
         // stream avoids checking primary category on full collection (the permutation is done though).
-        stream = for {id <- permutedIndices.toStream
-                      p = prods(id) if p.primaryCategory == lcboProdCategory} yield p
-        res = stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong))
+        stream <- Xor.right(for {id <- permutedIndices.toStream
+                      p = prods(id) if p.primaryCategory == lcboProdCategory} yield p)
+        res <- Xor.Right(stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong)))
       // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
       // and then zip with list of zeroes because we are too slow to obtain inventories.
       } yield res

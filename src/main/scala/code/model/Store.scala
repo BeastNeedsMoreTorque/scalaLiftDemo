@@ -88,7 +88,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 
   override def inventories: Iterable[Inventory] = storeProducts.associations
 
-  def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]] =
+  def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): ValidateSelection =
     advise(rng, this, category, requestSize, runner)
 
   override def asyncLoadCache(): Unit =

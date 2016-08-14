@@ -5,7 +5,7 @@ import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
 import code.model.prodAdvisor.MonteCarloProductAdvisorComponentImpl
 import code.model.utils.RNG
 import scala.collection.IndexedSeq
-import scala.util.Try
+import cats.data.Xor
 
 /**
   * Created by philippederome on 2016-05-04.
@@ -13,6 +13,7 @@ import scala.util.Try
 class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   class MonteCarloProductAdvisorComponentImplTest extends MonteCarloProductAdvisorComponentImpl
 
+  val emptyProducts = Xor.Right( IndexedSeq[Product]() )
   val instance = new MonteCarloProductAdvisorComponentImplTest
   val drunkShuffler = instance.agent
 
@@ -30,7 +31,7 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   val outOfStockRunner = new ProductRunner {
     override def fetchByStoreCategory(lcboStoreId: LCBO_ID,
                                       category: String,
-                                      requiredSize: Int): Try[IndexedSeq[IProduct]] = Try { IndexedSeq[Product]() }
+                                      requiredSize: Int): ValidatedProducts = emptyProducts
   }
   it should s"advise an empty list of products when using dummy InventoryService and ProductRunner when no products of category can be found" in {
     val rng = RNG.Simple(411)
@@ -99,8 +100,8 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   }
 
   val singleBeerRunner = new ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: LCBO_ID, category: String, requiredSize: Int): Try[IndexedSeq[IProduct]] =
-      Try { if (category == "beer") Vector(Heineken) else Vector() }
+    override def fetchByStoreCategory(lcboStoreId: LCBO_ID, category: String, requiredSize: Int): ValidatedProducts =
+      Xor.Right( if (category == "beer") Vector(Heineken) else Vector() )
   }
 
   val HeinekensBut63Runner = new ProductRunner {
@@ -111,13 +112,13 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
     override def fetchByStoreCategory(lcboStoreId: LCBO_ID,
                                       category: String,
-                                      requiredSize: Int): Try[IndexedSeq[IProduct]] = Try {
+                                      requiredSize: Int): ValidatedProducts = Xor.Right (
       category match {
         case "beer" => someBeers.toVector
         case "wine" => someWines.toVector
         case _ => Vector()
       }
-    }
+    )
   }
 
   val HeinekensBut62Runner = new ProductRunner {
@@ -128,14 +129,14 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
     override def fetchByStoreCategory(lcboStoreId: LCBO_ID,
                                       category: String,
-                                      requiredSize: Int): Try[IndexedSeq[IProduct]] =
-    Try {
+                                      requiredSize: Int): ValidatedProducts =
+    Xor.Right(
       category match {
         case "beer" => someBeers.toVector
         case "wine" => someWines.toVector
         case _ => Vector()
       }
-    }
+    )
   }
 
   behavior of "Single product match by category once list of 1 and once empty list"

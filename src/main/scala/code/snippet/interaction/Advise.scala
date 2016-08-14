@@ -1,10 +1,11 @@
 package code.snippet.interaction
 
+import cats.data.Xor
 import code.model.{IProduct, Product, Store, User}
+import code.model.GlobalLCBO_IDs.P_KEY
 import code.model.utils.RNG
-import code.snippet.SessionCache.{theCategory, theAdviseCount}
+import code.snippet.SessionCache.{theAdviseCount, theCategory}
 import code.model.AttributeHtmlData
-import net.liftweb.common.{Empty, Full}
 import net.liftweb.http.S
 import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds.{SetHtml, _}
@@ -18,7 +19,7 @@ import scala.xml.NodeSeq
 /**
   * Created by philippederome on 2016-07-31.
   *
-  * Handler for Advise (question mark icon gif) button.
+  * Rendering handler for the Advise button (question mark icon gif).
   */
 trait Advise extends UtilCommands {
   implicit val formatsAdvise = net.liftweb.json.DefaultFormats
@@ -46,25 +47,27 @@ trait Advise extends UtilCommands {
       { identity } // normal case
     }
 
-  private def maySelect(s: Store): JsCmd = {
+  private def maySelect(store: Store): JsCmd = {
+    // Preliminaries
+    type InventoryResponse = Store.Selection
+    type InventoryResponseValidation = Xor[String, InventoryResponse]
+    lazy val successToProducts: InventoryResponse => InventoryResponseValidation = inventories =>
+      if (inventories.isEmpty) Xor.Left(s"Unable to find a product of category ${theCategory.is}")
+      // we're reloading into cache to make up for that issue!
+      else Xor.Right(inventories)
+
+    lazy val errorToProducts: Throwable => InventoryResponseValidation = t =>
+      Xor.Left(s"Unable to choose product of category ${theCategory.is} with exception error ${t.toString()}")
+
+    // ready to compute!
     val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
-    lazy val successToProducts: Iterable[(IProduct, Long)] => Option[Iterable[(IProduct, Long)]] = {
-      pairs: Iterable[(IProduct, Long)] =>
-        if (pairs.isEmpty) S.error(s"Unable to find a product of category ${theCategory.is}")
-        // we're reloading into cache to make up for that issue!
-        Full(pairs) // returns prod and quantity in inventory normally, regardless of emptiness)
-    }
-    lazy val errorToProducts: Throwable => Option[Iterable[(IProduct, Long)]] = {
-      t: Throwable =>
-        S.error(s"Unable to choose product of category ${theCategory.is} with exception error ${t.toString()}")
-        Empty
-    }
-    val advisedProductsSeq = s.advise(rng, theCategory.is, theAdviseCount.is, Product)
-    val prodQtySeq = advisedProductsSeq.fold(errorToProducts, successToProducts)
-    prodQtySeq.fold { Noop } // we gave notice of error already via JS, nothing else to do
-    { pairs => // normal case
-      S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
-      prodDisplayJS(pairs.map { case (p, q) => QuantityOfProduct(q, p) })
+    val inventoryResponse = store.advise(rng, theCategory.is, theAdviseCount.is, Product)
+
+    inventoryResponse.fold(errorToProducts, successToProducts) match {
+      case Xor.Left(msg) => S.error(msg); Noop
+      case Xor.Right(inventories) =>
+        S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
+        prodDisplayJS(inventories.map { case (p, q) => QuantityOfProduct(q, p) })
     }
   }
 
