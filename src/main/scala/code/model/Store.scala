@@ -40,7 +40,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   val address_line_1 = new FilteredMandatoryStringField(addressSize)
   val city = new FilteredMandatoryStringField(cityNameSize)
   override val productsCache = TrieMap[LCBO_ID, IProduct]()
-  override val productsCacheByCategory = TrieMap[String, IndexedSeq[KeyKeeperVals]]()
+  override val categoryIndex = TrieMap[String, IndexedSeq[KeyKeeperVals]]()
   // don't put whole IProduct in here, just useful keys.
   override val inventoryByProductId = TrieMap[P_KEY, Inventory]()
 
@@ -68,7 +68,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   override def getProduct(x: LCBO_ID): Option[IProduct] = productsCache.get(x)
 
   override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] =
-    productsCacheByCategory.get(lcboCategory).
+    categoryIndex.get(lcboCategory).
       fold(IndexedSeq[KeyKeeperVals]()){ identity }
 
   def refreshProducts(): Unit =  {
