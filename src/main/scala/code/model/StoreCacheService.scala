@@ -120,9 +120,9 @@ trait StoreCacheService extends ORMExecutor with Loggable {
       Xor.catchNonFatal(inTransaction {
         // bulk update the ones needing an update and then bulk insert the ones
         // MainSchema actions of update and insert provide an update to database combined to ORM caching, transparent to us
-        execute(MainSchema.inventories.update, inventories.updatedInvs).
-          combine(execute(MainSchema.inventories.insert, inventories.newInvs)).
-          fold[Unit]({err: String => throw new Throwable(err)}, _ => ())
+        execute[Inventory, Iterable](MainSchema.inventories.update, inventories.updatedInvs).
+          combine(execute[Inventory, Iterable](MainSchema.inventories.insert, inventories.newInvs)).
+          fold({err: String => throw new Throwable(err)}, (Unit) => ())
       })
 
     // load @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.

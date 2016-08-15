@@ -2,7 +2,6 @@ package code.model
 
 import java.sql.SQLException
 import cats.data.Xor
-import scala.collection.Iterable
 
 /**
   * Created by philippederome on 2016-04-03.
@@ -11,19 +10,20 @@ import scala.collection.Iterable
   * and we can identify the error neatly right here.
   */
 trait ORMExecutor {
-  def execute[T](apply: Iterable[T] => Unit, items: Iterable[T]): Xor[String, Iterable[T]] =
+  def execute[A, F[_]](f: F[A] => Unit, fa: F[A]): Xor[String, F[A]] =
     try {
-      apply(items)
-      Xor.Right(items) // e.g. insert, update, delete
+      f(fa) // side effect: e.g. insert, update, delete
+      Xor.Right(fa) // echo back the same data
     } catch {
       case se: SQLException =>
-        val err = s"""SQLException $items
+        val err = s"""SQLException $fa
           Code: ${se.getErrorCode}
           SqlState: ${se.getSQLState}
           Error Message: ${se.getMessage}
           NextException: ${se.getNextException}"""
         Xor.Left(err)
-      case other: Throwable =>
+      case scala.util.control.NonFatal(other) =>
         Xor.Left(other.toString())
+        // bubble up fatal ones
     }
 }
