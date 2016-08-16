@@ -2,6 +2,7 @@ package code.model
 
 import cats.data.Xor
 import cats.std.all._
+import cats.syntax.all._
 import code.model.Product.fetchByStore
 import code.model.Inventory.loadInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
@@ -71,12 +72,9 @@ trait StoreCacheService extends ORMExecutor with Loggable {
   def loadCache(): Unit = {
     val productsContext: StringFormatter = s => s"Problem loading products into cache with exception error $s"
     val inventoriesContext: StringFormatter = s => s"Problem loading inventories into cache for '$lcboId' with exception error $s"
-    val loadProdsAndInvs: (StringFormatter, StringFormatter) => Unit = (pFormat, iFormat) => {
-      loadProducts(pFormat)
-      loadInventories(iFormat)
-      // serialize products then inventories intentionally because of Ref.Integrity (inventory depends on valid product)
-    }
-    val loads = Future(loadProdsAndInvs(productsContext, inventoriesContext))
+
+    // serialize products then inventories intentionally because of Ref.Integrity (inventory depends on valid product)
+    val loads = Future({loadProducts(productsContext); loadInventories(inventoriesContext)})
     logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
     loads onComplete {
       case Success(_) => // We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
@@ -117,8 +115,8 @@ trait StoreCacheService extends ORMExecutor with Loggable {
       Xor.catchNonFatal(inTransaction {
         // bulk update the ones needing an update and then bulk insert the ones
         // MainSchema actions of update and insert provide an update to database combined to ORM caching, transparent to us
-        execute[Inventory, Iterable](MainSchema.inventories.update, inventories.updatedInvs).
-          combine(execute[Inventory, Iterable](MainSchema.inventories.insert, inventories.newInvs)).
+        (execute[Inventory, Iterable](MainSchema.inventories.update, inventories.updatedInvs)
+          |+| execute[Inventory, Iterable](MainSchema.inventories.insert, inventories.newInvs)).
           fold({err: String => throw new Throwable(err)}, (Unit) => ())
       })
 
