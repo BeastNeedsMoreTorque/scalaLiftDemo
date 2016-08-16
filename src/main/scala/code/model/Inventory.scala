@@ -39,13 +39,13 @@ class InventoryAsLCBOJson(var product_id: Long,
   * storeid and productid are our composite PK whereas store_id and product_id is the same from LCBO's point of view with their PK.
   * We keep it in for referencing. See also case class InventoryAsLCBOJson further down.
   */
-case class Inventory private(val storeid: Long,
-                             val productid: Long)
+case class Inventory private(val storeid: P_KEY,
+                             val productid: P_KEY)
   extends InventoryAsLCBOJson with KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
 
   override def getKey: String = s"$productid:$storeid"
 
-  def id: CompositeKey2[Long, Long] = compositeKey(storeid, productid)
+  def id: CompositeKey2[Long, Long] = compositeKey(storeid.underlying, productid.underlying)
 
   def copyDiffs(inv: Inventory): Inventory = {
     quantity = inv.quantity
