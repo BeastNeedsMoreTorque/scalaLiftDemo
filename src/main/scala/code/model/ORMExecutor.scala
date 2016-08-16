@@ -16,9 +16,9 @@ trait ORMExecutor {
     * @param fa collection of items to be sent to a database
     * @tparam A underlying type of elements to persist
     * @tparam F type of container of elements
-    * @return error message in Left of Xor or Unit if all is well.
+    * @return error message in Left of Xor or Right of Unit if all is well.
     */
-  def execute[A, F[_]](f: F[A] => Unit, fa: F[A]): Xor[String, Unit] =
+  def execute[A, F[_]](f: F[A] => Unit, fa: F[A]): String Xor Unit =
     try {
       f(fa)
       Xor.Right(Unit)

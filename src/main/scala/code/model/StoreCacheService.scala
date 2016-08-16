@@ -1,7 +1,7 @@
 package code.model
 
 import cats.data.Xor
-import cats.kernel.Semigroup
+import cats.std.all._
 import code.model.Product.fetchByStore
 import code.model.Inventory.loadInventoriesByStore
 import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
@@ -113,9 +113,6 @@ trait StoreCacheService extends ORMExecutor with Loggable {
   }
 
   private def loadInventories(formatter: StringFormatter): Unit = {
-    implicit val iterInvSemigroup = new Semigroup[Unit]{
-      override def combine(x: Unit, y: Unit): Unit = ()
-    }
     def cacheInventoriesWithORM(inventories: UpdatedAndNewInventories): Throwable Xor Unit =
       Xor.catchNonFatal(inTransaction {
         // bulk update the ones needing an update and then bulk insert the ones
