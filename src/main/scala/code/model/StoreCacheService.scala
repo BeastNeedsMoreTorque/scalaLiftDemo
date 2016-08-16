@@ -113,8 +113,8 @@ trait StoreCacheService extends ORMExecutor with Loggable {
   }
 
   private def loadInventories(formatter: StringFormatter): Unit = {
-    implicit val iterInvSemigroup = new Semigroup[Iterable[Inventory]]{
-      override def combine(x: Iterable[Inventory], y: Iterable[Inventory]): Iterable[Inventory] = x ++ y
+    implicit val iterInvSemigroup = new Semigroup[Unit]{
+      override def combine(x: Unit, y: Unit): Unit = ()
     }
     def cacheInventoriesWithORM(inventories: UpdatedAndNewInventories): Throwable Xor Unit =
       Xor.catchNonFatal(inTransaction {

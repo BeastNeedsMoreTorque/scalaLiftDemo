@@ -57,11 +57,11 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
       cacheItems(itemsWithAK)
     }
 
-    // Seems high enough to report error to log as it appears a little messy to push it up further.
+    // Seems high level enough in code to report error to log as it appears a little messy to push it up further.
     lazy val context = (err: String) =>
       s"Problem with batchTransactor, exception error $err"
 
     execute(ORMTransactor, items).
-      fold[Unit](err => logger.error(context(err)), feedCache)
+      fold(err => logger.error(context(err)), (Unit) => feedCache(items))
   }
 }

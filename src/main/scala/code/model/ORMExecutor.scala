@@ -2,18 +2,26 @@ package code.model
 
 import java.sql.SQLException
 import cats.data.Xor
+import language.higherKinds
 
 /**
   * Created by philippederome on 2016-04-03.
-  * Just to isolate the verbose try catch block.
-  * The only spot we do a catch so far, BECAUSE we need all the diagnostics we can get
-  * and we can identify the error neatly right here.
+  * Offers mechanism to report errors as SQLException with some detail
   */
 trait ORMExecutor {
-  def execute[A, F[_]](f: F[A] => Unit, fa: F[A]): Xor[String, F[A]] =
+  /**
+    * executes what is assumed to be a database operation using f for a collection of items fa
+    * formatting error message in special way for details if it is a SQLException
+    * @param f a database operation with side effect, e.g. insert, update, delete
+    * @param fa collection of items to be sent to a database
+    * @tparam A underlying type of elements to persist
+    * @tparam F type of container of elements
+    * @return error message in Left of Xor or Unit if all is well.
+    */
+  def execute[A, F[_]](f: F[A] => Unit, fa: F[A]): Xor[String, Unit] =
     try {
-      f(fa) // side effect: e.g. insert, update, delete
-      Xor.Right(fa) // echo back the same data
+      f(fa)
+      Xor.Right(Unit)
     } catch {
       case se: SQLException =>
         val err = s"""SQLException $fa

@@ -41,13 +41,12 @@ trait ItemStateGrouper {
     * Client of trait makes such determination. We return an ordered pair of the dirty ones and then the new ones.
     * We want I to be an interface of T when using get/isDirty as get usage could be more abstract than type T at client side (possibly retrieving from cache).
     * @param items input items that are assumed to have valid data that we need to classify for caching strategy
-    * @param get user method to retrieve what is in memory for the given item based on item's key
-    * @tparam I interface of T
+    * @param get  user method to retrieve what is in memory for the given item based on item's key
+    * @tparam I  interface of T
     * @tparam T type of elements of items
     * @return pairs of sequences as updates and inserts within UpdateAndInserts
     */
-  def itemsByState[I, T <: I](items: IndexedSeq[T],
-                                     get: I => Option[I]): UpdateAndInserts[T] = {
+  def itemsByState[I, T <: I](items: IndexedSeq[T], get: I => Option[I]): UpdateAndInserts[T] = {
     def empty = IndexedSeq.empty[T]
 
     val x = items.groupBy {
