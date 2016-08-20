@@ -15,6 +15,7 @@ import scala.collection._
 import scala.collection.concurrent.TrieMap
 import scala.language.implicitConversions
 import scala.xml.Node
+import code.model.GlobalLCBO_IDs._
 
 trait StoreSizeConstants {
   def nameSize: Int = Props.getInt("store.size.NAME", 0)
@@ -57,7 +58,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 
   override def lcboKeyToPK: concurrent.Map[LCBO_KEY, P_KEY] = Store.lcboKeyToPKMap
 
-  override def pKey: P_KEY = P_KEY(idField.get)
+  override def pKey: P_KEY = idField.get.PKeyID
 
   override def meta: MetaRecord[Store] = Store
 
@@ -82,7 +83,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   }
 
   private def getInventories: Map[P_KEY, Inventory] =
-    asMap(inventories, { i: Inventory => P_KEY(i.productid)} )
+    asMap(inventories, { i: Inventory => i.productid.PKeyID} )
 
   override def inventories: Iterable[Inventory] = storeProducts.associations
 
@@ -93,7 +94,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
-  override def lcboKey: LCBO_KEY = LCBO_KEY(lcbo_id.get)
+  override def lcboKey: LCBO_KEY = lcbo_id.get.LcboKeyID
 
   case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals)
 }

@@ -46,7 +46,8 @@ object ConfigPairsRepo {
       * @return a map of strings to strings bound to the masterKey
       */
     override def getSeq(masterKey: String): Seq[(String, String)] = {
-      val json = parse(Props.get(masterKey, "")).children // contains List of JField(String, JString(String))
+      val json = parse(Props.get(masterKey, "")).children // contains List of JValue, which are really
+      // JField(name:String, value:JValue that is effectively String)
       json.collect { case (x: JField) => x.value.extractOpt[String].map( (x.name, _)) }.flatten
       // was a little complex, but it's exception safe as extractOpt does not throw.
     }

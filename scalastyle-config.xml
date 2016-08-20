@@ -83,7 +83,7 @@
  <check enabled="true" class="org.scalastyle.scalariform.VarFieldChecker" level="warning"/>
  <check enabled="true" class="org.scalastyle.scalariform.VarLocalChecker" level="warning"/>
  <check enabled="true" class="org.scalastyle.scalariform.WhileChecker" level="error"/>
- <check level="error" class="org.scalastyle.scalariform.StructuralTypeChecker" enabled="true"></check>
+ <check level="warning" class="org.scalastyle.scalariform.StructuralTypeChecker" enabled="true"></check>
  <check enabled="true" class="org.scalastyle.scalariform.ProcedureDeclarationChecker" level="error"/>
  <check enabled="true" class="org.scalastyle.scalariform.NotImplementedErrorUsage" level="warning"/>
  <check level="error" class="org.scalastyle.file.RegexChecker" enabled="true">

@@ -6,6 +6,7 @@ import code.model.prodAdvisor.MonteCarloProductAdvisorComponentImpl
 import code.model.utils.RNG
 import scala.collection.IndexedSeq
 import cats.data.Xor
+import code.model.GlobalLCBO_IDs._
 
 /**
   * Created by philippederome on 2016-05-04.
@@ -18,8 +19,8 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   val drunkShuffler = instance.agent
 
   val NullInventoryService = new InventoryService {
-    override def pKey: P_KEY = P_KEY(1)
-    override def lcboKey: LCBO_KEY = LCBO_KEY(1)
+    override def pKey: P_KEY = 1.PKeyID
+    override def lcboKey: LCBO_KEY = 1.LcboKeyID
     override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => None
     override def getProduct(x: LCBO_KEY): Option[IProduct] = None
     override def getProductKeysByCategory(lcboCategory: String) = IndexedSeq[KeyKeeperVals]()
@@ -71,29 +72,29 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   }
 
   val Heineken = new typicalBeerProduct {
-    override def pKey: P_KEY = P_KEY(1)
-    override def lcboKey: LCBO_KEY = LCBO_KEY(1)
+    override def pKey: P_KEY = 1.PKeyID
+    override def lcboKey: LCBO_KEY = 1.LcboKeyID
     override def alcoholContent: String = "5.0%"
     override def Name: String = "Heineken"
   }
 
   val MillStLager = new typicalBeerProduct {
-    override def pKey: P_KEY = P_KEY(2)
-    override def lcboKey: LCBO_KEY = LCBO_KEY(2)
+    override def pKey: P_KEY = 2.PKeyID
+    override def lcboKey: LCBO_KEY = 2.LcboKeyID
     override def alcoholContent: String = "5.0%"
     override def Name: String = "Mill Street Lager"
   }
 
   val OysterBay = new typicalWineProduct {
-    override def pKey: P_KEY = P_KEY(1000)
-    override def lcboKey: LCBO_KEY = LCBO_KEY(1000)
+    override def pKey: P_KEY = 1000.PKeyID
+    override def lcboKey: LCBO_KEY = 1000.LcboKeyID
     override def alcoholContent: String = "16.0%"
     override def Name: String = "Oyster Bay"
   }
 
   val ChampagneKrug = new typicalWineProduct {
-    override def pKey: P_KEY = P_KEY(1001)
-    override def lcboKey: LCBO_KEY = LCBO_KEY(1001)
+    override def pKey: P_KEY = 1001.PKeyID
+    override def lcboKey: LCBO_KEY = 1001.LcboKeyID
     override def alcoholContent: String = "16.0%"
     override def Name: String = "Krug Champagne"
   }

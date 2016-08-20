@@ -5,7 +5,7 @@ import cats.std.all._
 import cats.syntax.all._
 import code.model.Product.fetchByStore
 import code.model.Inventory.loadInventoriesByStore
-import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
+import code.model.GlobalLCBO_IDs._
 import code.model.Store.CategoryKeyKeeperVals
 import code.model.utils.RetainSingles._
 import net.liftweb.common.Loggable
@@ -44,7 +44,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
   val categoryIndex: TrieMap[String, IndexedSeq[KeyKeeperVals]]
 
   private val getCachedInventoryItem: Inventory => Option[Inventory] =
-    inv => inventoryByProductId.get(P_KEY(inv.productid))
+    inv => inventoryByProductId.get(inv.productid.PKeyID)
 
   /**
     *

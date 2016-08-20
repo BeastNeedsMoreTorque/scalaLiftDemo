@@ -17,7 +17,8 @@ object MainSchema extends Schema {
   // String columns are typically nullable.
 
   val inventories = manyToManyRelation(stores, products, "inventory").
-    via[Inventory]((s,p,inv) => (inv.storeid.underlying === s.idField.get, p.idField.get === inv.productid.underlying))
+    via[Inventory]( (s,p,inv) =>
+      (inv.storeid === s.idField.get, p.idField.get === inv.productid))
   // The table in database needs to be called "Inventory". See Inventory class for all columns.
 
   val userProducts = table[UserProduct]("userproduct")

@@ -5,6 +5,7 @@ import net.liftweb.util.Props
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
 import code.model.utils.RetainSingles.implicitSeqToRetainSingles
+import code.model.GlobalLCBO_IDs._
 
 /**
   * Created by philippederome on 2016-03-17. Unable to apply cake pattern here and prevent Store and Product to inherit from this,
@@ -52,7 +53,7 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
       val akIds = items.map(_.lcboKey: Long).toStream.distinct // alternate key ids, which are a proxy for our primary key IDs to be evaluated from DB.
       // select only those we just inserted, hopefully the same set (cardinality of akIds is expected to be smaller than items
       // because of repetition at the source).
-      val itemsWithAK = from(table)(item => where(item.lcboKey.underlying in akIds) select item)
+      val itemsWithAK = from(table)(item => where((item.lcboKey: Long) in akIds) select item)
       if (itemsWithAK.size < akIds.size) logger.error(s"feedCache got only ${itemsWithAK.size} items for expected ${akIds.size}")
       cacheItems(itemsWithAK)
     }

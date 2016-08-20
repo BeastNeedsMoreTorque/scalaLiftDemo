@@ -1,7 +1,7 @@
 package code.model
 
 import java.text.NumberFormat
-import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
+import code.model.GlobalLCBO_IDs._
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field.{BooleanField, IntField, LongField}
@@ -63,9 +63,9 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
 
   override def lcboKeyToPK: concurrent.Map[LCBO_KEY, P_KEY] = Product.lcboKeyToPKMap
 
-  override def pKey: P_KEY = P_KEY(idField.get)
+  override def pKey: P_KEY = idField.get.PKeyID
 
-  override def lcboKey: LCBO_KEY = LCBO_KEY(lcbo_id.get)
+  override def lcboKey: LCBO_KEY = lcbo_id.get.LcboKeyID
 
   override def imageThumbUrl: String = image_thumb_url.getValue
   override def Name: String = name.get

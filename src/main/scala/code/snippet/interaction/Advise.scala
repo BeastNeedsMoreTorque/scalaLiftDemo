@@ -14,6 +14,7 @@ import net.liftweb.util.Props
 
 import scala.util.Random
 import scala.xml.NodeSeq
+import code.model.GlobalLCBO_IDs.TaggedLong
 
 /**
   * Created by philippederome on 2016-07-31.
@@ -51,7 +52,7 @@ trait Advise extends UtilCommands {
     User.currentUser.dmap { S.error("advise", "advise feature unavailable, Login first!"); Noop } { user =>
       val cmd =
         for {storeId <- jsStore.extractOpt[Long]
-             ss <- Store.getStore(storeId)  // no result here or earlier on will lead to error below as cmd will be None
+             ss <- Store.getStore(storeId.PKeyID)  // no result here or earlier on will lead to error below as cmd will be None
              advice = maySelect(ss)
         } yield advice
 

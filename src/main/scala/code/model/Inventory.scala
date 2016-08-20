@@ -1,6 +1,6 @@
 package code.model
 
-import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
+import code.model.GlobalLCBO_IDs._
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 import code.model.utils.KeyHolder
 import code.model.utils.RetainSingles.implicitSeqToRetainSingles
@@ -39,13 +39,13 @@ class InventoryAsLCBOJson(var product_id: Long,
   * storeid and productid are our composite PK whereas store_id and product_id is the same from LCBO's point of view with their PK.
   * We keep it in for referencing. See also case class InventoryAsLCBOJson further down.
   */
-case class Inventory private(val storeid: P_KEY,
-                             val productid: P_KEY)
+case class Inventory private(val storeid: Long,
+                             val productid: Long)
   extends InventoryAsLCBOJson with KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
 
   override def getKey: String = s"$productid:$storeid"
 
-  def id: CompositeKey2[Long, Long] = compositeKey(storeid.underlying, productid.underlying)
+  def id: CompositeKey2[Long, Long] = compositeKey(storeid, productid)
 
   def copyDiffs(inv: Inventory): Inventory = {
     quantity = inv.quantity
@@ -65,8 +65,8 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
   val extract: JSitemsExtractor[Inventory] =  { jVal =>
     for {p <- jVal.children.toIndexedSeq
          inv <- p.extractOpt[InventoryAsLCBOJson]
-         storeid <- Store.lcboKeyToPKMap.get(LCBO_KEY(inv.store_id))
-         productid <- Product.lcboKeyToPKMap.get(LCBO_KEY(inv.product_id))
+         storeid <- Store.lcboKeyToPKMap.get(inv.store_id.LcboKeyID)
+         productid <- Product.lcboKeyToPKMap.get(inv.product_id.LcboKeyID)
          newInv = Inventory(storeid, productid, inv)
     } yield newInv
   }
@@ -86,7 +86,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
 
     def getUpdatedInvs(items: IndexedSeq[Inventory]) = {
       { for {freshInv <- items
-             cachedInv <- mapByProductId.get(P_KEY(freshInv.productid))
+             cachedInv <- mapByProductId.get(freshInv.productid.PKeyID)
              dirtyInv = cachedInv.copyDiffs(freshInv) } yield dirtyInv }
     }
 

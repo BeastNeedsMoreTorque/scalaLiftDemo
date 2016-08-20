@@ -8,6 +8,7 @@ import net.liftweb.util.DefaultConnectionIdentifier
 import net.liftweb.squerylrecord.RecordTypeMode._
 import scala.xml.Node
 import cats.data.Xor
+import code.model.GlobalLCBO_IDs._
 
 /**
   * An O-R mapped "User" class that includes first name, last name, password and Liftweb demo would add a "Personal Essay" to it
