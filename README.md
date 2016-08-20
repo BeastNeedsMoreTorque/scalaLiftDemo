@@ -14,13 +14,15 @@ User actions is via 3 icon buttons beneath the category icons. They are `advise`
 
 The `advise` action will find matching LCBO products for the given category and store attempting to show as many as requested, one following each other 
 vertically.
-The recommendation may use caching if a user has previously made requests from the current store and there are products and inventories available in the database for that store.
+The recommendation may use caching if a user has previously made requests from the current store and there are products and inventories available
+in the database for that store.
 Alternatively, the recommendation may make an immediate request to LCBO API from the server to obtain a subset of matching products for reasonable quick 
 response, an exercise in partial degradation of service.
 In both cases, the advise action randomly selects a match of products. In the cached case, there may be 3000 items in a given store (e.g. wine), so it does a 
 random sample algorithm using required size as parameter over cached products of selected category (n choose k problem). In the non-cached case,
-we use a random shuffle of the products just obtained (a permutation select one of n! problem) and then select the required count from the shuffle. The shuffle 
-works from the indices of the collection.
+we use a random shuffle of the products just obtained (a permutation select one of n! problem) and then restrict to the required count from the shuffle. 
+The shuffle or permutation works from the indices of the collection, which is assumed to be a moderately small collection ( a configurable parameter 
+as to how many products we are willing to query immediately from the LCBO to satisfy client request, `advisor.maxSampleSize`).
 
 Random algorithms of sampling and shuffling are taken from The Art of Computer Programming by Knuth with minor adjustments to Scala.
 
@@ -28,7 +30,8 @@ The displayed products show an image, attributes of the product, and user input 
 
 The `cancel` action simply erases the products display.
 
-The `consume` action is a basic simulation of a shopping cart, allowing user to select a count of each product within the proposed list and evaluating a total bill.
+The `consume` action is a simplified simulation of a shopping cart, allowing user to select a count of each product within the proposed list and evaluating a 
+total bill.
 
 ##Environment and Dependencies
 - Run modes: dev and test (`src/main/resources/props:` `default.props` and `test.default.props` whose names are chosen as per Lift framework).
@@ -36,9 +39,8 @@ Test mode is used when executing a sample of Scalatest unit test cases.
 
 - Starting app: in project folder, launch sbt, and then `jetty:start`.
 May also start from Intellij IDEA Community Edition 2016.*. Patience is required when Intellij IDEA CE decides to index your project.
-Runs on localhost:8090 except if launched from IDEA in which case it is localhost:8080 (I have yet to find out not to hardcode 8080 when under IDEA control). 
-The port number is controlled in build.sbt by containerPort,
-which is tied to plugin xsbt-web-plugin (project/plugins.sbt)
+Runs on localhost:8090 except if launched from IDEA in which case it is localhost:8080 (or the port you specify in run configuration in the IDE).
+If running from sbt, the port number is controlled in build.sbt by containerPort,which is tied to plugin xsbt-web-plugin (project/plugins.sbt)
 
 - web server: runs fine on OS X El Capitan 10.11 (initially developed on Yosemite 10.10.5).
 browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
@@ -47,7 +49,7 @@ browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - SBT: 0.13.11
 
-- Scala: 2.11.7
+- Scala: 2.11.8
 
 - JVM SDK: 1.8
 
@@ -65,7 +67,8 @@ scalatest for unit testing
 - Install PostgresSQL. I use 9.4.5.0
 
 ## WEB API Dependencies (keys, rate usage)
-See `https://lcboapi.com/docs/v1` about setting a LCBO token, which is required if used from a public website as queries are limited.
+See `https://lcboapi.com/docs/v1` about setting a LCBO token, which is required if used from a public website as queries are limited
+and an important reason why I didn't contemplate deploying to public cloud.
 
 My home private usage qualifies for following:
 When LCBO API is accessed from a web server or private script, these keys are not rate-limited, and they do not support CORS or JSONP.
@@ -78,37 +81,31 @@ Once obtained, use it in `webapp/index.html` at following replacing `GET_A_KEY` 
 Install initial SQL tables using `POSTGRES_SCHEMA_INIT.SQL`. What may cause portability issues for other databases in that file are:
 Usage of sequences to generate IDs.
 Usage of `SERIAL` in users table for primary key (auto increment in other RDBMSs).
-Table `"Inventory"` is double quoted. It's managed by Squeryl outside of LIFT's Record control and useful to represent stateful many-to-many relations between store and product.
 
 ## Design Limitations
 - Security:
 User is expected to accept to provide geo-location, otherwise nothing will work since the closest store is where everything starts while users may select other stores of choice.
 There is no login security planned in database and none on web side of things with registration of users not enforcing any password complexity.
 
-- HA/fail-over: not planned
+- no HA
 
-- Mobile: not planned.
+- no Mobile
 
 ##Commentary about design patterns
 Behavioral Design Patterns:
 template method design pattern (used for loading up caches generically upon a database store)
 
 Functional Design Patterns:
-State monad from Cats (for `RNG`, `State` in `RNG.scala`). They are also found with Options, collections, Futures. Pretty pervasive.
+State monad from Cats (for `RNG`, `State` in `RNG.scala`).
 
 Scala-specific design patterns:
 enrich my library (`RetainSingles`), similar to C# extension methods
 cake pattern (`ProductAdvisor`)
 value object (case classes, ubiquitous in Scala)
-allocation-free extension methods (`LCBO_ID`, `P_KEY`)
 curiously recurring template pattern (`CRTP`) as found in `Persistable` ( `self: T =>`), tied with Lift Record's design
 lazy evaluation (`Store` to inhibit immediate loading of stateful many2many relation `storeProducts`)
 Dependency Injection via Partially applied Functions (`LCBOPageFetcherComponent` using partially applied functions for `JSitemsExtractor` and `GotEnough_?` to apply different mechanisms of JSON parsing  )
 implicit injection (for type conversion also known as implicit view in Scala in Depth: `P_KEY` and `LCBO_ID` implicitly convert to `Long`, `Store` to XML Node conversion)
-
-Unused Design Patterns:
-stackable traits, duck typing, memoization, type class (via context bounds, though I tried it in a recent version of ItemStateGrouper)
-
 
 Functional Programming: random number generation is a classical example of side effect and does not lend naturally to repeatable unit testing or pure functions implementation.
 However, the book Functional Programming in Scala guides developers in addressing this, in particular Chapter 6 for random number generation. This is the approach taken here.

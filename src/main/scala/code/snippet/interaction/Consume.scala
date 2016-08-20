@@ -27,7 +27,7 @@ trait Consume extends UtilCommands {
       val selectedProducts =
         // ExtractOpt avoids MappingException and generates None on failure (similar idea for parseOpt
         for {json <- selection.extractOpt[String].flatMap(parseOpt).toIndexedSeq
-             item <- json.children.toVector
+             item <- json.children
              prod <- item.extractOpt[SelectedProduct]}
           yield prod
 
