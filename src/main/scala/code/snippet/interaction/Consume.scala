@@ -25,8 +25,8 @@ trait Consume extends UtilCommands {
     // and then get down to business with helper mayConsume.
     User.currentUser.dmap { S.error("consumeProducts", "unable to process transaction, Login first!"); Noop } { user =>
       val selectedProducts =
-        // ExtractOpt avoids MappingException and generates None on failure
-        for {json <- selection.extractOpt[String].map(parse).toIndexedSeq
+        // ExtractOpt avoids MappingException and generates None on failure (similar idea for parseOpt
+        for {json <- selection.extractOpt[String].flatMap(parseOpt).toIndexedSeq
              item <- json.children.toVector
              prod <- item.extractOpt[SelectedProduct]}
           yield prod

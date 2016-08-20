@@ -2,7 +2,7 @@ package code.model.pageFetcher
 
 import cats.data.Xor
 import code.Rest.RestClient
-import net.liftweb.json._
+import net.liftweb.json.{parseOpt,JValue,JNothing}
 import net.liftweb.common.Loggable
 import net.liftweb.util.Props
 import scala.annotation.tailrec
@@ -79,7 +79,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggabl
       def go(accumItems: IndexedSeq[T], currPage: Int): IndexedSeq[T] = {
         // get as many as possible on a page because we could have few matches.
         val (msg, uri) = get(uriRoot, params ++ Seq(("page", currPage)): _*)
-        val jsonRoot = parse(msg)
+        val jsonRoot = parseOpt(msg).fold[JValue](JNothing)(identity)
         // fyi: throws plenty of various exceptions.
         val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj.
         if (isFinalPage(jsonRoot, currPage) || enough(revisedItems.size)) {
