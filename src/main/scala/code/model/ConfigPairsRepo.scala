@@ -1,6 +1,6 @@
 package code.model
 
-import net.liftweb.json.parse
+import net.liftweb.json.{JField,parse}
 import net.liftweb.util.Props
 import scala.collection.Seq
 
@@ -39,15 +39,16 @@ object ConfigPairsRepo {
     * Props based class that uses JSON parsing from a props config to implement ConfigPairsRepo getSeq
     */
   class PropsSeqReader extends ConfigPairsRepo {
+    implicit val formats = net.liftweb.json.DefaultFormats
     /**
       *
       * @param masterKey a key to some configuration holding a map of values
       * @return a map of strings to strings bound to the masterKey
       */
     override def getSeq(masterKey: String): Seq[(String, String)] = {
-      val json = parse(Props.get(masterKey, "") )
-      json.children.map(_.values). // contains List of (String, JString(String))
-        collect { case (pair: (String, String)) => pair }
+      val json = parse(Props.get(masterKey, "")).children // contains List of JField(String, JString(String))
+      json.collect { case (x: JField) => x.value.extractOpt[String].map( (x.name, _)) }.flatten
+      // was a little complex, but it's exception safe as extractOpt does not throw.
     }
   }
 }

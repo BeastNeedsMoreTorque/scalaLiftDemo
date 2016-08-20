@@ -38,21 +38,21 @@ trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] 
 
     // Do special handling to filter out duplicate keys, which would throw.
     // Trust the database and not the cache, some other client could insert in database
-    val LcboIDs = from(table)(item => select(item.lcboId)).toSet
+    val lcboKeys = from(table)(item => select(item.lcboKey)).toSet
 
     // removes any duplicate keys and log error if found duplicates
     // prevent duplicate primary key for our current data in DB (considering LCBO ID as alternate primary key)
-    val filtered = items.retainSingles.filterNot( p => LcboIDs(p.lcboId) )
+    val filtered = items.retainSingles.filterNot( p => lcboKeys(p.lcboKey) )
     // break it down in reasonable size transactions, and then serialize the work.
     filtered.grouped(batchSize).foreach { batchTransactor( _ , ormInserter) }
   }
 
   private def batchTransactor(items: Iterable[T], ORMTransactor: Iterable[T] => Unit): Unit = {
     def feedCache(items: Iterable[T]) = {
-      val akIds = items.map(_.lcboId: Long).toStream.distinct // alternate key ids, which are a proxy for our primary key IDs to be evaluated from DB.
+      val akIds = items.map(_.lcboKey: Long).toStream.distinct // alternate key ids, which are a proxy for our primary key IDs to be evaluated from DB.
       // select only those we just inserted, hopefully the same set (cardinality of akIds is expected to be smaller than items
       // because of repetition at the source).
-      val itemsWithAK = from(table)(item => where(item.lcboId.underlying in akIds) select item)
+      val itemsWithAK = from(table)(item => where(item.lcboKey.underlying in akIds) select item)
       if (itemsWithAK.size < akIds.size) logger.error(s"feedCache got only ${itemsWithAK.size} items for expected ${akIds.size}")
       cacheItems(itemsWithAK)
     }

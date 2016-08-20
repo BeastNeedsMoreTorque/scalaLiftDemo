@@ -1,6 +1,6 @@
 package code.model
 
-import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RNG
 import code.model.utils.RetainSingles.asMap
@@ -39,7 +39,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   val name = new FilteredMandatoryStringField(nameSize)
   val address_line_1 = new FilteredMandatoryStringField(addressSize)
   val city = new FilteredMandatoryStringField(cityNameSize)
-  override val productsCache = TrieMap[LCBO_ID, IProduct]()
+  override val productsCache = TrieMap[LCBO_KEY, IProduct]()
   override val categoryIndex = TrieMap[String, IndexedSeq[KeyKeeperVals]]()
   // don't put whole IProduct in here, just useful keys.
   override val inventoryByProductId = TrieMap[P_KEY, Inventory]()
@@ -55,7 +55,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 
   override def cache: concurrent.Map[P_KEY, Store] = Store.cache
 
-  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = Store.lcboIdToPKMap
+  override def lcboKeyToPK: concurrent.Map[LCBO_KEY, P_KEY] = Store.lcboKeyToPKMap
 
   override def pKey: P_KEY = P_KEY(idField.get)
 
@@ -65,7 +65,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   // (which are not presented as map but as slower sequence;
   // we organize as map for faster access).
   // They're recomputed when needed by the three helper functions that follow.
-  override def getProduct(x: LCBO_ID): Option[IProduct] = productsCache.get(x)
+  override def getProduct(x: LCBO_KEY): Option[IProduct] = productsCache.get(x)
 
   override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] =
     categoryIndex.get(lcboCategory).
@@ -93,20 +93,20 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
 
-  override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
+  override def lcboKey: LCBO_KEY = LCBO_KEY(lcbo_id.get)
 
   case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals)
 }
 
 object Store extends Store with MetaRecord[Store] {
   override val cache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
-  val lcboIdToPKMap: concurrent.Map[LCBO_ID, P_KEY] = TrieMap() // secondary dependent cache, a.k.a. index
+  val lcboKeyToPKMap: concurrent.Map[LCBO_KEY, P_KEY] = TrieMap() // secondary dependent cache, a.k.a. index
   val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
 
   def findAll: Iterable[Store] = cache.values
 
-  def storeIdToLcboId(pKey: P_KEY): Option[LCBO_ID] = getStore(pKey).map(_.lcboId)
+  def storeIdTolcboKey(pKey: P_KEY): Option[LCBO_KEY] = getStore(pKey).map(_.lcboKey)
 
   def getStore(pKey: P_KEY): Option[Store] = cache.get(pKey)
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
@@ -148,7 +148,7 @@ object Store extends Store with MetaRecord[Store] {
   }
 
   def getCachedItem: IStore => Option[IStore] = s =>
-    for {pKey <- lcboIdToPKMap.get(s.lcboId)
+    for {pKey <- lcboKeyToPKMap.get(s.lcboKey)
          is <- getStore(pKey)} yield is
 
   private def getStores = collectItemsAsWebClient("/stores", extract, queryFilterArgs)

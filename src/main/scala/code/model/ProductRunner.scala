@@ -1,6 +1,6 @@
 package code.model
 
-import code.model.GlobalLCBO_IDs.LCBO_ID
+import code.model.GlobalLCBO_IDs.LCBO_KEY
 import scala.collection.IndexedSeq
 import cats.data.Xor
 
@@ -20,5 +20,5 @@ trait ProductRunner {
     * @param requiredSize max amount of items requested
     * @return available products matching selection criteria possibly fewer items than requiredSize
     */
-  def fetchByStoreCategory(lcboStoreId: LCBO_ID, category: String, requiredSize: Int): ValidatedProducts
+  def fetchByStoreCategory(lcboStoreId: LCBO_KEY, category: String, requiredSize: Int): ValidatedProducts
 }

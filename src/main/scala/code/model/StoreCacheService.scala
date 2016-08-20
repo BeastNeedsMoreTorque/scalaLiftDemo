@@ -5,7 +5,7 @@ import cats.std.all._
 import cats.syntax.all._
 import code.model.Product.fetchByStore
 import code.model.Inventory.loadInventoriesByStore
-import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.Store.CategoryKeyKeeperVals
 import code.model.utils.RetainSingles._
 import net.liftweb.common.Loggable
@@ -31,7 +31,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
   /**
     * cache of products, keyed by the LCBO product id.
     */
-  val productsCache: TrieMap[LCBO_ID, IProduct]
+  val productsCache: TrieMap[LCBO_KEY, IProduct]
 
   /**
     * cache of inventories keyed by our own primary key of the product.
@@ -50,7 +50,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     *
     * @return store identifier as published by LCBO
     */
-  def lcboId: LCBO_ID
+  def lcboKey: LCBO_KEY
 
   /**
     *
@@ -71,16 +71,16 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     */
   def loadCache(): Unit = {
     val productsContext: StringFormatter = s => s"Problem loading products into cache with exception error $s"
-    val inventoriesContext: StringFormatter = s => s"Problem loading inventories into cache for '$lcboId' with exception error $s"
+    val inventoriesContext: StringFormatter = s => s"Problem loading inventories into cache for '$lcboKey' with exception error $s"
 
     // serialize products then inventories intentionally because of Ref.Integrity (inventory depends on valid product)
     val loads = Future({loadProducts(productsContext); loadInventories(inventoriesContext)})
-    logger.info(s"loadCache async launched for $lcboId") // about 15 seconds, likely depends mostly on network/teleco infrastructure
+    logger.info(s"loadCache async launched for $lcboKey") // about 15 seconds, likely depends mostly on network/teleco infrastructure
     loads onComplete {
       case Success(_) => // We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
-        logger.debug(s"loadCache async work succeeded for $lcboId")
-        if (emptyInventory) logger.warn(s"got no product inventory for storeId $lcboId !") // No provision for retrying.
-      case Failure(f) => logger.info(s"loadCache explicitly failed for $lcboId cause ${f.getMessage}")
+        logger.debug(s"loadCache async work succeeded for $lcboKey")
+        if (emptyInventory) logger.warn(s"got no product inventory for storeId $lcboKey !") // No provision for retrying.
+      case Failure(f) => logger.info(s"loadCache explicitly failed for $lcboKey cause ${f.getMessage}")
     }
   }
 
@@ -90,7 +90,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     * @return nothing (Unit), side effect to internal caches
     */
   def addToCaches(items: IndexedSeq[IProduct]): Unit = {
-    productsCache ++= asMap(items, {p: IProduct => p.lcboId})
+    productsCache ++= asMap(items, {p: IProduct => p.lcboKey})
     // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
     // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
     categoryIndex ++= productsCache.values.
@@ -100,7 +100,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
   }
 
   private def loadProducts(formatter: StringFormatter): Unit = {
-    val theProducts = fetchByStore(lcboId)
+    val theProducts = fetchByStore(lcboKey)
     val logErrorOnFail = { t: Throwable => errHandler(t, formatter) }
     val cacheOnSuccess = { items: IndexedSeq[IProduct] =>
         if (items.isEmpty) logger.error("Problem loading products into cache, none found")
@@ -126,7 +126,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
       webApiRoute = "/inventories",
       getCachedInventoryItem,
       inventoryByProductId.toMap,
-      Seq("store_id" -> lcboId, "where_not" -> "is_dead")).
+      Seq("store_id" -> lcboKey, "where_not" -> "is_dead")).
       flatMap(cacheInventoriesWithORM)
 
     val failure = { t: Throwable => errHandler(t, formatter) }

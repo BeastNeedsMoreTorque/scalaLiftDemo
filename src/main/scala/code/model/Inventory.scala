@@ -1,6 +1,6 @@
 package code.model
 
-import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
 import code.model.utils.KeyHolder
 import code.model.utils.RetainSingles.implicitSeqToRetainSingles
@@ -65,8 +65,8 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
   val extract: JSitemsExtractor[Inventory] =  { jVal =>
     for {p <- jVal.children.toIndexedSeq
          inv <- p.extractOpt[InventoryAsLCBOJson]
-         storeid <- Store.lcboIdToPKMap.get(LCBO_ID(inv.store_id))
-         productid <- Product.lcboIdToPKMap.get(LCBO_ID(inv.product_id))
+         storeid <- Store.lcboKeyToPKMap.get(LCBO_KEY(inv.store_id))
+         productid <- Product.lcboKeyToPKMap.get(LCBO_KEY(inv.product_id))
          newInv = Inventory(storeid, productid, inv)
     } yield newInv
   }

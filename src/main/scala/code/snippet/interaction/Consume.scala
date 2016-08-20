@@ -1,7 +1,7 @@
 package code.snippet.interaction
 
 import code.model.{IProduct, Product, User}
-import code.model.GlobalLCBO_IDs.LCBO_ID
+import code.model.GlobalLCBO_IDs.LCBO_KEY
 import net.liftweb.http.S
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds.{SetHtml, _}
@@ -44,7 +44,7 @@ trait Consume extends UtilCommands {
     // with full data of same products we should have in cache as pairs
     val feedback =
       for{sp <- selectedProds
-        p <- Product.getItemByLcboId(LCBO_ID(sp.id))
+        p <- Product.getItemByLcboKey(LCBO_KEY(sp.id))
         f = mayConsumeItem(user, p, sp.quantity)} yield SelectedProductFeedback(sp, f)
 
     val goodAndBackFeedback = feedback.groupBy(_.feedback.success)

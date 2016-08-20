@@ -93,13 +93,13 @@ trait Advise extends UtilCommands {
   private def getDiv(qOfProd: QuantityOfProduct): NodeSeq = {
     val prod = qOfProd.product
     val inventory = qOfProd.quantity.toString
-    val invAttribute = AttributeHtmlData(key="Quantity:", value=inventory, css="prodAttrContentInventory", name=prod.lcboId.toString)
+    val invAttribute = AttributeHtmlData(key="Quantity:", value=inventory, css="prodAttrContentInventory", name=prod.lcboKey.toString)
     // label it as prodAttrContentInventory for client to interpret and identify easily
     // similarly, assigning the prodId to name helps identify it in browser JS.
     val allAttributes = prod.streamAttributes :+ invAttribute
 
     // tag the div with misc attributes to facilitate reconciling related data within browser JS
-    <div class="prodIdRoot" name={prod.lcboId.toString}>{attributesMarkup(allAttributes)}{selectionMarkup(prod)}</div><hr/>
+    <div class="prodIdRoot" name={prod.lcboKey.toString}>{attributesMarkup(allAttributes)}{selectionMarkup(prod)}</div><hr/>
   }
 
   /**
@@ -143,7 +143,7 @@ trait Advise extends UtilCommands {
   private def selectionMarkup(prod: IProduct) = {
     val checkBoxNS =
       <label>
-        <input type="checkbox" class="prodSelectInput" value={prod.lcboId.toString}/>
+        <input type="checkbox" class="prodSelectInput" value={prod.lcboKey.toString}/>
         {prod.Name}
       </label><br/>
 

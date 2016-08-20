@@ -1,7 +1,7 @@
 package code.model
 
 import java.text.NumberFormat
-import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field.{BooleanField, IntField, LongField}
@@ -61,11 +61,11 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
 
   override def cache: concurrent.Map[P_KEY, Product] = Product.cache
 
-  override def lcboIdToPK: concurrent.Map[LCBO_ID, P_KEY] = Product.lcboIdToPKMap
+  override def lcboKeyToPK: concurrent.Map[LCBO_KEY, P_KEY] = Product.lcboKeyToPKMap
 
   override def pKey: P_KEY = P_KEY(idField.get)
 
-  override def lcboId: LCBO_ID = LCBO_ID(lcbo_id.get)
+  override def lcboKey: LCBO_KEY = LCBO_KEY(lcbo_id.get)
 
   override def imageThumbUrl: String = image_thumb_url.getValue
   override def Name: String = name.get
@@ -119,7 +119,7 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
 object Product extends Product with MetaRecord[Product] with ProductRunner  {
   // thread-safe lock free objects
   override val cache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB!
-  val lcboIdToPKMap: concurrent.Map[LCBO_ID, P_KEY] = TrieMap()
+  val lcboKeyToPKMap: concurrent.Map[LCBO_KEY, P_KEY] = TrieMap()
   val MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
   val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)
   // seems difficult to apply D.I. here, so access global object.
@@ -140,7 +140,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   * URL will be built as follows: http://lcbo.com/products?store_id=<storeId>&q=<category.toLowerCase()>&per_page=<perPage> (+ details on where_not and order)
   * LCBO allows to specify q as query to specify pattern match on product name (e.g. beer, wine)
   */
-  override def fetchByStoreCategory(lcboStoreId: LCBO_ID, category: String, requiredSize: Int): ValidatedProducts = {
+  override def fetchByStoreCategory(lcboStoreId: LCBO_KEY, category: String, requiredSize: Int): ValidatedProducts = {
     implicit val checkUpToRequiredSize = sizeFulfilled(requiredSize)
     // don't fetch more than required size.
     productWebQuery(lcboStoreId, Seq("q" -> category) ++ queryByCategoryArgs)
@@ -153,15 +153,15 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
     for {
       as <- productWebQuery(lcboStoreId, queryFilterArgs) // take them all from Stream
       bs <- synchDirtyAndNewItems(as, getCachedItem).right[Throwable] // the side effect
-      cs = bs.map{_.lcboId}.flatMap{ getItemByLcboId } // usable for client to cache, now that we refreshed them all
+      cs = bs.map{_.lcboKey}.flatMap{ getItemByLcboKey } // usable for client to cache, now that we refreshed them all
     } yield cs
   }
 
-  def getItemByLcboId(id: LCBO_ID): Option[IProduct] =
-    for {pKey <- lcboIdToPKMap.get(id)
+  def getItemByLcboKey(id: LCBO_KEY): Option[IProduct] =
+    for {pKey <- lcboKeyToPKMap.get(id)
          ip <- cache.get(pKey)} yield ip
 
-  def getCachedItem: IProduct => Option[IProduct] = s => getItemByLcboId(s.lcboId)
+  def getCachedItem: IProduct => Option[IProduct] = s => getItemByLcboKey(s.lcboKey)
 
   // the implicit isEnough parameter is strictly to play around with the concept as in this case, implicit is not particularly compelling.
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent

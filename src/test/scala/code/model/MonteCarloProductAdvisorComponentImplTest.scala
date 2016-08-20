@@ -1,7 +1,7 @@
 package code.model
 
 import code.UnitTest
-import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.prodAdvisor.MonteCarloProductAdvisorComponentImpl
 import code.model.utils.RNG
 import scala.collection.IndexedSeq
@@ -19,17 +19,16 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
 
   val NullInventoryService = new InventoryService {
     override def pKey: P_KEY = P_KEY(1)
-    override def lcboId: LCBO_ID = LCBO_ID(1)
+    override def lcboKey: LCBO_KEY = LCBO_KEY(1)
     override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => None
-    override def getProduct(x: LCBO_ID): Option[IProduct] = None
+    override def getProduct(x: LCBO_KEY): Option[IProduct] = None
     override def getProductKeysByCategory(lcboCategory: String) = IndexedSeq[KeyKeeperVals]()
     override def asyncLoadCache() = () // intentional Noop/Unit here.
   }
 
-
   behavior of "No product available empty list"
   val outOfStockRunner = new ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: LCBO_ID,
+    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
                                       category: String,
                                       requiredSize: Int): ValidatedProducts = emptyProducts
   }
@@ -73,34 +72,34 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
 
   val Heineken = new typicalBeerProduct {
     override def pKey: P_KEY = P_KEY(1)
-    override def lcboId: LCBO_ID = LCBO_ID(1)
+    override def lcboKey: LCBO_KEY = LCBO_KEY(1)
     override def alcoholContent: String = "5.0%"
     override def Name: String = "Heineken"
   }
 
   val MillStLager = new typicalBeerProduct {
     override def pKey: P_KEY = P_KEY(2)
-    override def lcboId: LCBO_ID = LCBO_ID(2)
+    override def lcboKey: LCBO_KEY = LCBO_KEY(2)
     override def alcoholContent: String = "5.0%"
     override def Name: String = "Mill Street Lager"
   }
 
   val OysterBay = new typicalWineProduct {
     override def pKey: P_KEY = P_KEY(1000)
-    override def lcboId: LCBO_ID = LCBO_ID(1000)
+    override def lcboKey: LCBO_KEY = LCBO_KEY(1000)
     override def alcoholContent: String = "16.0%"
     override def Name: String = "Oyster Bay"
   }
 
   val ChampagneKrug = new typicalWineProduct {
     override def pKey: P_KEY = P_KEY(1001)
-    override def lcboId: LCBO_ID = LCBO_ID(1001)
+    override def lcboKey: LCBO_KEY = LCBO_KEY(1001)
     override def alcoholContent: String = "16.0%"
     override def Name: String = "Krug Champagne"
   }
 
   val singleBeerRunner = new ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: LCBO_ID, category: String, requiredSize: Int): ValidatedProducts =
+    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY, category: String, requiredSize: Int): ValidatedProducts =
       Xor.Right( if (category == "beer") Vector(Heineken) else Vector() )
   }
 
@@ -110,7 +109,7 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     val someWines = Seq(OysterBay, ChampagneKrug)
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
-    override def fetchByStoreCategory(lcboStoreId: LCBO_ID,
+    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
                                       category: String,
                                       requiredSize: Int): ValidatedProducts = Xor.Right (
       category match {
@@ -127,7 +126,7 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     val someWines = Seq(OysterBay, ChampagneKrug)
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
-    override def fetchByStoreCategory(lcboStoreId: LCBO_ID,
+    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
                                       category: String,
                                       requiredSize: Int): ValidatedProducts =
     Xor.Right(

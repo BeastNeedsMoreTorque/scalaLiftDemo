@@ -3,12 +3,12 @@ package code.model
 import cats.data.Xor
 
 import scala.collection.Iterable
-import code.model.GlobalLCBO_IDs.{LCBO_ID, P_KEY}
+import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.utils.RNG
 
 trait InventoryService extends KeyKeeper {
   val inventoryByProductIdMap: P_KEY => Option[Inventory]
-  def getProduct(x: LCBO_ID): Option[IProduct]
+  def getProduct(x: LCBO_KEY): Option[IProduct]
   def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals]
   def asyncLoadCache(): Unit
 }

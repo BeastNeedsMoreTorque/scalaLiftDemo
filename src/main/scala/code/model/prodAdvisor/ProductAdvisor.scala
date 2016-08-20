@@ -147,7 +147,7 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
           for {p <- initialProductKeys
                inv <- invService.inventoryByProductIdMap(p.pKey)
                q = inv.quantity if q > 0
-               prod <- invService.getProduct(p.lcboId)} yield (prod, q)
+               prod <- invService.getProduct(p.lcboKey)} yield (prod, q)
         }
         // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
 
@@ -181,7 +181,7 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
                         lcboProdCategory: String,
                         r: RNG): ValidateSelection =
     for {
-      prods <- runner.fetchByStoreCategory(invService.lcboId, category, maxSampleSize)
+      prods <- runner.fetchByStoreCategory(invService.lcboKey, category, maxSampleSize)
       // take a hit of one go to LCBO, querying by category, no more.
       permutedIndices <- Xor.Right(RNG.shuffle(prods.indices).runA(r).value)
       // stream avoids checking primary category on full collection (the permutation is done though).
