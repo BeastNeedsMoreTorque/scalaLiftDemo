@@ -1,6 +1,6 @@
 package code.model
 
-import net.liftweb.json.{JField,parseOpt}
+import net.liftweb.json.{JField,JString,parseOpt}
 import net.liftweb.util.Props
 import scala.collection.Seq
 
@@ -50,7 +50,7 @@ object ConfigPairsRepo {
       val json = parseOpt(Props.get(masterKey, emptyString)) // contains optionally children having JValue, which are really
       // JField(name:String, value:JValue that is effectively String)
       json.fold(Seq.empty[(String, String)]) (
-        _.children.collect { case (x: JField) => (x.name, x.value.extractOrElse[String](emptyString)) })
+        _.children.collect { case JField(name, JString(value)) => (name, value) })
     }
   }
 }

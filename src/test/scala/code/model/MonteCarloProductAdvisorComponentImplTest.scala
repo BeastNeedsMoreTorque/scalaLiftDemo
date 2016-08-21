@@ -114,8 +114,7 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
                                       category: String,
                                       requiredSize: Int): ValidatedProducts = Xor.Right (
       category match {
-        case "beer" => someBeers.toVector
-        case "wine" => someWines.toVector
+        case "beer" => someBeers.toVector case "wine" => someWines.toVector
         case _ => Vector()
       }
     )
@@ -132,8 +131,7 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
                                       requiredSize: Int): ValidatedProducts =
     Xor.Right(
       category match {
-        case "beer" => someBeers.toVector
-        case "wine" => someWines.toVector
+        case "beer" => someBeers.toVector case "wine" => someWines.toVector
         case _ => Vector()
       }
     )
