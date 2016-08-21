@@ -42,15 +42,16 @@ object ConfigPairsRepo {
     implicit val formats = net.liftweb.json.DefaultFormats
     val emptyString: String = ""
     /**
-      *
       * @param masterKey a key to some configuration holding a map of values
       * @return a map of strings to strings bound to the masterKey
       */
     override def getSeq(masterKey: String): Seq[(String, String)] = {
-      val json = parseOpt(Props.get(masterKey, emptyString)) // contains optionally children having JValue, which are really
-      // JField(name:String, value:JValue that is effectively String)
-      json.fold(Seq.empty[(String, String)]) (
-        _.children.collect { case JField(name, JString(value)) => (name, value) })
+      val values = Props.get(masterKey, emptyString) // assumed to be of form {"key1":"value1",... "keyn":"valuen"}, which is JSON
+      // contains optionally children having JValue, which are really JField(name:String, value:JValue that is effectively String)
+      parseOpt(values).
+        fold(Seq.empty[(String, String)]) {
+          _.children.collect { case JField(name, JString(value)) => (name, value) }
+        }
     }
   }
 }
