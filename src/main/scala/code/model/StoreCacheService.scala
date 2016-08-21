@@ -124,9 +124,9 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     // we chain errors using flatMap (FP style).
     val loadAndCache = loadInventoriesByStore(
       webApiRoute = "/inventories",
-      getCachedInventoryItem,
-      inventoryByProductId.toMap,
-      Seq("store_id" -> lcboKey, "where_not" -> "is_dead")).
+      get = getCachedInventoryItem,
+      mapByProductId = inventoryByProductId.toMap,
+      params = Seq("store_id" -> lcboKey, "where_not" -> "is_dead")).
       flatMap(cacheInventoriesWithORM)
 
     val failure = { t: Throwable => errHandler(t, formatter) }
