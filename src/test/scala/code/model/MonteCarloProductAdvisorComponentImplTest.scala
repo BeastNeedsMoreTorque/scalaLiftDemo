@@ -27,29 +27,46 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     override def asyncLoadCache(): Unit = () // intentional Noop/Unit here.
   }
 
-  behavior of "No product available empty list"
+  // Runners
+  trait MockBeerRunner extends ProductRunner {
+    val beers: Seq[MockBeer]
+    val wines: Seq[MockWine]
+    // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
+    // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
+    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
+                                      category: String,
+                                      requiredSize: Int): ValidatedProducts = Xor.Right (
+      category match {
+        case "beer" => beers.toVector case "wine" => wines.toVector
+        case _ => Vector()
+      }
+    )
+  }
+
   object outOfStockRunner extends ProductRunner {
     override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
                                       category: String,
                                       requiredSize: Int): ValidatedProducts = emptyProducts
   }
-  it should s"advise an empty list of products when using dummy InventoryService and ProductRunner when no products of category can be found" in {
-    val rng = RNG.Simple(411)
-    tupsyTurvyClerk.advise(rng, NullInventoryService, "wine", 5, outOfStockRunner).map {
-      x => x.toList shouldBe empty
-    }
+
+  object singleBeerRunner extends ProductRunner {
+    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY, category: String, requiredSize: Int): ValidatedProducts =
+      Xor.Right( if (category == "beer") Vector(Heineken) else Vector() )
   }
 
-  it should s"advise an empty list of products when no products of category can be found" in {
-    val categories = Seq("wine", "spirits", "beer", "ciders", "coolers", "non-Alc")
-    val rng = RNG.Simple(411)
-    val FlagShip = Store
-    FlagShip.lcbo_id.set(1) // to make web query good
-    categories.foreach(cat => tupsyTurvyClerk.advise(rng, FlagShip, cat, 5, outOfStockRunner).map {
-      x => x.toList shouldBe empty
-    })
+  object HeinekensBut63Runner extends MockBeerRunner {
+    // depends precisely on  props store.fixedRNGSeed=411
+    override val beers =  Seq.fill(63)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(37)( Heineken)
+    override val wines = Seq(OysterBay, ChampagneKrug)
   }
 
+  object HeinekensBut62Runner extends MockBeerRunner {
+    // depends precisely on  props store.fixedRNGSeed=411. Mill St is at a different spot!
+    override val beers =  Seq.fill(62)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(38)( Heineken)
+    override val wines = Seq(OysterBay, ChampagneKrug)
+  }
+
+  // products
   trait MockProduct extends IProduct {
     override def isDiscontinued: Boolean = false
     override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
@@ -63,7 +80,6 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     override def pKey: P_KEY = identifier.PKeyID
     override def lcboKey: LCBO_KEY = identifier.LcboKeyID
   }
-  // val ints = Gen.choose(1, 1000), eventually might use that.
   trait MockBeer extends IProduct with MockProduct  {
     override def primaryCategory: String = "beer"
     override def price: String = "$2.00"
@@ -102,36 +118,21 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     override def price: String = "$150.00"
   }
 
-  object singleBeerRunner extends ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY, category: String, requiredSize: Int): ValidatedProducts =
-      Xor.Right( if (category == "beer") Vector(Heineken) else Vector() )
+  behavior of "No product available empty list"
+  it should s"advise an empty list of products when using dummy InventoryService and ProductRunner when no products of category can be found" in {
+    val rng = RNG.Simple(411)
+    tupsyTurvyClerk.advise(rng, NullInventoryService, "wine", 5, outOfStockRunner).map {
+      x => x.toList shouldBe empty
+    }
   }
-
-  trait MockBeerRunner extends ProductRunner {
-    val beers: Seq[MockBeer]
-    val wines: Seq[MockWine]
-    // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
-    // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
-    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
-                                      category: String,
-                                      requiredSize: Int): ValidatedProducts = Xor.Right (
-      category match {
-        case "beer" => beers.toVector case "wine" => wines.toVector
-        case _ => Vector()
-      }
-    )
-  }
-
-  object HeinekensBut63Runner extends MockBeerRunner {
-    // depends precisely on  props store.fixedRNGSeed=411
-    override val beers =  Seq.fill(63)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(37)( Heineken)
-    override val wines = Seq(OysterBay, ChampagneKrug)
-  }
-
-  object HeinekensBut62Runner extends MockBeerRunner {
-    // depends precisely on  props store.fixedRNGSeed=411. Mill St is at a different spot!
-    override val beers =  Seq.fill(62)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(38)( Heineken)
-    override val wines = Seq(OysterBay, ChampagneKrug)
+  it should s"advise an empty list of products when no products of category can be found" in {
+    val categories = Seq("wine", "spirits", "beer", "ciders", "coolers", "non-Alc")
+    val rng = RNG.Simple(411)
+    val FlagShip = Store
+    FlagShip.lcbo_id.set(1) // to make web query good
+    categories.foreach(cat => tupsyTurvyClerk.advise(rng, FlagShip, cat, 5, outOfStockRunner).map {
+      x => x.toList shouldBe empty
+    })
   }
 
   behavior of "Single product match by category once list of 1 and once empty list"
@@ -162,12 +163,10 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     val shuffled = RNG.shuffle((0 to 100)).runA(rng411).value
     shuffled.take(1) should equal(Seq(63))
   }
-
   it should s"get Mill Street Lager or really #63 out of 0 to 100 (64th position in 0-index system, literally 63)" +
   "if seed is set to 411 with 100 Heinekens " +
     s"out of 101!!!" in
     validateSelectedName(HeinekensBut63Runner, rng411, "Mill Street Lager")
-
   it should s"get Heineken as Mill Street Lager is not in special spot of index value 63 among 101, 100 of which are Heineken!" in
     validateSelectedName(HeinekensBut62Runner, rng411, "Heineken")
 
