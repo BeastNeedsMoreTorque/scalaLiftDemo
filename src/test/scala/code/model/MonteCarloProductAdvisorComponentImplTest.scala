@@ -28,9 +28,9 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   }
 
   // Runners
-  trait MockBeerRunner extends ProductRunner {
-    val beers: Seq[MockBeer]
-    val wines: Seq[MockWine]
+  trait MockProductRunner extends ProductRunner {
+    val beers: Seq[MockBeer] = Seq.empty
+    val wines: Seq[MockWine] = Seq.empty
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
     override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
@@ -43,24 +43,19 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     )
   }
 
-  object outOfStockRunner extends ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
-                                      category: String,
-                                      requiredSize: Int): ValidatedProducts = emptyProducts
+  object outOfStockRunner extends MockProductRunner
+
+  object singleBeerRunner extends MockProductRunner {
+    override val beers =  List( Heineken)
   }
 
-  object singleBeerRunner extends ProductRunner {
-    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY, category: String, requiredSize: Int): ValidatedProducts =
-      Xor.Right( if (category == "beer") Vector(Heineken) else Vector() )
-  }
-
-  object HeinekensBut63Runner extends MockBeerRunner {
+  object HeinekensBut63Runner extends MockProductRunner {
     // depends precisely on  props store.fixedRNGSeed=411
     override val beers =  Seq.fill(63)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(37)( Heineken)
     override val wines = Seq(OysterBay, ChampagneKrug)
   }
 
-  object HeinekensBut62Runner extends MockBeerRunner {
+  object HeinekensBut62Runner extends MockProductRunner {
     // depends precisely on  props store.fixedRNGSeed=411. Mill St is at a different spot!
     override val beers =  Seq.fill(62)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(38)( Heineken)
     override val wines = Seq(OysterBay, ChampagneKrug)
