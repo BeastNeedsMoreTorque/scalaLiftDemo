@@ -15,27 +15,27 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   class MonteCarloProductAdvisorComponentImplTest extends MonteCarloProductAdvisorComponentImpl
 
   val emptyProducts = Xor.Right( IndexedSeq[Product]() )
-  val instance = new MonteCarloProductAdvisorComponentImplTest
-  val drunkShuffler = instance.agent
+  object MonteCarloInstance extends MonteCarloProductAdvisorComponentImplTest
+  val tupsyTurvyClerk = MonteCarloInstance.agent
 
-  val NullInventoryService = new InventoryService {
+  object NullInventoryService extends InventoryService {
     override def pKey: P_KEY = 1.PKeyID
     override def lcboKey: LCBO_KEY = 1.LcboKeyID
     override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => None
     override def getProduct(x: LCBO_KEY): Option[IProduct] = None
-    override def getProductKeysByCategory(lcboCategory: String) = IndexedSeq[KeyKeeperVals]()
-    override def asyncLoadCache() = () // intentional Noop/Unit here.
+    override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] = IndexedSeq.empty
+    override def asyncLoadCache(): Unit = () // intentional Noop/Unit here.
   }
 
   behavior of "No product available empty list"
-  val outOfStockRunner = new ProductRunner {
+  object outOfStockRunner extends ProductRunner {
     override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
                                       category: String,
                                       requiredSize: Int): ValidatedProducts = emptyProducts
   }
   it should s"advise an empty list of products when using dummy InventoryService and ProductRunner when no products of category can be found" in {
     val rng = RNG.Simple(411)
-    drunkShuffler.advise(rng, NullInventoryService, "wine", 5, outOfStockRunner).map {
+    tupsyTurvyClerk.advise(rng, NullInventoryService, "wine", 5, outOfStockRunner).map {
       x => x.toList shouldBe empty
     }
   }
@@ -43,111 +43,108 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   it should s"advise an empty list of products when no products of category can be found" in {
     val categories = Seq("wine", "spirits", "beer", "ciders", "coolers", "non-Alc")
     val rng = RNG.Simple(411)
-    val s = Store
-    s.lcbo_id.set(1) // to make web query good
-    categories.foreach(cat => drunkShuffler.advise(rng, s, cat, 5, outOfStockRunner).map {
+    val FlagShip = Store
+    FlagShip.lcbo_id.set(1) // to make web query good
+    categories.foreach(cat => tupsyTurvyClerk.advise(rng, FlagShip, cat, 5, outOfStockRunner).map {
       x => x.toList shouldBe empty
     })
   }
 
+  trait MockProduct extends IProduct {
+    override def isDiscontinued: Boolean = false
+    override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
+    override def streamAttributes: IndexedSeq[AttributeHtmlData] =
+      ( AttributeHtmlData("Name:", Name) ::
+        AttributeHtmlData("Primary Category:", primaryCategory) ::
+        AttributeHtmlData("Price:", price) ::
+        AttributeHtmlData("Alcohol content:", alcoholContent) ::
+        Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
+    def identifier: Long
+    override def pKey: P_KEY = identifier.PKeyID
+    override def lcboKey: LCBO_KEY = identifier.LcboKeyID
+  }
   // val ints = Gen.choose(1, 1000), eventually might use that.
-  trait typicalBeerProduct extends IProduct  {
+  trait MockBeer extends IProduct with MockProduct  {
     override def primaryCategory: String = "beer"
-    override def isDiscontinued: Boolean = false
-    override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
-
-    // Change unit of currency from cents to dollars and Int to String
     override def price: String = "$2.00"
-    override def streamAttributes: IndexedSeq[AttributeHtmlData] = Product.streamAttributes
-  }
-
-  trait typicalWineProduct extends IProduct  {
-    override def primaryCategory: String = "wine"
-    override def isDiscontinued: Boolean = false
-    override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
-
-    // Change unit of currency from cents to dollars and Int to String
-    override def price: String = "$15.00"
-    override def streamAttributes: IndexedSeq[AttributeHtmlData] = Product.streamAttributes
-  }
-
-  val Heineken = new typicalBeerProduct {
-    override def pKey: P_KEY = 1.PKeyID
-    override def lcboKey: LCBO_KEY = 1.LcboKeyID
     override def alcoholContent: String = "5.0%"
+  }
+
+  trait MockWine extends IProduct with MockProduct {
+    override def primaryCategory: String = "wine"
+    override def price: String = "$15.00"
+    override def alcoholContent: String = "16.0%"
+  }
+
+  object Heineken extends MockBeer {
+    override def identifier: Long = 1
     override def Name: String = "Heineken"
   }
 
-  val MillStLager = new typicalBeerProduct {
-    override def pKey: P_KEY = 2.PKeyID
-    override def lcboKey: LCBO_KEY = 2.LcboKeyID
-    override def alcoholContent: String = "5.0%"
+  object MillStLager extends MockBeer {
+    override def identifier: Long = 2
+    override def alcoholContent: String = "5.5%"
     override def Name: String = "Mill Street Lager"
+    override def price: String = "$2.50"
   }
 
-  val OysterBay = new typicalWineProduct {
-    override def pKey: P_KEY = 1000.PKeyID
-    override def lcboKey: LCBO_KEY = 1000.LcboKeyID
+  object OysterBay extends MockWine {
+    override def identifier: Long = 1000
     override def alcoholContent: String = "16.0%"
     override def Name: String = "Oyster Bay"
+    override def price: String = "$21.00"
   }
 
-  val ChampagneKrug = new typicalWineProduct {
-    override def pKey: P_KEY = 1001.PKeyID
-    override def lcboKey: LCBO_KEY = 1001.LcboKeyID
-    override def alcoholContent: String = "16.0%"
+  object ChampagneKrug extends MockWine {
+    override def identifier: Long = 1001
+    override def alcoholContent: String = "14.0%"
     override def Name: String = "Krug Champagne"
+    override def price: String = "$150.00"
   }
 
-  val singleBeerRunner = new ProductRunner {
+  object singleBeerRunner extends ProductRunner {
     override def fetchByStoreCategory(lcboStoreId: LCBO_KEY, category: String, requiredSize: Int): ValidatedProducts =
       Xor.Right( if (category == "beer") Vector(Heineken) else Vector() )
   }
 
-  val HeinekensBut63Runner = new ProductRunner {
-    // depends precisely on  props store.fixedRNGSeed=411
-    val someBeers =  Seq.fill(63)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(37)( Heineken)
-    val someWines = Seq(OysterBay, ChampagneKrug)
+  trait MockBeerRunner extends ProductRunner {
+    val beers: Seq[MockBeer]
+    val wines: Seq[MockWine]
     // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
     override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
                                       category: String,
                                       requiredSize: Int): ValidatedProducts = Xor.Right (
       category match {
-        case "beer" => someBeers.toVector case "wine" => someWines.toVector
+        case "beer" => beers.toVector case "wine" => wines.toVector
         case _ => Vector()
       }
     )
   }
 
-  val HeinekensBut62Runner = new ProductRunner {
+  object HeinekensBut63Runner extends MockBeerRunner {
+    // depends precisely on  props store.fixedRNGSeed=411
+    override val beers =  Seq.fill(63)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(37)( Heineken)
+    override val wines = Seq(OysterBay, ChampagneKrug)
+  }
+
+  object HeinekensBut62Runner extends MockBeerRunner {
     // depends precisely on  props store.fixedRNGSeed=411. Mill St is at a different spot!
-    val someBeers =  Seq.fill(62)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(38)( Heineken)
-    val someWines = Seq(OysterBay, ChampagneKrug)
-    // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
-    // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
-    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
-                                      category: String,
-                                      requiredSize: Int): ValidatedProducts =
-    Xor.Right(
-      category match {
-        case "beer" => someBeers.toVector case "wine" => someWines.toVector
-        case _ => Vector()
-      }
-    )
+    override val beers =  Seq.fill(62)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(38)( Heineken)
+    override val wines = Seq(OysterBay, ChampagneKrug)
   }
 
   behavior of "Single product match by category once list of 1 and once empty list"
   it should s"get a Heineken name in first selection for beer when it is the only product" in {
     val rng = RNG.Simple(411)
-    drunkShuffler.advise(rng, NullInventoryService, "beer", 1, singleBeerRunner).map {
+    tupsyTurvyClerk.advise(rng, NullInventoryService, "beer", 1, singleBeerRunner).map {
       _.headOption.foreach(_._1.Name should equal("Heineken"))
     }
   }
   // following is more to validate previous test. This is not particularly interesting.
   it should s"NOT get a Heineken name in first selection for wine when Heineken is the only (beer) product" in {
     val rng = RNG.Simple(411)
-    drunkShuffler.advise(rng, NullInventoryService, "wine", 1, singleBeerRunner).map {
+    tupsyTurvyClerk.advise(rng, NullInventoryService, "wine", 1, singleBeerRunner).map {
       case Nil => ; // success: wine != beer, no match.
     }
   }
@@ -156,7 +153,7 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   behavior of "Deterministic random selection of single item among 101 beers: 1 Mill Street among 100 Heinekens fixed seed"
   val rng411 = RNG.Simple(411)
   def validateSelectedName(runner: ProductRunner, rng: RNG, name: String): Unit = {
-    drunkShuffler.advise(rng, NullInventoryService, "beer", 1, runner).map {
+    tupsyTurvyClerk.advise(rng, NullInventoryService, "beer", 1, runner).map {
       _.headOption.foreach{ _._1.Name should equal(name)}
     }
   }

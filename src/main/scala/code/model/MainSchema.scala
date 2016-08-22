@@ -23,7 +23,7 @@ object MainSchema extends Schema {
 
   val userProducts = table[UserProduct]("userproduct")
 
-  val productToUserProducts = oneToManyRelation(products, userProducts).
+  protected val productToUserProducts = oneToManyRelation(products, userProducts).
     via((p,u) => p.id === u.productid)
   // Foreign-key constraints (see end of file):
 
