@@ -45,9 +45,9 @@ trait Consume extends UtilCommands {
     // associate primitive browser product details for selected products (SelectedProduct)
     // with full data of same products we should have in cache as pairs
     val feedback =
-      for{sp <- selectedProds
-        p <- Product.getItemByLcboKey(sp.id.LcboKeyID)
-        f = mayConsumeItem(store, user, p, sp.quantity)} yield SelectedProductFeedback(sp, f)
+      for { sp <- selectedProds
+            p <- Product.getItemByLcboKey(sp.id.LcboKeyID)
+            f = mayConsumeItem(store, user, p, sp.quantity)} yield SelectedProductFeedback(sp, f)
 
     val goodAndBackFeedback = feedback.groupBy(_.feedback.success)
     // splits into errors (false success) and normal confirmations (true success)
@@ -58,33 +58,28 @@ trait Consume extends UtilCommands {
     // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
 
     val goodFeedback = goodAndBackFeedback.getOrElse(true, Nil) // select those for which we have success and positive message
-    if (goodFeedback.isEmpty) {
-      if (feedback.isEmpty) {
+    (goodFeedback, feedback) match {
+      case (Nil, fs) if fs.isEmpty =>
         S.error("None of the selected products exist in database, wait a minute or two")
-        // that means web server should warm up quite a few at first.
-        // Not better than Twitter Fail Whale...
-      } else {
-        Noop // we already provided bad feedback, here satisfy function signature (and semantics) to return a JsCmd.
-      }
-    }
-    else {
-      if (goodFeedback.size == feedback.size) S.error("") // no error, erase old errors no longer applicable.
-      val confirmationMessages = goodFeedback.map{ x => PurchasedProductConfirmation(x.selectedProduct, x.feedback.message) }
-      // get some particulars about cost and quantity in addition to message
-      transactionsConfirmationJS(user.firstName.get, confirmationMessages) &
-        hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
+        // that means web server should warm up quite a few at first. Not better than Twitter Fail Whale...
+      case (Nil, _) => Noop // we already provided bad feedback, here satisfy function signature (and semantics) to return a JsCmd.
+      case (good, f) =>
+        if (good.size == f.size) S.error("") // no error, erase old errors no longer applicable.
+        val confirmationMessages = good.map { x => PurchasedProductConfirmation(x.selectedProduct, x.feedback.message) }
+        // get some particulars about cost and quantity in addition to message
+        transactionsConfirmationJS(user.firstName.get, confirmationMessages) &
+          hideProdDisplayJS & showConfirmationJS   // meant to simulate consumption of products
     }
   }
 
   private def mayConsumeItem(store: Store, user: User, p: IProduct, quantity: Long): Feedback = {
     val successToFeedback: Long => Feedback =
-      count => Feedback(user.firstName.get, success = true, s"${p.Name} $count unit(s) over the years")
+      count => Feedback(userName = user.firstName.get, success = true,
+                        message = s"${p.Name} $count unit(s) over the years")
 
     val errorToFeedback: Throwable => Feedback =
-      t =>
-        Feedback(user.firstName.get,
-          success = false,
-          s"Unable to sell you product ${p.Name} with exception '${t.toString()}'")
+      t => Feedback(userName = user.firstName.get, success = false,
+                    message = s"Unable to sell you product ${p.Name} with exception '${t.toString}'")
 
     store.consume(user, p, quantity).fold[Feedback](errorToFeedback, successToFeedback)
   }
@@ -107,8 +102,8 @@ trait Consume extends UtilCommands {
       if (missedQty <= 0)
         s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
       else
-        s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units;" +
-          s"sorry about the unfulfilled $missedQty items out of stock"
+        s"""$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units;
+         |sorry about the unfulfilled $missedQty items out of stock""".stripMargin
     }
 
     val liContent = purchaseConfirmationMessage(item.confirmation,

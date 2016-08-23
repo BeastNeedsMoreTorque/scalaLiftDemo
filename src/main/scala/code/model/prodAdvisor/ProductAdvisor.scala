@@ -16,11 +16,15 @@ trait ProductAdvisorComponent {
     * Selection is an iterable of product along with a count of many there are
     */
   type Selection = Iterable[(IProduct, Long)]
+
   /**
     * captures exceptions as errors in Xor if any, otherwise a selection
     */
   type ValidateSelection = Xor[Throwable, Selection]
 
+  /**
+    * captures exceptions as errors in Xor if any, otherwise the quantity that got purchased
+    */
   type ValidatePurchase = Xor[Throwable, Long]
 
   /**
@@ -32,6 +36,11 @@ trait ProductAdvisorComponent {
     * An interface to provide advice (recommendation) for LCBO products modelled by a simple single method.
     */
   trait ProductAdvisor {
+    val liquorCategoryMapper = LiquorCategory(ConfigPairsRepo.configPairsRepoPropsImpl)
+    val maxSampleSize = Props.getInt("advisor.maxSampleSize", 0)
+    def toPrimaryCategory(category: String): String =
+      liquorCategoryMapper.toPrimaryCategory(category)
+
     /**
       * @param rng a Random Number Generator state item.
       * @param invService an entity capable of determining number of items for each product that can be sold
@@ -47,6 +56,12 @@ trait ProductAdvisorComponent {
                requestSize: Int,
                runner: ProductRunner): ValidateSelection
 
+    /**
+      * @param user the end user purchasing items for consumption
+      * @param p the product being purchased
+      * @param quantity quantity of product being purchased by user
+      * @return ValidatePurchase matching the request input parameters if purchase could be accomplished/simulated (error otherwise)
+      */
     def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase
   }
 }
@@ -74,8 +89,48 @@ trait ProductAdvisorDispatcher {
              runner: ProductRunner): ValidateSelection =
     agent.advise(rng, invService, category, requestSize, runner)
 
+  /**
+    * @param user the end user purchasing items for consumption
+    * @param p the product being purchased
+    * @param quantity quantity of product being purchased by user
+    * @return ValidatePurchase matching the request input parameters if purchase could be accomplished/simulated (error otherwise)
+    */
   def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
     agent.consume(user, p, quantity)
+}
+
+/**
+  * slow because it does not want to use cache and always goes to LCBO.
+  */
+trait SlowAdvisorComponentImpl extends ProductAdvisorComponent {
+  def agent: ProductAdvisor = new SlowAdvisor()
+
+  class SlowAdvisor() extends ProductAdvisor {
+    /**
+      * @param user the end user purchasing items for consumption
+      * @param p the product being purchased
+      * @param quantity quantity of product being purchased by user
+      * @return ValidatePurchase matching the request input parameters if purchase could be accomplished/simulated (error otherwise)
+      */
+    def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
+      user.consume(p, quantity)
+
+    def advise(rng: RNG,
+               invService: InventoryService,
+               category: String,
+               requestSize: Int,
+               runner: ProductRunner): ValidateSelection = {
+      val lcboProdCategory = toPrimaryCategory(category)
+
+      for {
+        prods <- runner.fetchByStoreCategory(invService.lcboKey, category, maxSampleSize)
+        stream <- Xor.right(for {id <- prods.indices.toStream
+                                 p = prods(id) if p.primaryCategory == lcboProdCategory} yield p)
+        res <- Xor.Right(stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong)))
+      } yield res
+      // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
+    }
+  }
 }
 
 /**
@@ -85,21 +140,12 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
   /**
     * @return a ProductAdvisor object, which selects products randomly without consideration about user preferences.
     */
-  def agent: ProductAdvisor = {
-    // manual Dependency Injection,specifying dependencies as parameters to MonteCarloAdvisor
-    val liquorCategory = LiquorCategory(ConfigPairsRepo.configPairsRepoPropsImpl)
-    val maxSampleSize = Props.getInt("advisor.maxSampleSize", 0)
-    new MonteCarloAdvisor(liquorCategory, maxSampleSize)
-  }
+  def agent: ProductAdvisor = new MonteCarloAdvisor()
 
   /**
     * beware: this advisor could be hammered! To do: Find a more practical, corporate alternative instead with some ML analytics.
-    * @param liquorCategory has info/context about LCBO categories
-    * @param maxSampleSize the maximum number of product items to request synchronously from LCBO, an excessively high value
-    *                      will compromise usability since thisis synchronous.
     */
-  class MonteCarloAdvisor(liquorCategory: LiquorCategory,
-                          maxSampleSize: Int) extends ProductAdvisor {
+  class MonteCarloAdvisor() extends ProductAdvisor {
 
     /**
       * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
@@ -118,13 +164,19 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
                category: String,
                requestSize: Int,
                runner: ProductRunner): ValidateSelection = {
-      val lcboProdCategory = liquorCategory.toPrimaryCategory(category)
+      val lcboProdCategory = toPrimaryCategory(category)
       // the shuffling in getShuffledProducts is predetermined by rng (and not other class calls to random generation routines),
       // and when cache fails, it is predetermined by the actual contents we get from LCBO via getSerialResult.
       getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory),
         category, lcboProdCategory, requestSize)
     }
 
+    /**
+      * @param user the end user purchasing items for consumption
+      * @param p the product being purchased
+      * @param quantity quantity of product being purchased by user
+      * @return ValidatePurchase matching the request input parameters if purchase could be accomplished/simulated (error otherwise)
+      */
     def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
       user.consume(p, quantity)
 
