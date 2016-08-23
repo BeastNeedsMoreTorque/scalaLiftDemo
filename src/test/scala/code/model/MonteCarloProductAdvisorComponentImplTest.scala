@@ -2,7 +2,7 @@ package code.model
 
 import code.UnitTest
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
-import code.model.prodAdvisor.MonteCarloProductAdvisorComponentImpl
+import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RNG
 import scala.collection.IndexedSeq
 import cats.data.Xor
@@ -15,8 +15,7 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   class MonteCarloProductAdvisorComponentImplTest extends MonteCarloProductAdvisorComponentImpl
 
   val emptyProducts = Xor.Right( IndexedSeq[Product]() )
-  object MonteCarloInstance extends MonteCarloProductAdvisorComponentImplTest
-  val tupsyTurvyClerk = MonteCarloInstance.agent
+  object TupsyTurvy extends ProductAdvisorDispatcher with MonteCarloProductAdvisorComponentImpl
 
   object NullInventoryService extends InventoryService {
     override def pKey: P_KEY = 1.PKeyID
@@ -113,43 +112,40 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     override def price: String = "$150.00"
   }
 
+  implicit val rng411 = RNG.Simple(411)
+
   behavior of "No product available empty list"
   it should s"advise an empty list of products when using dummy InventoryService and ProductRunner when no products of category can be found" in {
-    val rng = RNG.Simple(411)
-    tupsyTurvyClerk.advise(rng, NullInventoryService, "wine", 5, outOfStockRunner).map {
+    TupsyTurvy.advise(NullInventoryService, "wine", 5, outOfStockRunner).map {
       x => x.toList shouldBe empty
     }
   }
   it should s"advise an empty list of products when no products of category can be found" in {
     val categories = Seq("wine", "spirits", "beer", "ciders", "coolers", "non-Alc")
-    val rng = RNG.Simple(411)
     val FlagShip = Store
     FlagShip.lcbo_id.set(1) // to make web query good
-    categories.foreach(cat => tupsyTurvyClerk.advise(rng, FlagShip, cat, 5, outOfStockRunner).map {
+    categories.foreach(cat => TupsyTurvy.advise(FlagShip, cat, 5, outOfStockRunner).map {
       x => x.toList shouldBe empty
     })
   }
 
   behavior of "Single product match by category once list of 1 and once empty list"
   it should s"get a Heineken name in first selection for beer when it is the only product" in {
-    val rng = RNG.Simple(411)
-    tupsyTurvyClerk.advise(rng, NullInventoryService, "beer", 1, singleBeerRunner).map {
+    TupsyTurvy.advise(NullInventoryService, "beer", 1, singleBeerRunner).map {
       _.headOption.foreach(_._1.Name should equal("Heineken"))
     }
   }
   // following is more to validate previous test. This is not particularly interesting.
   it should s"NOT get a Heineken name in first selection for wine when Heineken is the only (beer) product" in {
-    val rng = RNG.Simple(411)
-    tupsyTurvyClerk.advise(rng, NullInventoryService, "wine", 1, singleBeerRunner).map {
+    TupsyTurvy.advise(NullInventoryService, "wine", 1, singleBeerRunner).map {
       case Nil => ; // success: wine != beer, no match.
     }
   }
 
   // following tests depend on a shuffle of collection indices (post category filter) and normal Scala collection take as selection strategy.
   behavior of "Deterministic random selection of single item among 101 beers: 1 Mill Street among 100 Heinekens fixed seed"
-  val rng411 = RNG.Simple(411)
   def validateSelectedName(runner: ProductRunner, rng: RNG, name: String): Unit = {
-    tupsyTurvyClerk.advise(rng, NullInventoryService, "beer", 1, runner).map {
+    TupsyTurvy.advise(NullInventoryService, "beer", 1, runner).map {
       _.headOption.foreach{ _._1.Name should equal(name)}
     }
   }

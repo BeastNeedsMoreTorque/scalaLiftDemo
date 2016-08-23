@@ -4,6 +4,7 @@ import code.model.utils.RNG
 import code.model._
 import net.liftweb.util.Props
 import cats.data.Xor
+
 import scala.collection.{IndexedSeq, Iterable, Seq}
 
 /**
@@ -72,9 +73,8 @@ trait ProductAdvisorComponent {
 trait ProductAdvisorDispatcher {
   this: ProductAdvisorComponent =>
 
+  val defaultRNG = RNG.Simple(1)
   /**
-    *
-    * @param rng a Random Number Generator state item.
     * @param invService an entity capable of determining number of items for each product that can be sold
     * @param category category of products to advise on (this is deliberately coarse to simplify application)
     * @param requestSize the desired request size for the advice, which need not be fulfilled but should be on best efforts basis
@@ -82,11 +82,10 @@ trait ProductAdvisorDispatcher {
     *               running around a counter for which clients have no access, in the back office.
     * @return ValidateSelection
     */
-  def advise(rng: RNG,
-             invService: InventoryService,
+  def advise(invService: InventoryService,
              category: String,
              requestSize: Int,
-             runner: ProductRunner): ValidateSelection =
+             runner: ProductRunner)(implicit rng: RNG): ValidateSelection =
     agent.advise(rng, invService, category, requestSize, runner)
 
   /**

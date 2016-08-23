@@ -2,17 +2,13 @@ package code.snippet.interaction
 
 import cats.data.Xor
 import code.model.{IProduct, Product, Store, User}
-import code.model.GlobalLCBO_IDs.P_KEY
-import code.model.utils.RNG
 import code.snippet.SessionCache.{theAdviseCount, theCategory}
 import code.model.AttributeHtmlData
 import net.liftweb.http.S
 import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.http.js.JsCmds.{SetHtml, _}
 import net.liftweb.json.JsonAST.JValue
-import net.liftweb.util.Props
 
-import scala.util.Random
 import scala.xml.NodeSeq
 import code.model.GlobalLCBO_IDs.TaggedLong
 
@@ -73,9 +69,7 @@ trait Advise extends UtilCommands {
     lazy val errorToProducts: Throwable => InventoryResponseValidation = t =>
       Xor.Left(s"Unable to choose product of category ${theCategory.is} with exception error ${t.toString()}")
 
-    // ready to compute!
-    val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
-    val inventoryResponse = store.advise(rng, theCategory.is, theAdviseCount.is, Product)
+    val inventoryResponse = store.advise(theCategory.is, theAdviseCount.is, Product)
 
     inventoryResponse.fold(errorToProducts, successToProducts) match {
       case Xor.Left(msg) => S.error(msg); Noop
@@ -171,21 +165,5 @@ trait Advise extends UtilCommands {
     * @param product a product we track of for user
     */
   case class QuantityOfProduct(quantity: Long, product: IProduct)
-
-  /**
-    * contains configuration values as to whether we want to use a random see and if instead we use a fixed one its value
-    * the FixedRNGSeed is to enable unit testing.
-    */
-  object Shuffler  {
-    /**
-      * When true we use standard (non functional have side effect) random number generation, but when false we use value of FixedRNGSeed.
-      * When false, FixedRNGSeed's value is ignored.
-      */
-    val UseRandomSeed = Props.getBool("productInteraction.useRandomSeed", true)
-    /**
-      * the seed to use when we want to bypass standard rand and control the random number generation
-      */
-    val FixedRNGSeed = Props.getInt("productInteraction.fixedRNGSeed", 0)
-  }
 
 }

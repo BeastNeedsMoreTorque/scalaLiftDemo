@@ -2,7 +2,6 @@ package code.model
 
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher}
-import code.model.utils.RNG
 import code.model.utils.RetainSingles.asMap
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
@@ -16,6 +15,8 @@ import scala.collection.concurrent.TrieMap
 import scala.language.implicitConversions
 import scala.xml.Node
 import code.model.GlobalLCBO_IDs._
+import code.model.utils.RNG
+import scala.util.Random
 
 trait StoreSizeConstants {
   def nameSize: Int = Props.getInt("store.size.NAME", 0)
@@ -87,8 +88,10 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 
   override def inventories: Iterable[Inventory] = storeProducts.associations
 
-  def advise(rng: RNG, category: String, requestSize: Int, runner: ProductRunner): ValidateSelection =
-    advise(rng, this, category, requestSize, runner)
+  def advise(category: String, requestSize: Int, runner: ProductRunner): ValidateSelection = {
+    val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
+    advise(this, category, requestSize, runner)(rng)
+  }
 
   override def asyncLoadCache(): Unit =
   // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
@@ -97,6 +100,23 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   override def lcboKey: LCBO_KEY = lcbo_id.get.LcboKeyID
 
   case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals)
+
+  /**
+    * contains configuration values as to whether we want to use a random see and if instead we use a fixed one its value
+    * the FixedRNGSeed is to enable unit testing.
+    */
+  object Shuffler  {
+    /**
+      * When true we use standard (non functional have side effect) random number generation, but when false we use value of FixedRNGSeed.
+      * When false, FixedRNGSeed's value is ignored.
+      */
+    val UseRandomSeed = Props.getBool("productInteraction.useRandomSeed", true)
+    /**
+      * the seed to use when we want to bypass standard rand and control the random number generation
+      */
+    val FixedRNGSeed = Props.getInt("productInteraction.fixedRNGSeed", 0)
+  }
+
 }
 
 object Store extends Store with MetaRecord[Store] {
