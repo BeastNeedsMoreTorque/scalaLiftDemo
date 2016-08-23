@@ -105,7 +105,7 @@ trait ProductAdvisorDispatcher {
 trait SlowAdvisorComponentImpl extends ProductAdvisorComponent {
   def agent: ProductAdvisor = new SlowAdvisor()
 
-  class SlowAdvisor() extends ProductAdvisor {
+  class SlowAdvisor extends ProductAdvisor {
     /**
       * @param user the end user purchasing items for consumption
       * @param p the product being purchased
@@ -145,7 +145,7 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
   /**
     * beware: this advisor could be hammered! To do: Find a more practical, corporate alternative instead with some ML analytics.
     */
-  class MonteCarloAdvisor() extends ProductAdvisor {
+  class MonteCarloAdvisor extends ProductAdvisor {
 
     /**
       * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
