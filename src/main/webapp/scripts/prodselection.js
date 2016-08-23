@@ -56,7 +56,9 @@ var prodSelection = (function() {
     currentProds: function() {
       selectedItems = [];
       $('div.prodContainer').find('input:checked').each(collectSelectedProductDetails);
-      return JSON.stringify(selectedItems);
+      var storeId = storeFinder.getTheSelectedStore();
+      var itemsAtStore = {store:storeId, items:selectedItems};
+      return JSON.stringify(itemsAtStore);
     }
   }
 }());

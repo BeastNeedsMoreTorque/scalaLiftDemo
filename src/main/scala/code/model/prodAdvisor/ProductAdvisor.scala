@@ -21,6 +21,8 @@ trait ProductAdvisorComponent {
     */
   type ValidateSelection = Xor[Throwable, Selection]
 
+  type ValidatePurchase = Xor[Throwable, Long]
+
   /**
     * @return a ProductAvisor who can provide advice on products
     */
@@ -44,6 +46,8 @@ trait ProductAdvisorComponent {
                category: String,
                requestSize: Int,
                runner: ProductRunner): ValidateSelection
+
+    def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase
   }
 }
 
@@ -69,6 +73,9 @@ trait ProductAdvisorDispatcher {
              requestSize: Int,
              runner: ProductRunner): ValidateSelection =
     agent.advise(rng, invService, category, requestSize, runner)
+
+  def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
+    agent.consume(user, p, quantity)
 }
 
 /**
@@ -117,6 +124,9 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
       getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory),
         category, lcboProdCategory, requestSize)
     }
+
+    def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
+      user.consume(p, quantity)
 
     /**
       * Note well: this would be a PURE FUNCTION, despite that caller uses randomization and makes use of cached data.

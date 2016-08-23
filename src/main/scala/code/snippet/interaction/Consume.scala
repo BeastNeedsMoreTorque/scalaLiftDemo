@@ -1,11 +1,11 @@
 package code.snippet.interaction
 
-import code.model.{IProduct, Product, User}
+import code.model.{IProduct, Product, Store, User}
 import code.model.GlobalLCBO_IDs._
 import net.liftweb.http.S
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds.{SetHtml, _}
-import net.liftweb.json.JsonAST.JValue
+import net.liftweb.json.JsonAST._
 import net.liftweb.json.JsonParser._
 
 import scala.xml.{NodeSeq, Text}
@@ -21,31 +21,33 @@ trait Consume extends UtilCommands {
   implicit val formats = net.liftweb.json.DefaultFormats
 
   def consume(selection: JValue): JsCmd = {
+    val data = selection.extractOpt[String].fold[JValue](JNothing){parse} // {"store":storeId, "items" : <list>}
+    val storeId = (data \ "store").extractOpt[Long]
+    val store = storeId.flatMap{ x => Store.getStore(x.PKeyID)}
+    val items = data \ "items"
+    val selectedProducts =
+      for {item <- items.children.toIndexedSeq
+         prod <- item.extractOpt[SelectedProduct]}
+      yield prod
     // Validate and report errors at high level of functionality as much as possible
     // and then get down to business with helper mayConsume.
-    User.currentUser.dmap { S.error("consumeProducts", "unable to process transaction, Login first!"); Noop } { user =>
-      val selectedProducts =
-        // ExtractOpt avoids MappingException and generates None on failure (similar idea for parseOpt
-        for {json <- selection.extractOpt[String].flatMap(parseOpt).toIndexedSeq
-             item <- json.children
-             prod <- item.extractOpt[SelectedProduct]}
-          yield prod
-
-      if (selectedProducts.nonEmpty) mayConsume(user, selectedProducts)
-      else {
+    (User.currentUser.toOption, selectedProducts, store) match {
+      case (None, _, _) => S.error("consumeProducts", "unable to process transaction, Login first!"); Noop
+      case (Some(user), products, _) if products.isEmpty =>
         S.warning("Select some recommended products before attempting to consume")
         Noop
-      }
+      case (Some(user), _, None) => S.warning("Store must be defined to consume recommended products"); Noop
+      case (Some(user), products, Some(store)) => mayConsume(store, user, products)
     }
   }
 
-  private def mayConsume(user: User, selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
+  private def mayConsume(store: Store, user: User, selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
     // associate primitive browser product details for selected products (SelectedProduct)
     // with full data of same products we should have in cache as pairs
     val feedback =
       for{sp <- selectedProds
         p <- Product.getItemByLcboKey(sp.id.LcboKeyID)
-        f = mayConsumeItem(user, p, sp.quantity)} yield SelectedProductFeedback(sp, f)
+        f = mayConsumeItem(store, user, p, sp.quantity)} yield SelectedProductFeedback(sp, f)
 
     val goodAndBackFeedback = feedback.groupBy(_.feedback.success)
     // splits into errors (false success) and normal confirmations (true success)
@@ -74,7 +76,7 @@ trait Consume extends UtilCommands {
     }
   }
 
-  private def mayConsumeItem(user: User, p: IProduct, quantity: Long): Feedback = {
+  private def mayConsumeItem(store: Store, user: User, p: IProduct, quantity: Long): Feedback = {
     val successToFeedback: Long => Feedback =
       count => Feedback(user.firstName.get, success = true, s"${p.Name} $count unit(s) over the years")
 
@@ -84,7 +86,7 @@ trait Consume extends UtilCommands {
           success = false,
           s"Unable to sell you product ${p.Name} with exception '${t.toString()}'")
 
-    user.consume(p, quantity).fold[Feedback](errorToFeedback, successToFeedback)
+    store.consume(user, p, quantity).fold[Feedback](errorToFeedback, successToFeedback)
   }
 
   private def transactionsConfirmationJS(user: String,
