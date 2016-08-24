@@ -34,7 +34,7 @@ trait ProductAdvisorComponent {
   def agent: ProductAdvisor
 
   /**
-    * An interface to provide advice (recommendation) for LCBO products modelled by a simple single method.
+    * An interface to provide advice (recommendation) and consumption for LCBO products modelled by a simple methods.
     */
   trait ProductAdvisor {
     val liquorCategoryMapper = LiquorCategory(ConfigPairsRepo.configPairsRepoPropsImpl)
@@ -62,8 +62,10 @@ trait ProductAdvisorComponent {
       * @param p the product being purchased
       * @param quantity quantity of product being purchased by user
       * @return ValidatePurchase matching the request input parameters if purchase could be accomplished/simulated (error otherwise)
+      *         Here we provide a default implementation by rewiring to the user.
       */
-    def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase
+    def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
+      user.consume(p, quantity)
   }
 }
 
@@ -105,15 +107,6 @@ trait SlowAdvisorComponentImpl extends ProductAdvisorComponent {
   def agent: ProductAdvisor = new SlowAdvisor()
 
   class SlowAdvisor extends ProductAdvisor {
-    /**
-      * @param user the end user purchasing items for consumption
-      * @param p the product being purchased
-      * @param quantity quantity of product being purchased by user
-      * @return ValidatePurchase matching the request input parameters if purchase could be accomplished/simulated (error otherwise)
-      */
-    def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
-      user.consume(p, quantity)
-
     def advise(rng: RNG,
                invService: InventoryService,
                category: String,
@@ -169,15 +162,6 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
       getShuffledProducts(invService, runner, rng, invService.getProductKeysByCategory(lcboProdCategory),
         category, lcboProdCategory, requestSize)
     }
-
-    /**
-      * @param user the end user purchasing items for consumption
-      * @param p the product being purchased
-      * @param quantity quantity of product being purchased by user
-      * @return ValidatePurchase matching the request input parameters if purchase could be accomplished/simulated (error otherwise)
-      */
-    def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
-      user.consume(p, quantity)
 
     /**
       * Note well: this would be a PURE FUNCTION, despite that caller uses randomization and makes use of cached data.
