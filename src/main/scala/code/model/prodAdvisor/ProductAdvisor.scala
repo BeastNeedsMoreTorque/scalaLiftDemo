@@ -14,21 +14,6 @@ import scala.collection.{IndexedSeq, Iterable, Seq}
   */
 trait ProductAdvisorComponent {
   /**
-    * Selection is an iterable of product along with a count of many there are
-    */
-  type Selection = Iterable[(IProduct, Long)]
-
-  /**
-    * captures exceptions as errors in Xor if any, otherwise a selection
-    */
-  type ValidateSelection = Xor[Throwable, Selection]
-
-  /**
-    * captures exceptions as errors in Xor if any, otherwise the quantity that got purchased
-    */
-  type ValidatePurchase = Xor[Throwable, Long]
-
-  /**
     * @return a ProductAvisor who can provide advice on products
     */
   def agent: ProductAdvisor
@@ -36,7 +21,7 @@ trait ProductAdvisorComponent {
   /**
     * An interface to provide advice (recommendation) and consumption for LCBO products modelled by a simple methods.
     */
-  trait ProductAdvisor {
+  trait ProductAdvisor extends EventTypes {
     val liquorCategoryMapper = LiquorCategory(ConfigPairsRepo.configPairsRepoPropsImpl)
     val maxSampleSize = Props.getInt("advisor.maxSampleSize", 0)
     def toPrimaryCategory(category: String): String =
@@ -72,7 +57,7 @@ trait ProductAdvisorComponent {
 /**
   * implements ProductAdvisor delegating to a polymorphic intermediary (agent) that actually provides the service.
   */
-trait ProductAdvisorDispatcher {
+trait ProductAdvisorDispatcher extends EventTypes {
   this: ProductAdvisorComponent =>
 
   val defaultRNG = RNG.Simple(1)
@@ -91,12 +76,16 @@ trait ProductAdvisorDispatcher {
     agent.advise(rng, invService, category, requestSize, runner)
 
   /**
+    * @param invService an entity capable of determining number of items for each product that can be sold
     * @param user the end user purchasing items for consumption
     * @param p the product being purchased
     * @param quantity quantity of product being purchased by user
     * @return ValidatePurchase matching the request input parameters if purchase could be accomplished/simulated (error otherwise)
     */
-  def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
+  def consume(invService: InventoryService,
+              user: User,
+              p: IProduct,
+              quantity: Long): ValidatePurchase =
     agent.consume(user, p, quantity)
 }
 

@@ -18,6 +18,4 @@ trait IStore extends InventoryService {
   def Name: String
   def isDead: Boolean
   def addressLine1: String
-
-  def advise(category: String, requestSize: Int, runner: ProductRunner): Xor[Throwable, Iterable[(IProduct, Long)]]
 }

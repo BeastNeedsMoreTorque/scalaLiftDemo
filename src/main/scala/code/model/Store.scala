@@ -1,5 +1,6 @@
 package code.model
 
+import cats.data.Xor
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RetainSingles.asMap
@@ -24,9 +25,24 @@ trait StoreSizeConstants {
   def cityNameSize: Int = Props.getInt("store.size.CITY_NAME", 0)
 }
 
-case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConstants with StoreCacheService
-  with ProductAdvisorDispatcher with MonteCarloProductAdvisorComponentImpl {
+trait EventTypes {
+  /**
+    * Selection is an iterable of product along with a count of many there are
+    */
+  type Selection = Iterable[(IProduct, Long)]
 
+  /**
+    * captures exceptions as errors in Xor if any, otherwise a selection
+    */
+  type ValidateSelection = Xor[Throwable, Selection]
+
+  /**
+    * captures exceptions as errors in Xor if any, otherwise the quantity that got purchased
+    */
+  type ValidatePurchase = Xor[Throwable, Long]
+}
+
+case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConstants with StoreCacheService with EventTypes {
   // products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)
   @Column(name = "pkid")
@@ -89,9 +105,11 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   override def inventories: Iterable[Inventory] = storeProducts.associations
 
   def advise(category: String, requestSize: Int, runner: ProductRunner): ValidateSelection = {
-    val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
-    advise(this, category, requestSize, runner)(rng)
+    Store.advise(this, category, requestSize, runner)
   }
+
+  def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
+    Store.consume(this, user, p, quantity)
 
   override def asyncLoadCache(): Unit =
   // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
@@ -105,7 +123,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
     * contains configuration values as to whether we want to use a random see and if instead we use a fixed one its value
     * the FixedRNGSeed is to enable unit testing.
     */
-  object Shuffler  {
+  object Shuffler {
     /**
       * When true we use standard (non functional have side effect) random number generation, but when false we use value of FixedRNGSeed.
       * When false, FixedRNGSeed's value is ignored.
@@ -119,8 +137,22 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 
 }
 
-object Store extends Store with MetaRecord[Store] {
-  override val cache: concurrent.Map[P_KEY, Store] = TrieMap()  // primary cache
+object Store extends Store with MetaRecord[Store] with ProductAdvisorDispatcher with MonteCarloProductAdvisorComponentImpl {
+  def advise(invService: InventoryService,
+             category: String,
+             requestSize: Int,
+             runner: ProductRunner): ValidateSelection = {
+    val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
+    super.advise(invService, category, requestSize, runner)(rng)
+  }
+
+  override def consume(invService: InventoryService,
+              user: User,
+              p: IProduct,
+              quantity: Long): ValidatePurchase =
+    super.consume(invService, user, p, quantity)
+
+  override val cache: concurrent.Map[P_KEY, Store] = TrieMap() // primary cache
   val lcboKeyToPKMap: concurrent.Map[LCBO_KEY, P_KEY] = TrieMap() // secondary dependent cache, a.k.a. index
   val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
