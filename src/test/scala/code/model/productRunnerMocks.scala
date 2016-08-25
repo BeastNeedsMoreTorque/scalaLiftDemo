@@ -9,7 +9,7 @@ import scala.collection.IndexedSeq
 /**
   * Created by philippederome on 2016-08-25.
   */
-package object ProductRunnerMocks {
+package object productRunnerMocks {
 
   object NullInventoryService extends InventoryService {
     override def pKey: P_KEY = 1.PKeyID
