@@ -60,7 +60,6 @@ trait ProductAdvisorComponent {
 trait ProductAdvisorDispatcher extends EventTypes {
   this: ProductAdvisorComponent =>
 
-  val defaultRNG = RNG.Simple(1)
   /**
     * @param invService an entity capable of determining number of items for each product that can be sold
     * @param category category of products to advise on (this is deliberately coarse to simplify application)
@@ -87,6 +86,10 @@ trait ProductAdvisorDispatcher extends EventTypes {
               p: IProduct,
               quantity: Long): ValidatePurchase =
     agent.consume(user, p, quantity)
+}
+
+object ProductAdvisorDispatcher {
+  val defaultRNG = RNG.Simple(1)
 }
 
 /**

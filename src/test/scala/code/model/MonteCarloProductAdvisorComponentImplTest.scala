@@ -1,12 +1,9 @@
 package code.model
 
 import code.UnitTest
-import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RNG
-import scala.collection.IndexedSeq
-import cats.data.Xor
-import code.model.GlobalLCBO_IDs._
+import code.model.ProductRunnerMocks._
 
 /**
   * Created by philippederome on 2016-05-04.
@@ -14,103 +11,7 @@ import code.model.GlobalLCBO_IDs._
 class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   class MonteCarloProductAdvisorComponentImplTest extends MonteCarloProductAdvisorComponentImpl
 
-  val emptyProducts = Xor.Right( IndexedSeq[Product]() )
   object TupsyTurvy extends ProductAdvisorDispatcher with MonteCarloProductAdvisorComponentImpl
-
-  object NullInventoryService extends InventoryService {
-    override def pKey: P_KEY = 1.PKeyID
-    override def lcboKey: LCBO_KEY = 1.LcboKeyID
-    override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => None
-    override def getProduct(x: LCBO_KEY): Option[IProduct] = None
-    override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] = IndexedSeq.empty
-    override def asyncLoadCache(): Unit = () // intentional Noop/Unit here.
-  }
-
-  // Runners
-  trait MockProductRunner extends ProductRunner {
-    val beers: Seq[MockBeer] = Seq.empty
-    val wines: Seq[MockWine] = Seq.empty
-    // Could create (or better yet generate randomly with ScalaCheck) a handful of concrete Product instances.
-    // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
-    override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
-                                      category: String,
-                                      requiredSize: Int): ValidatedProducts = Xor.Right (
-      category match {
-        case "beer" => beers.toVector case "wine" => wines.toVector
-        case _ => Vector()
-      }
-    )
-  }
-
-  object outOfStockRunner extends MockProductRunner
-
-  object singleBeerRunner extends MockProductRunner {
-    override val beers =  List( Heineken)
-  }
-
-  object HeinekensBut63Runner extends MockProductRunner {
-    // depends precisely on  props store.fixedRNGSeed=411
-    override val beers =  Seq.fill(63)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(37)( Heineken)
-    override val wines = Seq(OysterBay, ChampagneKrug)
-  }
-
-  object HeinekensBut62Runner extends MockProductRunner {
-    // depends precisely on  props store.fixedRNGSeed=411. Mill St is at a different spot!
-    override val beers =  Seq.fill(62)( Heineken) ++ Seq(MillStLager) ++ Seq.fill(38)( Heineken)
-    override val wines = Seq(OysterBay, ChampagneKrug)
-  }
-
-  // products
-  trait MockProduct extends IProduct {
-    override def isDiscontinued: Boolean = false
-    override def imageThumbUrl: String = "http://lcboapi.com/someimage.png"
-    override def streamAttributes: IndexedSeq[AttributeHtmlData] =
-      ( AttributeHtmlData("Name:", Name) ::
-        AttributeHtmlData("Primary Category:", primaryCategory) ::
-        AttributeHtmlData("Price:", price) ::
-        AttributeHtmlData("Alcohol content:", alcoholContent) ::
-        Nil).filterNot{ attr => attr.value == "null" || attr.value.isEmpty }.toVector
-    def identifier: Long
-    override def pKey: P_KEY = identifier.PKeyID
-    override def lcboKey: LCBO_KEY = identifier.LcboKeyID
-  }
-  trait MockBeer extends IProduct with MockProduct  {
-    override def primaryCategory: String = "beer"
-    override def price: String = "$2.00"
-    override def alcoholContent: String = "5.0%"
-  }
-
-  trait MockWine extends IProduct with MockProduct {
-    override def primaryCategory: String = "wine"
-    override def price: String = "$15.00"
-    override def alcoholContent: String = "16.0%"
-  }
-
-  object Heineken extends MockBeer {
-    override def identifier: Long = 1
-    override def Name: String = "Heineken"
-  }
-
-  object MillStLager extends MockBeer {
-    override def identifier: Long = 2
-    override def alcoholContent: String = "5.5%"
-    override def Name: String = "Mill Street Lager"
-    override def price: String = "$2.50"
-  }
-
-  object OysterBay extends MockWine {
-    override def identifier: Long = 1000
-    override def alcoholContent: String = "16.0%"
-    override def Name: String = "Oyster Bay"
-    override def price: String = "$21.00"
-  }
-
-  object ChampagneKrug extends MockWine {
-    override def identifier: Long = 1001
-    override def alcoholContent: String = "14.0%"
-    override def Name: String = "Krug Champagne"
-    override def price: String = "$150.00"
-  }
 
   implicit val rng411 = RNG.Simple(411)
 
@@ -154,10 +55,13 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
     val shuffled = RNG.shuffle((0 to 100)).runA(rng411).value
     shuffled.take(1) should equal(Seq(63))
   }
+
+  // depends precisely on position of Mill Street Lager in runner and rng411
   it should s"get Mill Street Lager or really #63 out of 0 to 100 (64th position in 0-index system, literally 63)" +
   "if seed is set to 411 with 100 Heinekens " +
     s"out of 101!!!" in
     validateSelectedName(HeinekensBut63Runner, rng411, "Mill Street Lager")
+  // depends precisely on position of Mill Street Lager in runner and rng411
   it should s"get Heineken as Mill Street Lager is not in special spot of index value 63 among 101, 100 of which are Heineken!" in
     validateSelectedName(HeinekensBut62Runner, rng411, "Heineken")
 
