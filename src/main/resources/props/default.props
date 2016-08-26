@@ -63,3 +63,4 @@ inventory.lcboMaxPerPage=100
 store.size.NAME=200
 store.size.ADDRESS=200
 store.size.CITY_NAME=30
+store.agentInterface=MonteCarloProductAdvisorComponentImpl

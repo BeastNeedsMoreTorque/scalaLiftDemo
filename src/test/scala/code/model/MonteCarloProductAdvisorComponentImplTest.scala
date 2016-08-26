@@ -3,7 +3,7 @@ package code.model
 import code.UnitTest
 import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher}
 import code.model.utils.RNG
-import code.model.ProductRunnerMocks._
+import code.model.productRunnerMocks._
 
 /**
   * Created by philippederome on 2016-05-04.

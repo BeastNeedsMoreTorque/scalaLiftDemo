@@ -1,7 +1,7 @@
 package code.model
 import code.UnitTest
 import code.model.prodAdvisor.{ProductAdvisorDispatcher, SlowAdvisorComponentImpl}
-import code.model.ProductRunnerMocks._
+import code.model.productRunnerMocks._
 
 /**
   * Created by philippederome on 2016-08-25.

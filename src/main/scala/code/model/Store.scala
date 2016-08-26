@@ -2,7 +2,7 @@ package code.model
 
 import cats.data.Xor
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
-import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher}
+import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher, SlowAdvisorComponentImpl}
 import code.model.utils.RetainSingles.asMap
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
@@ -137,20 +137,26 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 
 }
 
-object Store extends Store with MetaRecord[Store] with ProductAdvisorDispatcher with MonteCarloProductAdvisorComponentImpl {
+object Store extends Store with MetaRecord[Store] {
+  val agentInterface = Props.get("store.agentInterface", "MonteCarloProductAdvisorComponentImpl")
+  val advisor = agentInterface match {
+    case "MonteCarloProductAdvisorComponentImpl" => new ProductAdvisorDispatcher with MonteCarloProductAdvisorComponentImpl
+    case _ => new ProductAdvisorDispatcher with SlowAdvisorComponentImpl
+  }
+
   def advise(invService: InventoryService,
              category: String,
              requestSize: Int,
              runner: ProductRunner): ValidateSelection = {
     val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
-    super.advise(invService, category, requestSize, runner)(rng)
+    advisor.advise(invService, category, requestSize, runner)(rng)
   }
 
-  override def consume(invService: InventoryService,
+  def consume(invService: InventoryService,
               user: User,
               p: IProduct,
               quantity: Long): ValidatePurchase =
-    super.consume(invService, user, p, quantity)
+    advisor.consume(invService, user, p, quantity)
 
   override val cache: concurrent.Map[P_KEY, Store] = TrieMap() // primary cache
   val lcboKeyToPKMap: concurrent.Map[LCBO_KEY, P_KEY] = TrieMap() // secondary dependent cache, a.k.a. index
