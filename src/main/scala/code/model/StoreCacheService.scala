@@ -1,8 +1,8 @@
 package code.model
 
 import cats.data.Xor
-import cats.std.all._
-import cats.syntax.all._
+import cats.std.unit._
+import cats.syntax.semigroup._
 import code.model.Product.fetchByStore
 import code.model.Inventory.loadInventoriesByStore
 import code.model.GlobalLCBO_IDs._
@@ -74,10 +74,13 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     val inventoriesContext: StringFormatter = s => s"Problem loading inventories into cache for '$lcboKey' with exception error $s"
 
     // serialize products then inventories intentionally because of Ref.Integrity (inventory depends on valid product)
-    val loads = Future({loadProducts(productsContext); loadInventories(inventoriesContext)})
+    val loads = for {
+      _ <- Future(loadProducts(productsContext))
+      _ <- Future(loadInventories(inventoriesContext))
+    } yield ()
     logger.info(s"loadCache async launched for $lcboKey") // about 15 seconds, likely depends mostly on network/teleco infrastructure
     loads onComplete {
-      case Success(_) => // We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
+      case Success(()) => // We've persisted along the way for each LCBO page ( no need to refresh because we do it each time we go to DB)
         logger.debug(s"loadCache async work succeeded for $lcboKey")
         if (emptyInventory) logger.warn(s"got no product inventory for storeId $lcboKey !") // No provision for retrying.
       case Failure(f) => logger.info(s"loadCache explicitly failed for $lcboKey cause ${f.getMessage}")

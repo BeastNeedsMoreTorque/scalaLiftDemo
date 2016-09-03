@@ -5,7 +5,7 @@ import code.model._
 import net.liftweb.util.Props
 import cats.data.Xor
 
-import scala.collection.{IndexedSeq, Iterable, Seq}
+import scala.collection.{IndexedSeq, Seq}
 
 /**
   * Created by philippederome on 2016-05-02. Cake Pattern style.
