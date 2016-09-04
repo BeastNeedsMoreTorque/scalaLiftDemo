@@ -2,7 +2,7 @@ package code.model
 
 import cats.data.Xor
 import cats.std.unit._
-import cats.syntax.semigroup._
+import cats.syntax.all._
 import code.model.Product.fetchByStore
 import code.model.Inventory.loadInventoriesByStore
 import code.model.GlobalLCBO_IDs._

@@ -108,10 +108,10 @@ trait SlowAdvisorComponentImpl extends ProductAdvisorComponent {
 
       for {
         prods <- runner.fetchByStoreCategory(invService.lcboKey, category, maxSampleSize)
-        stream <- Xor.right(for {id <- prods.indices.toStream
-                                 p = prods(id) if p.primaryCategory == lcboProdCategory} yield p)
-        res <- Xor.Right(stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong)))
-      } yield res
+        prodStream <- Xor.right(for {id <- prods.indices.toStream
+                                     p = prods(id) if p.primaryCategory == lcboProdCategory} yield (p, 0.toLong))
+        select <- Xor.Right(prodStream.take(requestSize))
+      } yield select
       // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
     }
   }
@@ -221,10 +221,10 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
       prods <- runner.fetchByStoreCategory(invService.lcboKey, category, maxSampleSize)
       // take a hit of one go to LCBO, querying by category, no more.
       permutedIndices <- Xor.Right(RNG.shuffle(prods.indices).runA(r).value)
-      // stream avoids checking primary category on full collection (the permutation is done though).
-      stream <- Xor.right(for {id <- permutedIndices.toStream
-                    p = prods(id) if p.primaryCategory == lcboProdCategory} yield p)
-      res <- Xor.Right(stream.take(requestSize).zip(Seq.fill(requestSize)(0.toLong)))
+      // prodStream avoids checking primary category on full collection (the permutation is done though).
+      prodStream <- Xor.right(for {id <- permutedIndices.toStream
+                          p = prods(id) if p.primaryCategory == lcboProdCategory} yield (p, 0.toLong))
+      res <- Xor.Right(prodStream.take(requestSize))
     // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
     // and then zip with list of zeroes because we are too slow to obtain inventories.
     } yield res
