@@ -112,14 +112,14 @@ However, the book Functional Programming in Scala guides developers in addressin
 Via configuration, we can let the random number generation be truly random (the seed is randomly controlled) or controlled for unit testing purpose (the seed is chosen by the unit test).
 
 ## What it looks like
-![alt text][logo]
+![alt text][logo1]
 
-[logo]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/AppViewer.png "Landing"
+[logo1]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/AppViewer.png "Landing"
 
-![alt text][logo]
+![alt text][logo2]
 
-[logo]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/Selecting.png "Selecting"
+[logo2]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/Selecting.png "Selecting"
 
-![alt text][logo]
+![alt text][logo3]
 
-[logo]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/Feedback.png "Feedback"
+[logo3]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/Feedback.png "Feedback"
