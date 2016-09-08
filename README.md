@@ -111,8 +111,15 @@ Functional Programming: random number generation is a classical example of side 
 However, the book Functional Programming in Scala guides developers in addressing this, in particular Chapter 6 for random number generation. This is the approach taken here.
 Via configuration, we can let the random number generation be truly random (the seed is randomly controlled) or controlled for unit testing purpose (the seed is chosen by the unit test).
 
-## What it looks like sort of
+## What it looks like
 ![alt text][logo]
 
-[logo]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/AppViewer.png "the image"
+[logo]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/AppViewer.png "Landing"
 
+![alt text][logo]
+
+[logo]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/Selecting.png "Selecting"
+
+![alt text][logo]
+
+[logo]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/Feedback.png "Feedback"
