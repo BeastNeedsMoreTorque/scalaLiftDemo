@@ -110,3 +110,10 @@ implicit injection (for type conversion also known as implicit view in Scala in 
 Functional Programming: random number generation is a classical example of side effect and does not lend naturally to repeatable unit testing or pure functions implementation.
 However, the book Functional Programming in Scala guides developers in addressing this, in particular Chapter 6 for random number generation. This is the approach taken here.
 Via configuration, we can let the random number generation be truly random (the seed is randomly controlled) or controlled for unit testing purpose (the seed is chosen by the unit test).
+
+## What it looks like sort of
+Reference-style: 
+![alt text][logo]
+
+[logo]: https://github.com/phderome/scalaLiftDemo/blob/master/src/main/webapp/images/AppViewer.png "the image"
+
