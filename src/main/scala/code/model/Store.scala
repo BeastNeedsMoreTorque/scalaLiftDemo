@@ -111,9 +111,11 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
     Store.consume(this, user, p, quantity)
 
-  override def asyncLoadCache(): Unit =
-  // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
+  override def asyncLoadCache(): Unit = {
+    import scala.concurrent.ExecutionContext.Implicits.global
+    // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
+  }
 
   override def lcboKey: LCBO_KEY = lcbo_id.get.LcboKeyID
 

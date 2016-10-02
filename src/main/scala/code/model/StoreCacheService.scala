@@ -13,9 +13,8 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 
 import scala.collection.{IndexedSeq, Iterable}
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.{blocking,Future}
+import scala.concurrent.{ExecutionContext, Future, blocking}
 import scala.util.{Failure, Success}
-import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by philippederome on 2016-07-31.
@@ -69,7 +68,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     * Generally has side effect to update database with more up to date content from LCBO's (if different)
     * @return nothing (Unit), side effect is to update caches. This is done asynchronously.
     */
-  def loadCache(): Unit = {
+  def loadCache()(implicit ec: ExecutionContext): Unit = {
     val productsContext: StringFormatter = s => s"Problem loading products into cache with exception error $s"
     val inventoriesContext: StringFormatter = s => s"Problem loading inventories into cache for '$lcboKey' with exception error $s"
 
