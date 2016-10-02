@@ -13,7 +13,7 @@ import net.liftweb.squerylrecord.RecordTypeMode._
 
 import scala.collection.{IndexedSeq, Iterable}
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.Future
+import scala.concurrent.{blocking,Future}
 import scala.util.{Failure, Success}
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -74,9 +74,10 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     val inventoriesContext: StringFormatter = s => s"Problem loading inventories into cache for '$lcboKey' with exception error $s"
 
     // serialize products then inventories intentionally because of Ref.Integrity (inventory depends on valid product)
+    // @see http://docs.scala-lang.org/overviews/core/futures.html (Blocking inside a Future) or Nedelcu Scala's Best practices
     val loads = for {
-      _ <- Future(loadProducts(productsContext))
-      _ <- Future(loadInventories(inventoriesContext))
+      _ <- Future (blocking (loadProducts (productsContext)))
+      _ <- Future (blocking (loadInventories (inventoriesContext)))
     } yield ()
     logger.info(s"loadCache async launched for $lcboKey") // about 15 seconds, likely depends mostly on network/teleco infrastructure
     loads onComplete {
