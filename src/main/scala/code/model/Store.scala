@@ -112,9 +112,8 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
     Store.consume(this, user, p, quantity)
 
   override def asyncLoadCache(): Unit = {
-    import scala.concurrent.ExecutionContext.Implicits.global
     // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
-    if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()
+    if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()(Store.ec)
   }
 
   override def lcboKey: LCBO_KEY = lcbo_id.get.LcboKeyID
@@ -140,6 +139,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 }
 
 object Store extends Store with MetaRecord[Store] {
+  implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
   val agentInterface = Props.get("store.agentInterface", "MonteCarloProductAdvisorComponentImpl")
   val advisor = agentInterface match {
     case "MonteCarloProductAdvisorComponentImpl" => new ProductAdvisorDispatcher with MonteCarloProductAdvisorComponentImpl
