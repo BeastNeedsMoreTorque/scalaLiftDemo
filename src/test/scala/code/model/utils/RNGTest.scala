@@ -4,6 +4,7 @@ import scala.util.Random
 import RNG._
 import code.UnitTest
 import code.SlowTest
+import org.scalatest.prop.PropertyChecks
 
 /**
   * Created by philippederome on 2016-04-28.
@@ -14,7 +15,7 @@ import code.SlowTest
   * The point of this exercise is practice FP, state, action handling to convert side-effect API to FP and use Scalatest.
   * Need more practice with Scalatest and writing test cases much more concisely.
   */
-class RNGTest extends UnitTest {
+class RNGTest extends UnitTest with PropertyChecks {
 
   // @see http://www.scalatest.org/user_guide/sharing_fixtures (Instantiating fixture objects)
   // technique normally used to localize side effects to single test cases. A little overkill for what's done here, but demonstrates the technique

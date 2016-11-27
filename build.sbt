@@ -8,6 +8,7 @@ organization := "ORG"
 
 resolvers ++= Seq("snapshots"     at "https://oss.sonatype.org/content/repositories/snapshots",
                   "staging"       at "https://oss.sonatype.org/content/repositories/staging",
+                  "Artima Maven Repository" at "http://repo.artima.com/releases",
                   "releases"      at "https://oss.sonatype.org/content/repositories/releases")
 
 unmanagedResourceDirectories in Test <+= baseDirectory { _ / "src/main/webapp" }
@@ -37,14 +38,15 @@ libraryDependencies ++= {
   Seq(
     "org.scala-lang"    % "scala-compiler"      % scalaCompiler,
     "org.scala-lang"    % "scala-reflect"       % scalaCompiler,
-    "org.typelevel" %% "cats" % "0.6.1",
+    "org.typelevel" %% "cats" % "0.8.1",
     "net.liftweb"     %% "lift-webkit" % liftVersion % "compile" withSources(),
     "net.liftweb"     %% "lift-mapper" % liftVersion % "compile->default" withSources(),
     "net.liftweb"     %% "lift-wizard" % liftVersion % "compile->default" withSources(),
     "net.liftweb"     %% "lift-squeryl-record" % liftVersion % "compile->default" withSources(), // Record interface to RDBMS,
     "net.liftmodules" %% "lift-jquery-module_2.6" % "2.8" withSources(),
     "postgresql"        % "postgresql"          % "9.1-901.jdbc4",
-    "org.scalatest"     %% "scalatest"      % "2.2.6"            % Test,
+    "org.scalactic" %% "scalactic" % "3.0.1",
+    "org.scalatest" %% "scalatest" % "3.0.1" % "test",
     "org.skinny-framework" %% "skinny-http-client" % "2.2.0",
     "org.eclipse.jetty" %  "jetty-webapp" % "9.1.0.v20131115"   % "container,test",  // Needed to run RunWebApp.scala in IDEA
     "org.eclipse.jetty" %  "jetty-plus"   % "9.1.0.v20131115"  % "container,test", // For Jetty Config

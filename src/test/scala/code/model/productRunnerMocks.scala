@@ -1,8 +1,7 @@
 package code.model
 
-import cats.data.Xor
 import code.model.GlobalLCBO_IDs._
-import code.model.ProductMocks._
+import code.model.productMocks._
 
 import scala.collection.IndexedSeq
 
@@ -26,7 +25,7 @@ package object productRunnerMocks {
     // Need some reasonable simulation for following. With just a bit more work, we could have something really interesting here.
     override def fetchByStoreCategory(lcboStoreId: LCBO_KEY,
                                       category: String,
-                                      requiredSize: Int): ValidatedProducts = Xor.Right (
+                                      requiredSize: Int): ValidatedProducts = Right (
       category match {
         case "beer" => beers.toVector case "wine" => wines.toVector
         case _ => Vector()

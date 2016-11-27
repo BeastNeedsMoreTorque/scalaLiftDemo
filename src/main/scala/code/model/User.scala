@@ -1,5 +1,6 @@
 package code.model
 
+import cats.implicits._
 import code.model.MainSchema._
 import net.liftweb.common.Full
 import net.liftweb.db.DB
@@ -7,7 +8,6 @@ import net.liftweb.mapper._
 import net.liftweb.util.DefaultConnectionIdentifier
 import net.liftweb.squerylrecord.RecordTypeMode._
 import scala.xml.Node
-import cats.data.Xor
 import code.model.GlobalLCBO_IDs._
 
 /**
@@ -28,7 +28,7 @@ class User extends MegaProtoUser[User] {
     * @return the number of times the user has purchased this product as a pair/tuple.
     *         May throw but would be caught as a Throwable within Xor to be consumed higher up.
     */
-  def consume(p: IProduct, quantity: Long): Xor[Throwable, Long] = Xor.catchNonFatal {
+  def consume(p: IProduct, quantity: Long): Either[Throwable, Long] = Either.catchNonFatal {
     // update it with new details; we could verify that there is a difference between LCBO and our version first...
     // assume price and URL for image are fairly volatile and rest is not. In real life, we'd compare them all to check.
     // Try captures database provider errors (column size too small for example, reporting it as an Throwable in Xor)

@@ -1,22 +1,22 @@
 package code.model.utils
 
-import code.UnitTest
 import code.model.utils.RetainSingles._
+import org.scalatest.{FlatSpec, Matchers}
 import scala.language.implicitConversions
 
 /**
   * Created by philippederome on 2016-05-12.
   */
-class RetainSinglesTest  extends UnitTest {
+class RetainSinglesTest extends FlatSpec with Matchers {
 
   case class Model(k: Long, first: String, last : String, salary: Double) extends KeyHolder {
-    override def getKey = k.toString
+    override def getKey: String = k.toString
   }
 
   behavior of "empty"
   it should s"return empty sequence on empty input" in {
     val empty = Seq.empty[Model]
-    empty.retainSingles.toStream shouldBe empty //have size 0
+    empty.retainSingles.toStream shouldBe empty // have size 0
   }
 
   behavior of "repeats"

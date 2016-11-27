@@ -22,7 +22,7 @@ package code.model.utils
 // This code is more of a showcase of State, Action then being real pragmatic alternative to scala Random class/trait (no such aim to outdo it).
 import scala.annotation.tailrec
 import cats.data.State
-import cats.std.list._
+import cats.instances.list._
 import cats.syntax.traverse._
 
 trait RNG {

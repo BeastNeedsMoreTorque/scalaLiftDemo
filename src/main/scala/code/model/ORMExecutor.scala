@@ -1,9 +1,7 @@
 package code.model
 
 import java.sql.SQLException
-import cats.data.Xor
 import language.higherKinds
-
 /**
   * Created by philippederome on 2016-04-03.
   * Offers mechanism to report errors as SQLException with some detail
@@ -18,10 +16,10 @@ trait ORMExecutor {
     * @tparam F type of container of elements
     * @return error message in Left of Xor or Right of Unit if all is well.
     */
-  def execute[A, F[_]](f: F[A] => Unit, fa: F[A]): String Xor Unit =
+  def execute[A, F[_]](f: F[A] => Unit, fa: F[A]): Either[String, Unit] =
     try {
       f(fa)
-      Xor.Right(Unit)
+      Right(Unit)
     } catch {
       case se: SQLException =>
         val err = s"""SQLException $fa
@@ -29,9 +27,9 @@ trait ORMExecutor {
           SqlState: ${se.getSQLState}
           Error Message: ${se.getMessage}
           NextException: ${se.getNextException}"""
-        Xor.Left(err)
+        Left(err)
       case scala.util.control.NonFatal(other) =>
-        Xor.Left(other.toString())
+        Left(other.toString())
         // bubble up fatal ones
     }
 }

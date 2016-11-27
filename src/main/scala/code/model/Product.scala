@@ -12,7 +12,7 @@ import org.squeryl.annotations._
 import scala.collection.concurrent.TrieMap
 import scala.collection.{Seq, _}
 import scala.language.implicitConversions
-import cats.syntax.xor._
+import cats.implicits._
 import scala.xml.Node
 
 trait ProductSizeConstants {
@@ -152,7 +152,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
     // and gives us opportunity to bring our cache up to date about firm wide products.
     for {
       as <- productWebQuery(lcboStoreId, queryFilterArgs) // take them all from Stream
-      bs <- synchDirtyAndNewItems(as, getCachedItem).right[Throwable] // the side effect
+      bs <- Right(synchDirtyAndNewItems(as, getCachedItem))
       cs = bs.map{_.lcboKey}.flatMap{ getItemByLcboKey } // usable for client to cache, now that we refreshed them all
     } yield cs
   }

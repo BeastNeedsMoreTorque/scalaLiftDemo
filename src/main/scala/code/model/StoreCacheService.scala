@@ -1,8 +1,6 @@
 package code.model
 
-import cats.data.Xor
-import cats.std.unit._
-import cats.syntax.all._
+import cats.implicits._
 import code.model.Product.fetchByStore
 import code.model.Inventory.loadInventoriesByStore
 import code.model.GlobalLCBO_IDs._
@@ -114,14 +112,17 @@ trait StoreCacheService extends ORMExecutor with Loggable {
   }
 
   private def loadInventories(formatter: StringFormatter): Unit = {
-    def cacheInventoriesWithORM(inventories: UpdatedAndNewInventories): Throwable Xor Unit =
-      Xor.catchNonFatal(inTransaction {
-        // bulk update the ones needing an update and then bulk insert the ones
-        // MainSchema actions of update and insert provide an update to database combined to ORM caching, transparent to us
-        (execute[Inventory, Iterable](MainSchema.inventories.update, inventories.updatedInvs)
-          |+| execute[Inventory, Iterable](MainSchema.inventories.insert, inventories.newInvs)).
-          fold({err: String => throw new Throwable(err)}, (Unit) => ())
-      })
+
+    def cacheInventoriesWithORM(inventories: UpdatedAndNewInventories): Either[Throwable, Unit] =
+      Either.catchNonFatal(
+        inTransaction {
+          // bulk update the ones needing an update and then bulk insert the ones
+          // MainSchema actions of update and insert provide an update to database combined to ORM caching, transparent to us
+          (execute[Inventory, Iterable](MainSchema.inventories.update, inventories.updatedInvs)
+            |+| execute[Inventory, Iterable](MainSchema.inventories.insert, inventories.newInvs)).
+            fold({err: String => throw new Throwable(err)}, (Unit) => ())
+        }
+      )
 
     // load @ LCBO, store to DB and cache into ORM stateful caches, trap/log errors, and if all good, refresh our own store's cache.
     // we chain errors using flatMap (FP style).

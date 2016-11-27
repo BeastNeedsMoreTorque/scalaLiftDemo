@@ -1,6 +1,5 @@
 package code.snippet.interaction
 
-import cats.data.Xor
 import code.model.{IProduct, Product, Store, User}
 import code.snippet.SessionCache.{theAdviseCount, theCategory}
 import code.model.AttributeHtmlData
@@ -11,7 +10,6 @@ import net.liftweb.json.JsonAST.JValue
 
 import scala.xml.NodeSeq
 import code.model.GlobalLCBO_IDs.TaggedLong
-
 /**
   * Created by philippederome on 2016-07-31.
   *
@@ -60,20 +58,20 @@ trait Advise extends UtilCommands {
   private def maySelect(store: Store): JsCmd = {
     // Preliminaries
     type InventoryResponse = Store.Selection
-    type InventoryResponseValidation = Xor[String, InventoryResponse]
+    type InventoryResponseValidation = Either[String, InventoryResponse]
     lazy val successToProducts: InventoryResponse => InventoryResponseValidation = inventories =>
-      if (inventories.isEmpty) Xor.Left(s"Unable to find a product of category ${theCategory.is}")
+      if (inventories.isEmpty) Left(s"Unable to find a product of category ${theCategory.is}")
       // we're reloading into cache to make up for that issue!
-      else Xor.Right(inventories)
+      else Right(inventories)
 
     lazy val errorToProducts: Throwable => InventoryResponseValidation = t =>
-      Xor.Left(s"Unable to choose product of category ${theCategory.is} with exception error ${t.toString()}")
+      Left(s"Unable to choose product of category ${theCategory.is} with exception error ${t.toString()}")
 
     val inventoryResponse = store.advise(theCategory.is, theAdviseCount.is, Product)
 
     inventoryResponse.fold(errorToProducts, successToProducts) match {
-      case Xor.Left(msg) => S.error(msg); Noop
-      case Xor.Right(inventories) =>
+      case Left(msg) => S.error(msg); Noop
+      case Right(inventories) =>
         S.error("") // work around clearCurrentNotices clear error message to make way for normal layout representing normal condition.
         prodDisplayJS(inventories.map { case (p, q) => QuantityOfProduct(q, p) })
     }

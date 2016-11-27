@@ -3,9 +3,9 @@ package code.model.prodAdvisor
 import code.model.utils.RNG
 import code.model._
 import net.liftweb.util.Props
-import cats.data.Xor
+import cats.implicits._
 
-import scala.collection.{IndexedSeq, Seq}
+import scala.collection.IndexedSeq
 
 /**
   * Created by philippederome on 2016-05-02. Cake Pattern style.
@@ -107,10 +107,10 @@ trait SlowAdvisorComponentImpl extends ProductAdvisorComponent {
       val lcboProdCategory = toPrimaryCategory(category)
 
       for {
-        prods <- runner.fetchByStoreCategory(invService.lcboKey, category, maxSampleSize)
-        prodStream <- Xor.right(for {id <- prods.indices.toStream
+        prods <- runner.fetchByStoreCategory(invService.lcboKey, category, maxSampleSize).right
+        prodStream <- Right(for {id <- prods.indices.toStream
                                      p = prods(id) if p.primaryCategory == lcboProdCategory} yield (p, 0.toLong))
-        select <- Xor.Right(prodStream.take(requestSize))
+        select <- Right(prodStream.take(requestSize))
       } yield select
       // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
     }
@@ -134,13 +134,14 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
     /**
       * We call up LCBO site each time we get a query with NO caching. This is inefficient but simple and yet reasonably responsive.
       * Select a random product that matches the parameters subject to a max sample size.
-      * @param rng a Random Number Generator state item.
+      *
+      * @param rng         a Random Number Generator state item.
       * @param invService  a InventoryService trait that has a few abstract methods about inventory in stock or
-      *                      ability to sync cache from LCBO Web API (theoretically inventory update or provisioning).
+      *                    ability to sync cache from LCBO Web API (theoretically inventory update or provisioning).
       * @param category    a String such as beer, wine, mostly matching primary_category at LCBO,
       *                    or an asset category (for query only not to compare results and filter!).
       * @param requestSize a number representing how many items we need to propose as recommendation
-      * @param runner a ProductRunner, responsible to obtain products in a store for a given vategory.
+      * @param runner      a ProductRunner, responsible to obtain products in a store for a given vategory.
       * @return ValidateSelection
       */
     def advise(rng: RNG,
@@ -162,71 +163,72 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
       * and has no side effect (by default it caches).
       * So this is "pure" relative to implementations of InventoryService and ProductRunner making guarantees to being pure on the methods we use here.
       * That guarantee could be provided in a unit test environment.
-      * @param invService an inventory service instance that allows us to obtain inventory info for products in a store
-      * @param runner a ProductRunner instance
-      * @param rng a Random Number Generator state item.
+      *
+      * @param invService         an inventory service instance that allows us to obtain inventory info for products in a store
+      * @param runner             a ProductRunner instance
+      * @param rng                a Random Number Generator state item.
       * @param initialProductKeys a tentative collection of products that would satisfy user request. If it does, we random sample from it,
-      *                        otherwise we go to LCBO to get some fresh ones synchronously and shuffle them.
-      * @param category the category of the product
-      * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO.
-      *                         It's been known that they would send a Wiser's Whiskey on a wine request.
-      * @param requestSize amount of items the client is requesting for a recommendation/advice
+      *                           otherwise we go to LCBO to get some fresh ones synchronously and shuffle them.
+      * @param category           the category of the product
+      * @param lcboProdCategory   specifies the expected value of primary_category on feedback from LCBO.
+      *                           It's been known that they would send a Wiser's Whiskey on a wine request.
+      * @param requestSize        amount of items the client is requesting for a recommendation/advice
       * @return ValidateSelection.
       */
     private def getShuffledProducts(invService: InventoryService,
-                            runner: ProductRunner,
-                            rng: RNG,
-                            initialProductKeys: IndexedSeq[KeyKeeperVals],
-                            category: String,
-                            lcboProdCategory: String,
-                            requestSize: Int): ValidateSelection = {
-        val inStockItems = {
-          for {p <- initialProductKeys
-               inv <- invService.inventoryByProductIdMap(p.pKey)
-               q = inv.quantity if q > 0
-               prod <- invService.getProduct(p.lcboKey)} yield (prod, q)
-        }
-        // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
+                                    runner: ProductRunner,
+                                    rng: RNG,
+                                    initialProductKeys: IndexedSeq[KeyKeeperVals],
+                                    category: String,
+                                    lcboProdCategory: String,
+                                    requestSize: Int): ValidateSelection = {
+      val inStockItems = {
+        for {p <- initialProductKeys
+             inv <- invService.inventoryByProductIdMap(p.pKey)
+             q = inv.quantity if q > 0
+             prod <- invService.getProduct(p.lcboKey)} yield (prod, q)
+      }
+      // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
 
-        invService.asyncLoadCache() // if we never loaded the cache, do it. Note: useful even if we have product of matching inventory
-        // to find out up to date inventory
-        // Ideally this asyncLoadCache could be a metaphor for a just in time restocking request given that our cache could be empty with cache representing
-        // "real inventory".
+      invService.asyncLoadCache() // if we never loaded the cache, do it. Note: useful even if we have product of matching inventory
+      // to find out up to date inventory
+      // Ideally this asyncLoadCache could be a metaphor for a just in time restocking request given that our cache could be empty with cache representing
+      // "real inventory".
 
-        val (rr, cachedIds) = RNG.collectSample(inStockItems.indices, requestSize).run(rng).value
-        // shuffle only on the indices not full items (easier on memory mgmt).
+      val (rr, cachedIds) = RNG.collectSample(inStockItems.indices, requestSize).run(rng).value
+      // shuffle only on the indices not full items (easier on memory mgmt).
 
-        if (cachedIds.nonEmpty) Xor.Right(cachedIds.map(inStockItems))
-        // when nonEmpty, get back the items that the ids have been selected (we don't stream because we know inventory > 0)
-        else getSerialResult(invService, runner, requestSize, category, lcboProdCategory, rr)
+      if (cachedIds.nonEmpty) Right(cachedIds.map(inStockItems))
+      // when nonEmpty, get back the items that the ids have been selected (we don't stream because we know inventory > 0)
+      else getSerialResult(invService, runner, requestSize, category, lcboProdCategory, rr)
     }
 
     /**
-      * @param invService an inventory service instance
-      * @param runner a ProductRunner instance
-      * @param requestSize amount of items the client is requesting for a recommendation/advice
-      * @param category the category of the product
+      * @param invService       an inventory service instance
+      * @param runner           a ProductRunner instance
+      * @param requestSize      amount of items the client is requesting for a recommendation/advice
+      * @param category         the category of the product
       * @param lcboProdCategory specifies the expected value of primary_category on feedback from LCBO.
       *                         It's been known that they would send a Wiser's Whiskey on a wine request.
-      * @param r a Random Number Generator state item.
+      * @param r                a Random Number Generator state item.
       * @return ValidateSelection (since there's web client dependency, need to capture exceptions low level exceptions here).
       */
     private def getSerialResult(invService: InventoryService,
-                        runner: ProductRunner,
-                        requestSize: Int,
-                        category: String,
-                        lcboProdCategory: String,
-                        r: RNG): ValidateSelection =
-    for {
-      prods <- runner.fetchByStoreCategory(invService.lcboKey, category, maxSampleSize)
-      // take a hit of one go to LCBO, querying by category, no more.
-      permutedIndices <- Xor.Right(RNG.shuffle(prods.indices).runA(r).value)
-      // prodStream avoids checking primary category on full collection (the permutation is done though).
-      prodStream <- Xor.right(for {id <- permutedIndices.toStream
-                          p = prods(id) if p.primaryCategory == lcboProdCategory} yield (p, 0.toLong))
-      res <- Xor.Right(prodStream.take(requestSize))
-    // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
-    // and then zip with list of zeroes because we are too slow to obtain inventories.
-    } yield res
+                                runner: ProductRunner,
+                                requestSize: Int,
+                                category: String,
+                                lcboProdCategory: String,
+                                r: RNG): ValidateSelection =
+      for {
+        prods <- runner.fetchByStoreCategory(invService.lcboKey, category, maxSampleSize).right
+        // take a hit of one go to LCBO, querying by category, no more.
+        permutedIndices <- Right(RNG.shuffle(prods.indices).runA(r).value)
+        // prodStream avoids checking primary category on full collection (the permutation is done though).
+        prodStream <- Right(for {id <- permutedIndices.toStream
+                                     p = prods(id) if p.primaryCategory == lcboProdCategory} yield (p, 0.toLong))
+        res <- Right(prodStream.take(requestSize))
+      // filter by category before take as LCBO does naive (or generic) pattern matching on all fields
+      // and then zip with list of zeroes because we are too slow to obtain inventories.
+      } yield res
   }
 }

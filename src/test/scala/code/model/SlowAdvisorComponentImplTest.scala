@@ -2,6 +2,7 @@ package code.model
 import code.UnitTest
 import code.model.prodAdvisor.{ProductAdvisorDispatcher, SlowAdvisorComponentImpl}
 import code.model.productRunnerMocks._
+import cats.implicits._
 
 /**
   * Created by philippederome on 2016-08-25.

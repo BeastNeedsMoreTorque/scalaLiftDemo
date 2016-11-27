@@ -1,8 +1,5 @@
 package code.model
 
-import cats.data.Xor
-
-import scala.collection.Iterable
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 
 trait InventoryService extends KeyKeeper {

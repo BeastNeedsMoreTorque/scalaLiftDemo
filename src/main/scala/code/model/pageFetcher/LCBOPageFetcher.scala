@@ -1,13 +1,12 @@
 package code.model.pageFetcher
 
-import cats.data.Xor
 import code.Rest.RestClient
-import net.liftweb.json.{parseOpt,JValue,JNothing}
+import net.liftweb.json.{JNothing, JValue, parseOpt}
 import net.liftweb.common.Loggable
 import net.liftweb.util.Props
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
-
+import cats.implicits._
 /**
   * Created by philippederome on 2016-03-30.
   * An excuse to exercise myself in Cake Pattern as per example found at
@@ -25,7 +24,7 @@ import scala.collection.IndexedSeq
 trait LCBOPageFetcherComponent  {
   type JSitemsExtractor[T] = JValue => IndexedSeq[T]
   type GotEnough_? = (Int) => Boolean
-  type ValidateItems[T] = Xor[Throwable, IndexedSeq[T]]
+  type ValidateItems[T] = Either[Throwable, IndexedSeq[T]]
   val neverEnough: GotEnough_? = { x => false }
 
   def fetcher: LCBOPageFetcher
@@ -69,7 +68,7 @@ trait LCBOPageFetcherComponentImpl extends LCBOPageFetcherComponent with Loggabl
     def collectItemsAsWebClient[T](path: String,
                                    xt: JSitemsExtractor[T],
                                    params: Seq[(String, Any)] = Seq())
-                                  (implicit enough: GotEnough_? = neverEnough): ValidateItems[T] = Xor.catchNonFatal {
+                                  (implicit enough: GotEnough_? = neverEnough): ValidateItems[T] = Either.catchNonFatal {
       val uriRoot: String = s"http://$LcboDomain/$path"
       // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise using "closure" as is often found in JS).
       // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same.

@@ -1,6 +1,6 @@
 package code.model
 
-import cats.data.Xor
+import cats.implicits._
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher, SlowAdvisorComponentImpl}
 import code.model.utils.RetainSingles.asMap
@@ -34,12 +34,12 @@ trait EventTypes {
   /**
     * captures exceptions as errors in Xor if any, otherwise a selection
     */
-  type ValidateSelection = Xor[Throwable, Selection]
+  type ValidateSelection = Either[Throwable, Selection]
 
   /**
     * captures exceptions as errors in Xor if any, otherwise the quantity that got purchased
     */
-  type ValidatePurchase = Xor[Throwable, Long]
+  type ValidatePurchase = Either[Throwable, Long]
 }
 
 case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConstants with StoreCacheService with EventTypes {

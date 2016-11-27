@@ -1,6 +1,5 @@
 package code.model
 
-import cats.data.Xor
 import code.model.GlobalLCBO_IDs._
 
 import scala.collection.IndexedSeq
@@ -8,8 +7,8 @@ import scala.collection.IndexedSeq
 /**
   * Created by philippederome on 2016-08-25.
   */
-package object ProductMocks {
-  val emptyProducts = Xor.Right( IndexedSeq[Product]() )
+package object productMocks {
+  val emptyProducts = Right( IndexedSeq[Product]() )
 
   trait MockProduct extends IProduct {
     override def isDiscontinued: Boolean = false
