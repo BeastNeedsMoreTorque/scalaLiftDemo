@@ -2,8 +2,6 @@ package code.model
 
 import code.model.GlobalLCBO_IDs._
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
-import code.model.utils.KeyHolder
-import code.model.utils.RetainSingles.implicitSeqToRetainSingles
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.common.Loggable
 import net.liftweb.util.Helpers._
@@ -11,7 +9,8 @@ import net.liftweb.util.Props
 import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
 
-import scala.collection.{IndexedSeq, Iterable}
+import scala.collection.Iterable
+import code.model.utils.RetainSingles._
 import cats.implicits._
 
 object DefaultDateAsNow {
@@ -40,9 +39,7 @@ class InventoryAsLCBOJson(var product_id: Long,
   */
 case class Inventory private(val storeid: Long,
                              val productid: Long)
-  extends InventoryAsLCBOJson with KeyedEntity[CompositeKey2[Long,Long]] with KeyHolder {
-
-  override def getKey: String = s"$productid:$storeid"
+  extends InventoryAsLCBOJson with KeyedEntity[CompositeKey2[Long,Long]] {
 
   def id: CompositeKey2[Long, Long] = compositeKey(storeid, productid)
 
@@ -83,16 +80,16 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
     // set up some functional transformers first, then get ready for real work.
     // God forbid, we might supply ourselves data that violates composite key. Weed it out by taking one per composite key!
 
-    def getUpdatedInvs(items: IndexedSeq[Inventory]) = {
-      { for {freshInv <- items
-             cachedInv <- mapByProductId.get(freshInv.productid.PKeyID)
-             dirtyInv = cachedInv.copyDiffs(freshInv) } yield dirtyInv }
-    }
+    def getUpdatedInvs(items: Iterable[Inventory]) = for {
+      freshInv <- items
+      cachedInv <- mapByProductId.get(freshInv.productid.PKeyID)
+      dirtyInv = cachedInv.copyDiffs(freshInv)
+    } yield dirtyInv
 
     for {items <- collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
       updatesAndInserts <- Right(itemsByState[Inventory, Inventory](items, get))
-      updatedInventories <- Right(getUpdatedInvs(updatesAndInserts.updates).retainSingles)
-      newInventories <- Right(updatesAndInserts.inserts.retainSingles)
+      updatedInventories <- Right(getUpdatedInvs(retainSingles(updatesAndInserts.updates)))
+      newInventories <- Right(retainSingles(updatesAndInserts.inserts))
       inventories <- Right(UpdatedAndNewInventories(updatedInventories, newInventories))
     } yield inventories
   }
