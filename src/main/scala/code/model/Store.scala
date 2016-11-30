@@ -42,13 +42,28 @@ trait EventTypes {
   type ValidatePurchase = Either[Throwable, Long]
 }
 
+trait InventoryService {
+  def lcboKey: LCBO_KEY
+  val inventoryByProductIdMap: P_KEY => Option[Inventory]
+  def getProduct(x: LCBO_KEY): Option[IProduct]
+  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals]
+  def asyncLoadCache(): Unit
+}
+
+trait IStore extends InventoryService {
+  def pKey: P_KEY
+  def Name: String
+  def isDead: Boolean
+  def addressLine1: String
+}
+
 case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeConstants with StoreCacheService with EventTypes {
   // products is a StatefulManyToMany[Product,Inventory], it extends Iterable[Product]
   lazy val storeProducts = MainSchema.inventories.leftStateful(this)
   @Column(name = "pkid")
   override val idField = new LongField(this, 0)
   // our own auto-generated id
-  override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => inventoryByProductId.toMap.get(key)
+  val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => inventoryByProductId.toMap.get(key)
   val lcbo_id = new LongField(this)
   // we don't share same PK as LCBO!
   val is_dead = new BooleanField(this, false)
@@ -76,6 +91,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   override def lcboKeyToPK: concurrent.Map[LCBO_KEY, P_KEY] = Store.lcboKeyToPKMap
 
   override def pKey: P_KEY = idField.get.PKeyID
+  override def lcboKey: LCBO_KEY = lcbo_id.get.LcboKeyID
 
   override def meta: MetaRecord[Store] = Store
 
@@ -83,9 +99,9 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   // (which are not presented as map but as slower sequence;
   // we organize as map for faster access).
   // They're recomputed when needed by the three helper functions that follow.
-  override def getProduct(x: LCBO_KEY): Option[IProduct] = productsCache.get(x)
+  def getProduct(x: LCBO_KEY): Option[IProduct] = productsCache.get(x)
 
-  override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] =
+  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] =
     categoryIndex.get(lcboCategory).
       fold(IndexedSeq[KeyKeeperVals]()){ identity }
 
@@ -111,12 +127,10 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
     Store.consume(this, user, p, quantity)
 
-  override def asyncLoadCache(): Unit = {
+  def asyncLoadCache(): Unit = {
     // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()(Store.ec)
   }
-
-  override def lcboKey: LCBO_KEY = lcbo_id.get.LcboKeyID
 
   case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals)
 
@@ -146,7 +160,7 @@ object Store extends Store with MetaRecord[Store] {
     case _ => new ProductAdvisorDispatcher with SlowAdvisorComponentImpl
   }
 
-  def advise(invService: InventoryService,
+  def advise(invService: Store,
              category: String,
              requestSize: Int,
              runner: ProductRunner): ValidateSelection = {
@@ -154,7 +168,7 @@ object Store extends Store with MetaRecord[Store] {
     advisor.advise(invService, category, requestSize, runner)(rng)
   }
 
-  def consume(invService: InventoryService,
+  def consume(invService: Store,
               user: User,
               p: IProduct,
               quantity: Long): ValidatePurchase =
@@ -208,7 +222,7 @@ object Store extends Store with MetaRecord[Store] {
     cache.values.foreach( _.refreshProducts())  // ensure inventories are refreshed INCLUDING on start up.
   }
 
-  def getCachedItem: IStore => Option[IStore] = s =>
+  def getCachedItem: Store => Option[Store] = s =>
     for {pKey <- lcboKeyToPKMap.get(s.lcboKey)
          is <- getStore(pKey)} yield is
 

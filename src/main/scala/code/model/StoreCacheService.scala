@@ -95,7 +95,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
     // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
     categoryIndex ++= productsCache.values.
-      map(x => CategoryKeyKeeperVals(x.primaryCategory, x: KeyKeeperVals)).toIndexedSeq.
+      map(prod => CategoryKeyKeeperVals(prod.primaryCategory, prod: KeyKeeperVals)).toIndexedSeq.
       groupBy(_.category).
       mapValues(_.map(_.keys))
   }

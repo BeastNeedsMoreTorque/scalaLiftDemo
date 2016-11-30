@@ -13,7 +13,7 @@ import code.model.utils.KeyHolder
   * so mitigate with access control on methods, one method is protected.
   * @see F-bounded polymorphism
   */
-trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor with KeyKeeper {
+trait Persistable[T <: Persistable[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.

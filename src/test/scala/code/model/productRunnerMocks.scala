@@ -11,10 +11,9 @@ import scala.collection.IndexedSeq
 package object productRunnerMocks {
 
   object NullInventoryService extends InventoryService {
-    override def pKey: P_KEY = 1.PKeyID
     override def lcboKey: LCBO_KEY = 1.LcboKeyID
     override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => None
-    override def getProduct(x: LCBO_KEY): Option[IProduct] = None
+    override def getProduct(x: LCBO_KEY): Option[Product] = None
     override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] = IndexedSeq.empty
     override def asyncLoadCache(): Unit = () // intentional Noop/Unit here.
   }

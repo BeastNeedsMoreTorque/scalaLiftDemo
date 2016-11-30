@@ -11,9 +11,6 @@ trait KeyHolder[A] {
 }
 
 object KeyHolder {
-  implicit val keyKeeperHolder = new KeyHolder[KeyKeeper] {
-    def getKey(f: KeyKeeper) = f.lcboKey.toString
-  }
   implicit val inventoryHolder = new KeyHolder[Inventory] {
     def getKey(f: Inventory) = s"${f.productid}:${f.storeid}"
   }

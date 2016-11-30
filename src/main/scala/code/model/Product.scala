@@ -32,6 +32,19 @@ trait ProductSizeConstants {
   * Record being open to NoSQL and Squeryl providing ORM service.
   * Product: The elements of a product from LCBO catalogue that we deem of relevant interest to replicate in DB for this toy demo.
   */
+trait IProduct {
+  def pKey: P_KEY
+  def lcboKey: LCBO_KEY
+  def Name: String
+  def primaryCategory: String
+  def isDiscontinued: Boolean
+  def imageThumbUrl: String
+  def alcoholContent: String
+  // Change unit of currency from cents to dollars and Int to String
+  def price: String
+  def streamAttributes: IndexedSeq[AttributeHtmlData]
+}
+
 class Product private() extends LCBOEntity[Product] with IProduct with ProductSizeConstants {
   // fields corresponding to columns for our schema
   @Column(name="pkid")
@@ -64,23 +77,20 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
   override def lcboKeyToPK: concurrent.Map[LCBO_KEY, P_KEY] = Product.lcboKeyToPKMap
 
   override def pKey: P_KEY = idField.get.PKeyID
-
   override def lcboKey: LCBO_KEY = lcbo_id.get.LcboKeyID
-
-  override def imageThumbUrl: String = image_thumb_url.getValue
-  override def Name: String = name.get
 
   def totalPackageUnits: Int = total_package_units.get
 
+  override def Name: String = name.get
   override def primaryCategory: String = primary_category.get
-
   override def isDiscontinued: Boolean = is_discontinued.get
+  override def imageThumbUrl: String = image_thumb_url.getValue
 
   /**
     *
     * @return an ordered list of pairs of values (label and value), representing most of the interesting data of the product
     */
-  def streamAttributes: IndexedSeq[AttributeHtmlData] =
+  override def streamAttributes: IndexedSeq[AttributeHtmlData] =
   // order is important and would be dependent on web designer input, we could possibly find ordering rule either in database
   // or in web design. This assumes order can be fairly static.
     ( AttributeHtmlData("Name:", name.get) ::
@@ -127,7 +137,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   protected val sizeFulfilled: Int => GotEnough_? =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
 
-  def getProduct(id: P_KEY): Option[IProduct] = cache.get(id)
+  def getProduct(id: P_KEY): Option[Product] = cache.get(id)
 
   override def table: Table[Product] = MainSchema.products
 
@@ -157,11 +167,11 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
     } yield cs
   }
 
-  def getItemByLcboKey(id: LCBO_KEY): Option[IProduct] =
+  def getItemByLcboKey(id: LCBO_KEY): Option[Product] =
     for {pKey <- lcboKeyToPKMap.get(id)
          ip <- cache.get(pKey)} yield ip
 
-  def getCachedItem: IProduct => Option[IProduct] = s => getItemByLcboKey(s.lcboKey)
+  def getCachedItem: Product => Option[Product] = p => getItemByLcboKey(p.lcboKey)
 
   // the implicit isEnough parameter is strictly to play around with the concept as in this case, implicit is not particularly compelling.
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent

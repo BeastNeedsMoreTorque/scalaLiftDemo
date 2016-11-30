@@ -39,13 +39,13 @@ trait Loader[T <: Loader[T]] extends Record[T] with Loggable
     *
     * @return primary key
     */
-  protected def pKey: P_KEY
+  def pKey: P_KEY
 
   /**
     *
     * @return alternate key, LCBO's key
     */
-  protected def lcboKey: LCBO_KEY
+  def lcboKey: LCBO_KEY
 
   /**
     * caches items
