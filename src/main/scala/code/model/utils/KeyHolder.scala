@@ -1,6 +1,6 @@
 package code.model.utils
 
-import code.model.{Inventory, KeyKeeper, Product, Store}
+import code.model.{Inventory, Product, Store}
 
 /**
   * Created by philippederome on 2016-05-13.

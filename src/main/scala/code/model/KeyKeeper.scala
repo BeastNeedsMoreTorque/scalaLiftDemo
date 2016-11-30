@@ -1,16 +1,14 @@
 package code.model
 
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
-import code.model.utils.KeyHolder
 import scala.language.implicitConversions
 
 /**
   * Created by philippederome on 2016-04-12.
   */
-trait KeyKeeper[A] extends KeyHolder[A] {
+trait KeyKeeper[A] {
   def lcboKey(f: A): LCBO_KEY
   def pKey(f: A): P_KEY
-  override def getKey(f: A): String = lcboKey(f).toString
 }
 
 object KeyKeeper {
