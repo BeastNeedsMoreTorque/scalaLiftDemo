@@ -8,7 +8,6 @@ import code.model.Store.CategoryKeyKeeperVals
 import code.model.utils.RetainSingles._
 import net.liftweb.common.Loggable
 import net.liftweb.squerylrecord.RecordTypeMode._
-
 import scala.collection.{IndexedSeq, Iterable}
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.{ExecutionContext, Future, blocking}
@@ -91,7 +90,6 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     * @return nothing (Unit), side effect to internal caches
     */
   def addToCaches(items: IndexedSeq[IProduct]): Unit = {
-    implicit val keyPairKeeper: KeyKeeper[IProduct] = KeyKeeper.getKeyPair({ prod: IProduct => prod.lcboKey}, {prod: IProduct => prod.pKey })
     productsCache ++= asMap(items, {p: IProduct => p.lcboKey})
     // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
     // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)

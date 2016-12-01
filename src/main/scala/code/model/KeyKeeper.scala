@@ -13,6 +13,7 @@ object KeyKeeper {
     def lcboKey(a: A): LCBO_KEY = lc(a)
     def pKey(a: A): P_KEY = pk(a)
   }
+  implicit val productKeyPairKeeper: KeyKeeper[IProduct] = KeyKeeper.getKeyPair({ prod: IProduct => prod.lcboKey}, {prod: IProduct => prod.pKey })
 }
 
 case class KeyKeeperVals(lcboKey: LCBO_KEY, pKey: P_KEY)
