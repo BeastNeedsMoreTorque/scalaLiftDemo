@@ -96,7 +96,8 @@ Behavioral Design Patterns:
 template method design pattern (used for loading up caches generically upon a database store)
 
 Functional Design Patterns:
-State monad from Cats (for `RNG`, `State` in `RNG.scala`).
+- State monad from Cats (for `RNG`, `State` in `RNG.scala`)
+- Type class (`KeyHolder` and `KeyKeeper` with consumers being `Product`, `Inventory`, `Store`)
 
 Scala-specific design patterns:
 enrich my library (`RetainSingles`), similar to C# extension methods
