@@ -3,23 +3,15 @@ package code.model
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import scala.language.implicitConversions
 
-/**
-  * Created by philippederome on 2016-04-12.
-  */
 trait KeyKeeper[A] {
   def lcboKey(f: A): LCBO_KEY
   def pKey(f: A): P_KEY
 }
 
 object KeyKeeper {
-  implicit val productKeeper = new KeyKeeper[IProduct] {
-    def lcboKey(f: IProduct): LCBO_KEY = f.lcboKey
-    def pKey(f: IProduct): P_KEY = f.pKey
-  }
-
-  implicit val storeKeeper = new KeyKeeper[IStore] {
-    def lcboKey(f: IStore): LCBO_KEY = f.lcboKey
-    def pKey(f: IStore): P_KEY = f.pKey
+  def getKeyPair[A](lc: A => LCBO_KEY, pk: A => P_KEY): KeyKeeper[A] = new KeyKeeper[A] {
+    def lcboKey(a: A): LCBO_KEY = lc(a)
+    def pKey(a: A): P_KEY = pk(a)
   }
 }
 

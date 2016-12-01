@@ -16,7 +16,7 @@ import scala.collection.concurrent.TrieMap
 import scala.language.implicitConversions
 import scala.xml.Node
 import code.model.GlobalLCBO_IDs._
-import code.model.utils.RNG
+import code.model.utils.{KeyHolder, RNG}
 import scala.util.Random
 
 trait StoreSizeConstants {
@@ -206,11 +206,12 @@ object Store extends Store with MetaRecord[Store] {
     // the initial db select is long and synchronous, long because of loading Many-to-Many stateful state, depending on stored data
     val refreshed = getStores  // improves our cache of stores with latest info from LCBO. In real-world,
     // we might have the app run for long and call getStores async once in a while
+    val keyHolder: KeyHolder[Store] = KeyHolder.getKey { s => s.lcboKey.toString }
     refreshed.toOption.fold[Unit](
       refreshed.leftMap(f => logger.error(context(f.toString()))))(
       items => {
         if (items.isEmpty) logger.error(onEmptyError)
-        synchDirtyAndNewItems(items, getCachedItem)
+        synchDirtyAndNewItems(items, getCachedItem)(keyHolder)
       })
     logger.info("load end") // trace because it takes a long time.
   }

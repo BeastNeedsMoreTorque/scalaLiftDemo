@@ -12,6 +12,7 @@ import org.squeryl.dsl.CompositeKey2
 import scala.collection.Iterable
 import code.model.utils.RetainSingles._
 import cats.implicits._
+import code.model.utils.KeyHolder
 
 object DefaultDateAsNow {
   def defaultDate: String = formattedDateNow.replace('/', '-') // Lift uses / but LCBO uses - so standardizes it for minimal changes.
@@ -86,6 +87,7 @@ object Inventory extends LCBOPageLoader with LCBOPageFetcherComponentImpl with I
       dirtyInv = cachedInv.copyDiffs(freshInv)
     } yield dirtyInv
 
+    implicit val keyHolder: KeyHolder[Inventory] = KeyHolder.getKey { inv => s"${inv.productid}:${inv.storeid}" }
     for {items <- collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
       updatesAndInserts <- Right(itemsByState[Inventory, Inventory](items, get))
       updatedInventories <- Right(getUpdatedInvs(retainSingles(updatesAndInserts.updates)))

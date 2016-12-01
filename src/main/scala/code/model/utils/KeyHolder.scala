@@ -1,25 +1,12 @@
 package code.model.utils
 
-import code.model.{Inventory, Product, Store}
-
-/**
-  * Created by philippederome on 2016-05-13.
-  */
-
-trait KeyHolder[A] {
+trait KeyHolder[A] { // effectively resembles Show[A] a great deal, but is meant to show a small aspect of the type A, not the whole thing.
   def getKey(f: A): String
 }
 
 object KeyHolder {
-  implicit val inventoryHolder = new KeyHolder[Inventory] {
-    def getKey(f: Inventory) = s"${f.productid}:${f.storeid}"
-  }
-
-  implicit val productHolder = new KeyHolder[Product] {
-    def getKey(f: Product) = f.lcboKey.toString
-  }
-  implicit val storeHolder = new KeyHolder[Store] {
-    def getKey(f: Store) = f.lcboKey.toString
+  def getKey[A](f: A => String): KeyHolder[A] = new KeyHolder[A] {
+    def getKey(a: A): String = f(a)
   }
 }
 

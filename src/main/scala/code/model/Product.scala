@@ -13,6 +13,7 @@ import scala.collection.concurrent.TrieMap
 import scala.collection.{Seq, _}
 import scala.language.implicitConversions
 import cats.implicits._
+import code.model.utils.KeyHolder
 import scala.xml.Node
 
 trait ProductSizeConstants {
@@ -160,9 +161,10 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   def fetchByStore(lcboStoreId: Long): ValidatedProducts = {
     // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
     // and gives us opportunity to bring our cache up to date about firm wide products.
+    val keyHolder: KeyHolder[Product] = KeyHolder.getKey { p => p.lcboKey.toString }
     for {
       as <- productWebQuery(lcboStoreId, queryFilterArgs) // take them all from Stream
-      bs <- Right(synchDirtyAndNewItems(as, getCachedItem))
+      bs <- Right(synchDirtyAndNewItems(as, getCachedItem)(keyHolder))
       cs = bs.map{_.lcboKey}.flatMap{ getItemByLcboKey } // usable for client to cache, now that we refreshed them all
     } yield cs
   }
