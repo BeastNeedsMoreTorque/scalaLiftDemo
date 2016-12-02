@@ -2,7 +2,7 @@ package code.model
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{IndexedSeq, Iterable, Seq}
-import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
+import code.model.pageFetcher.LCBOPageLoader
 import code.model.utils.RetainSingles._
 import code.model.utils.ShowKey
 import code.model.GlobalLCBO_IDs._
@@ -17,7 +17,7 @@ import net.liftweb.util.Props
   * @see F-bounded polymorphism
   */
 trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor
-  with CreatedUpdated[T] with LCBOPageLoader with LCBOPageFetcherComponentImpl with ItemStateGrouper {
+  with CreatedUpdated[T] with LCBOPageLoader with ItemStateGrouper {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.
