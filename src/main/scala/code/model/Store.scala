@@ -46,7 +46,7 @@ trait InventoryService {
   def lcboKey: LCBO_KEY
   val inventoryByProductIdMap: P_KEY => Option[Inventory]
   def getProduct(x: LCBO_KEY): Option[IProduct]
-  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals]
+  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals]
   def asyncLoadCache(): Unit
 }
 
@@ -73,7 +73,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   val address_line_1 = new FilteredMandatoryStringField(addressSize)
   val city = new FilteredMandatoryStringField(cityNameSize)
   override val productsCache = TrieMap[LCBO_KEY, IProduct]()
-  override val categoryIndex = TrieMap[String, IndexedSeq[KeyKeeperVals]]()
+  override val categoryIndex = TrieMap[String, IndexedSeq[ShowKeyPairVals]]()
   // don't put whole IProduct in here, just useful keys.
   override val inventoryByProductId = TrieMap[P_KEY, Inventory]()
 
@@ -101,9 +101,9 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   // They're recomputed when needed by the three helper functions that follow.
   def getProduct(x: LCBO_KEY): Option[IProduct] = productsCache.get(x)
 
-  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[KeyKeeperVals] =
+  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals] =
     categoryIndex.get(lcboCategory).
-      fold(IndexedSeq[KeyKeeperVals]()){ identity }
+      fold(IndexedSeq[ShowKeyPairVals]()){ identity }
 
   def refreshProducts(): Unit =  {
     refreshInventories()
@@ -132,7 +132,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()(Store.ec)
   }
 
-  case class CategoryKeyKeeperVals(category: String, keys: KeyKeeperVals)
+  case class CategoryShowKeyPairVals(category: String, keys: ShowKeyPairVals)
 
   /**
     * contains configuration values as to whether we want to use a random see and if instead we use a fixed one its value

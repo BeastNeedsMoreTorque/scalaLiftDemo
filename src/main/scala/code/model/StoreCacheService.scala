@@ -4,7 +4,7 @@ import cats.implicits._
 import code.model.Product.fetchByStore
 import code.model.Inventory.loadInventoriesByStore
 import code.model.GlobalLCBO_IDs._
-import code.model.Store.CategoryKeyKeeperVals
+import code.model.Store.CategoryShowKeyPairVals
 import code.model.utils.RetainSingles._
 import net.liftweb.common.Loggable
 import net.liftweb.squerylrecord.RecordTypeMode._
@@ -37,7 +37,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
   /**
     * cache of product ids by category, a category index
     */
-  val categoryIndex: TrieMap[String, IndexedSeq[KeyKeeperVals]]
+  val categoryIndex: TrieMap[String, IndexedSeq[ShowKeyPairVals]]
 
   private val getCachedInventoryItem: Inventory => Option[Inventory] =
     inv => inventoryByProductId.get(inv.productid.PKeyID)
@@ -94,7 +94,7 @@ trait StoreCacheService extends ORMExecutor with Loggable {
     // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
     // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
     categoryIndex ++= productsCache.values.
-      map(prod => CategoryKeyKeeperVals(prod.primaryCategory, prod: KeyKeeperVals)).toIndexedSeq.
+      map(prod => CategoryShowKeyPairVals(prod.primaryCategory, prod: ShowKeyPairVals)).toIndexedSeq.
       groupBy(_.category).
       mapValues(_.map(_.keys))
   }

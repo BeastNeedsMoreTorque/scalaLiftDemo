@@ -1,7 +1,6 @@
 package code.model.utils
 
 import net.liftweb.common.Loggable
-import scala.language.implicitConversions
 
 /**
   * Created by philippederome on 2016-05-12.
@@ -12,8 +11,8 @@ object RetainSingles extends Loggable {
   def asMap[K, V](values: Iterable[V], toK: V => K): Map[K, V] =
     values.groupBy(toK).map { case(k, vs) => k -> vs.head }
 
-  def retainSingles[A: KeyHolder](as: Seq[A])(implicit ev: KeyHolder[A]): Iterable[A] = {
-    val splits = as.groupBy(ev.getKey)
+  def retainSingles[A: ShowKey](as: Seq[A])(implicit ev: ShowKey[A]): Iterable[A] = {
+    val splits = as.groupBy(ev.show)
     splits.map(_._2.head) // we don't care if there is more than one per group (duplicates) as this is expected as normal.
   }
 }

@@ -3,7 +3,7 @@ package code.model
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{IndexedSeq, Seq}
 import code.model.pageFetcher.{LCBOPageFetcherComponentImpl, LCBOPageLoader}
-import code.model.utils.KeyHolder
+import code.model.utils.ShowKey
 import net.liftweb.json.JsonAST.{JField, JInt}
 import net.liftweb.record.field.{StringField,OptionalStringField}
 
@@ -72,7 +72,7 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Persistable[T]
     * reconciling/interpreting as new or dirty (or clean/unchanged)
     * and then make sure first DB is brought up to date with that info and synchronously the cache memory as well.
     */
-  final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], get: I => Option[I])(implicit ev: KeyHolder[T]): IndexedSeq[T] = {
+  final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], get: I => Option[I])(implicit ev: ShowKey[T]): IndexedSeq[T] = {
     val dirtyAndNewItems = itemsByState[I, T](items, get)
     updateAndInsert(dirtyAndNewItems.updates, dirtyAndNewItems.inserts) // updates DB AND cache.
     items

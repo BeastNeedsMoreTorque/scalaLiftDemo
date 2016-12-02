@@ -178,7 +178,7 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
     private def getShuffledProducts(invService: InventoryService,
                                     runner: ProductRunner,
                                     rng: RNG,
-                                    initialProductKeys: IndexedSeq[KeyKeeperVals],
+                                    initialProductKeys: IndexedSeq[ShowKeyPairVals],
                                     category: String,
                                     lcboProdCategory: String,
                                     requestSize: Int): ValidateSelection = {
