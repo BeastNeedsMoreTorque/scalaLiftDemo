@@ -9,11 +9,11 @@ trait KeyKeeper[A] {
 }
 
 object KeyKeeper {
-  def getKeyPair[A](lc: A => LCBO_KEY, pk: A => P_KEY): KeyKeeper[A] = new KeyKeeper[A] {
+  def apply[A](lc: A => LCBO_KEY, pk: A => P_KEY): KeyKeeper[A] = new KeyKeeper[A] {
     def lcboKey(a: A): LCBO_KEY = lc(a)
     def pKey(a: A): P_KEY = pk(a)
   }
-  implicit val productKeyPairKeeper: KeyKeeper[IProduct] = KeyKeeper.getKeyPair({ prod: IProduct => prod.lcboKey}, {prod: IProduct => prod.pKey })
+  implicit def productKeyPairKeeper: KeyKeeper[IProduct] = KeyKeeper(prod => prod.lcboKey, prod => prod.pKey)
 }
 
 case class KeyKeeperVals(lcboKey: LCBO_KEY, pKey: P_KEY)

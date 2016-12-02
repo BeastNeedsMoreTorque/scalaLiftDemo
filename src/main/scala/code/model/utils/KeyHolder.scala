@@ -7,11 +7,11 @@ trait KeyHolder[A] { // effectively resembles Show[A] a great deal, but is meant
 }
 
 object KeyHolder {
-  def getKey[A](f: A => String): KeyHolder[A] = new KeyHolder[A] {
+  def apply[A](f: A => String): KeyHolder[A] = new KeyHolder[A] {
     def getKey(a: A): String = f(a)
   }
-  implicit val storekeyHolder: KeyHolder[Store] = KeyHolder.getKey { s => s.lcboKey.toString }
-  implicit val keyInventoryHolder: KeyHolder[Inventory] = KeyHolder.getKey { inv => s"${inv.productid}:${inv.storeid}" }
-  implicit val keyProductHolder: KeyHolder[Product] = KeyHolder.getKey { p => p.lcboKey.toString }
+  implicit def storekeyHolder: KeyHolder[Store] = KeyHolder { s => s.lcboKey.toString }
+  implicit def keyInventoryHolder: KeyHolder[Inventory] = KeyHolder { inv => s"${inv.productid}:${inv.storeid}" }
+  implicit def keyProductHolder: KeyHolder[Product] = KeyHolder { p => p.lcboKey.toString }
 }
 
