@@ -1,7 +1,6 @@
 package code.model
 
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
-import scala.language.implicitConversions
 
 trait KeyKeeper[A] {
   def lcboKey(f: A): LCBO_KEY
