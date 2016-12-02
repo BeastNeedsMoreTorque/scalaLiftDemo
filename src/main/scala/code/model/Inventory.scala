@@ -55,6 +55,7 @@ case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: I
 
 object Inventory extends LCBOPageLoader with ItemStateGrouper {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
+  implicit val formats = net.liftweb.json.DefaultFormats
   val extract: JSitemsExtractor[Inventory] =  { jVal =>
     for {p <- jVal.children.toIndexedSeq
          inv <- p.extractOpt[InventoryAsLCBOJson]

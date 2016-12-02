@@ -20,7 +20,6 @@ trait LCBOPageLoader extends RestClient with Loggable {
   val neverEnough: GotEnough_? = { x => false }
 
   val LcboDomain = Props.get("lcboDomain", "")  // set it!
-  implicit val formats = net.liftweb.json.DefaultFormats
   /**
     * LCBO client JSON query handler. Exists to present a cleaner interface than the tail recursive method
     *
@@ -57,6 +56,7 @@ trait LCBOPageLoader extends RestClient with Loggable {
   }
 
   def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
+    implicit val formats = net.liftweb.json.DefaultFormats
     // LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
     val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
     val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
