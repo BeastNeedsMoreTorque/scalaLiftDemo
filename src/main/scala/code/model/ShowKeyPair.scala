@@ -4,8 +4,8 @@ import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 
 // patterned after Show type class, it is meant to show a pair of "keys" from A, one external (E) one internal (I)
 trait ShowKeyPair[A, E, I] { // E: external, I: Internal
-  def showE(f: A): E
-  def showI(f: A): I
+  def showE(a: A): E
+  def showI(a: A): I
 }
 
 object ShowKeyPair {
