@@ -4,7 +4,6 @@ import net.liftweb.util.Props
 import scala.xml.NodeSeq
 
 /**
-  * Created by philippederome on 2015-12-25.
   * RadioElements function like radio buttons, one element selected among a list but here we erase the radio buttons and
   * replace normal text labels with image elements. We also handle a frame around the image with a CSS style to suggest selection
   * is active. This RadioElements also contains a title to provide an intuitive tooltip on the image that acts as a button.
@@ -22,8 +21,10 @@ object RadioElements {
   def radioOptions(ss: Seq[String],
                    defaultName: String,
                    toImg: String => String): Seq[RadioElements] =
-    ss.map { s =>
-      RadioElements(s, <img name={s} title={s} src={toImg(s)} class={if (s == defaultName) thickBorder else thinBorder} />)
-      // selected with style that frames it
-  }
+  ss.map {
+    case `defaultName` => (defaultName, thickBorder)
+    case (s) => (s, thinBorder)
+  }.map { case (s, border) =>
+    RadioElements(s, <img name={s} title={s} src={toImg(s)} class={border}/>)
+  } // selected with style that frames it
 }

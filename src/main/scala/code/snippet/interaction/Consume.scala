@@ -88,7 +88,7 @@ trait Consume extends UtilCommands {
                                          confirmationMsgs: Iterable[PurchasedProductConfirmation]): JsCmd = {
     val totalCost = confirmationMsgs.map{ _.selectedProduct.cost}.sum
     val formattedTotalCost = formatter.format(totalCost)
-    val listItems = confirmationMsgs.map(getItem).fold(NodeSeq.Empty)( _ ++ _ )
+    val listItems = <div>{confirmationMsgs.map(getItem)}</div>
 
     SetHtml("transactionsConfirmationUser", Text(user)) &
       SetHtml("purchaseAmount", Text(formattedTotalCost)) &

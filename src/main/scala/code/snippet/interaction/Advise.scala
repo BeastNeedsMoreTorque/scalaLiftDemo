@@ -46,8 +46,8 @@ trait Advise extends UtilCommands {
     User.currentUser.dmap { S.error("advise", "advise feature unavailable, Login first!"); Noop } { user =>
       val cmd =
         for {storeId <- jsStore.extractOpt[Long]
-             ss <- Store.getStore(storeId.PKeyID)  // no result here or earlier on will lead to error below as cmd will be None
-             advice = maySelect(ss)
+             s <- Store.getStore(storeId.PKeyID)  // no result here or earlier on will lead to error below as cmd will be None
+             advice = maySelect(s)
         } yield advice
 
       cmd.fold {
@@ -77,22 +77,22 @@ trait Advise extends UtilCommands {
     }
   }
 
-  private def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd = {
-    // for each element of qOfProds, build a Div as NodeSeq and concatenate them as a NodeSeq for the several divs
-    val divs: NodeSeq = <div>{qOfProds.map(getDiv)}</div>
-    SetHtml("prodContainer", divs) & hideConfirmationJS & showProdDisplayJS  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
-  }
+  // for each element of qOfProds, build a Div as NodeSeq and concatenate them as a NodeSeq for the several divs
+  def prodDisplayJS(qOfProds: Iterable[QuantityOfProduct]): JsCmd =
+    SetHtml("prodContainer", <div>{qOfProds.map(getDiv)}</div>) & hideConfirmationJS & showProdDisplayJS
+  // JsCmd (JavaScript  (n JsCmd) can be chained as bigger JavaScript command)
 
-  private def getDiv(qOfProd: QuantityOfProduct): NodeSeq = {
+  def getDiv(qOfProd: QuantityOfProduct): NodeSeq = {
     val prod = qOfProd.product
+    val prodKeyName = prod.lcboKey.toString
     val inventory = qOfProd.quantity.toString
-    val invAttribute = AttributeHtmlData(key="Quantity:", value=inventory, css="prodAttrContentInventory", name=prod.lcboKey.toString)
+    val invAttribute = AttributeHtmlData(key="Quantity:", value=inventory, css="prodAttrContentInventory", name=prodKeyName)
     // label it as prodAttrContentInventory for client to interpret and identify easily
     // similarly, assigning the prodId to name helps identify it in browser JS.
     val allAttributes = prod.streamAttributes :+ invAttribute
 
     // tag the div with misc attributes to facilitate reconciling related data within browser JS
-    <div class="prodIdRoot" name={prod.lcboKey.toString}>{attributesMarkup(allAttributes)}{selectionMarkup(prod)}</div><hr/>
+    <div class="prodIdRoot" name={prodKeyName}>{attributesMarkup(allAttributes)}{selectionMarkup(prod)}</div><hr/>
   }
 
   /**
@@ -105,7 +105,7 @@ trait Advise extends UtilCommands {
     * We also add a hiddenCost, so that the cost per item is always available for our calculation
     * (visible to user in attributes in any event, but harder for us to get at for computation)
     */
-  private def attributesMarkup(attrs: IndexedSeq[AttributeHtmlData]): NodeSeq = {
+  def attributesMarkup(attrs: IndexedSeq[AttributeHtmlData]): NodeSeq = {
     def rowMarkup(a: AttributeHtmlData): NodeSeq = {
       <tr>
         <td class="prodAttrHead">{a.key}</td>
@@ -133,7 +133,7 @@ trait Advise extends UtilCommands {
     * @param prod
     * @return NodeSeq consisting of the markup for check box, quantity of product, and cost of product*quantity
     */
-  private def selectionMarkup(prod: IProduct) = {
+  def selectionMarkup(prod: IProduct): NodeSeq = {
     val checkBoxNS =
       <label>
         <input type="checkbox" class="prodSelectInput" value={prod.lcboKey.toString}/>
@@ -163,5 +163,4 @@ trait Advise extends UtilCommands {
     * @param product a product we track of for user
     */
   case class QuantityOfProduct(quantity: Long, product: IProduct)
-
 }

@@ -1,6 +1,5 @@
 package code.snippet.interaction
 
-import code.model.AttributeHtmlData
 import code.snippet.JSUtilities._
 import code.snippet.SessionCache._
 import net.liftweb.common._
@@ -86,5 +85,4 @@ class ProductInteraction extends Cancel with Consume with Advise with Loggable {
     val default = Full(values.head)
     val options = values.map(k => (k,k))
   }
-
 }
