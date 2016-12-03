@@ -98,13 +98,12 @@ trait Consume extends UtilCommands {
 
   private def getItem(item: PurchasedProductConfirmation): NodeSeq = {
     val formattedCost = formatter.format(item.selectedProduct.cost)
-    def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Long, missedQty: Long) = {
+    def purchaseConfirmationMessage(confirmation: String, formattedCost: String, quantity: Long, missedQty: Long) =
       if (missedQty <= 0)
         s"$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units"
       else
         s"""$confirmation including the cost of today's purchase at $formattedCost for $quantity extra units;
          |sorry about the unfulfilled $missedQty items out of stock""".stripMargin
-    }
 
     val liContent = purchaseConfirmationMessage(item.confirmation,
       formattedCost,
