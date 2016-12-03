@@ -7,10 +7,7 @@ import skinny.http.{HTTPException, _}
   * Created by philippederome on 2015-12-19.
   */
 trait RestClient {
-  val HTTP_PROTOCOL_GOOD_STAT_LOW = 200
-  val HTTP_PROTOCOL_GOOD_STAT_HI = 300
-  val sockTimeOut = Props.getInt("http.ClientReadTimeOut", 0)
-  val connTimeOut = Props.getInt("http.ClientConnTimeOut", 0)
+  import RestClient._
   /**
     * Returns the text (content) from a REST URI as a String.
     *
@@ -28,4 +25,11 @@ trait RestClient {
       throw new HTTPException(Some("Unexpected response "), response)
     }
   }
+}
+
+object RestClient {
+  val HTTP_PROTOCOL_GOOD_STAT_LOW = 200
+  val HTTP_PROTOCOL_GOOD_STAT_HI = 300
+  val sockTimeOut = Props.getInt("http.ClientReadTimeOut", 0)
+  val connTimeOut = Props.getInt("http.ClientConnTimeOut", 0)
 }

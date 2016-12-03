@@ -7,19 +7,13 @@ import net.liftweb.util.Props
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
 import cats.implicits._
-/**
-  *
-  * @see http://blog.originate.com/blog/2013/10/21/reader-monad-for-dependency-injection/
-  *      He makes very interesting observations about using Reader Monads in web app and cake pattern at outer edges.
-  *
-  */
-trait LCBOPageLoader extends RestClient with Loggable {
+
+trait LCBOPageFetcher extends RestClient with Loggable {
   type JSitemsExtractor[T] = JValue => IndexedSeq[T]
   type GotEnough_? = (Int) => Boolean
   type ValidateItems[T] = Either[Throwable, IndexedSeq[T]]
   val neverEnough: GotEnough_? = { x => false }
 
-  val LcboDomain = Props.get("lcboDomain", "")  // set it!
   /**
     * LCBO client JSON query handler. Exists to present a cleaner interface than the tail recursive method
     *
@@ -34,14 +28,9 @@ trait LCBOPageLoader extends RestClient with Loggable {
                                  xt: JSitemsExtractor[T],
                                  params: Seq[(String, Any)] = Seq())
                                 (implicit enough: GotEnough_? = neverEnough): ValidateItems[T] = Either.catchNonFatal {
-    def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
-      implicit val formats = net.liftweb.json.DefaultFormats
-      // LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
-      val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
-      val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
-      isFinalPage || totalPages < pageNo + 1
-    }
-    val uriRoot: String = s"http://$LcboDomain/$path"
+    implicit val formats = net.liftweb.json.DefaultFormats
+
+    val uriRoot: String = s"http://${LCBOPageFetcher.LcboDomain}/$path"
     // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise using "closure" as is often found in JS).
     // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same.
     // It has no side effect for sure, other than helpful log.
@@ -61,5 +50,17 @@ trait LCBOPageLoader extends RestClient with Loggable {
     }
     go( IndexedSeq(), 1) // tail recursion with classic accumulator as first parameter
   }
+
+  def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
+    implicit val formats = net.liftweb.json.DefaultFormats
+    // LCBO tells us it's last page (Uses XPath-like querying to extract data from parsed object).
+    val isFinalPage = (jsonRoot \ "pager" \ "is_final_page").extractOrElse[Boolean](false)
+    val totalPages = (jsonRoot \ "pager" \ "total_pages").extractOrElse[Int](0)
+    isFinalPage || totalPages < pageNo + 1
+  }
+}
+
+object LCBOPageFetcher {
+  val LcboDomain: String = Props.get("lcboDomain", "")  // set it!
 }
 
