@@ -28,7 +28,6 @@ trait LCBOPageFetcher extends RestClient with Loggable {
                                  xt: JSitemsExtractor[T],
                                  params: Seq[(String, Any)] = Seq())
                                 (implicit enough: GotEnough_? = neverEnough): ValidateItems[T] = Either.catchNonFatal {
-
     implicit val formats = net.liftweb.json.DefaultFormats
 
     val uriRoot: String = s"http://${LCBOPageFetcher.LcboDomain}/$path"
@@ -50,7 +49,6 @@ trait LCBOPageFetcher extends RestClient with Loggable {
       else go(revisedItems, currPage + 1)
     }
     go( IndexedSeq(), 1) // tail recursion with classic accumulator as first parameter
-
   }
 
   def isFinalPage(jsonRoot: JValue, pageNo: Int): Boolean = {
@@ -65,3 +63,4 @@ trait LCBOPageFetcher extends RestClient with Loggable {
 object LCBOPageFetcher {
   val LcboDomain: String = Props.get("lcboDomain", "")  // set it!
 }
+
