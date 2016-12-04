@@ -21,14 +21,15 @@ trait Consume extends UtilCommands {
   implicit val formats = net.liftweb.json.DefaultFormats
 
   def consume(selection: JValue): JsCmd = {
-    val data = selection.extractOpt[String].fold[JValue](JNothing){parse} // {"store":storeId, "items" : <list>}
-    val storeId = (data \ "store").extractOpt[Long]
-    val store = storeId.flatMap{ x => Store.getStore(x.PKeyID)}
-    val items = data \ "items"
-    val selectedProducts =
-      for {item <- items.children.toIndexedSeq
-         prod <- item.extractOpt[SelectedProduct]}
-      yield prod
+    val data = selection.extractOpt[String].fold[JValue](JNothing)(parse) // {"store":storeId, "items" : <list>}
+    val store = for {
+      id <- (data \ "store").extractOpt[Long]
+      s <- Store.getStore(id.PKeyID)
+    } yield s
+    val selectedProducts = for {
+      item <- (data \ "items").children.toIndexedSeq
+      prod <- item.extractOpt[SelectedProduct]
+    } yield prod
     // Validate and report errors at high level of functionality as much as possible
     // and then get down to business with helper mayConsume.
     (User.currentUser.toOption, selectedProducts, store) match {
@@ -37,19 +38,20 @@ trait Consume extends UtilCommands {
         S.warning("Select some recommended products before attempting to consume")
         Noop
       case (Some(user), _, None) => S.warning("Store must be defined to consume recommended products"); Noop
-      case (Some(user), products, Some(store)) => mayConsume(store, user, products)
+      case (Some(user), products, Some(stored)) => mayConsume(stored, user, products)
     }
   }
 
   private def mayConsume(store: Store, user: User, selectedProds: IndexedSeq[SelectedProduct]): JsCmd = {
     // associate primitive browser product details for selected products (SelectedProduct)
     // with full data of same products we should have in cache as pairs
-    val feedback =
-      for { sp <- selectedProds
-            p <- Product.getItemByLcboKey(sp.id.LcboKeyID)
-            f = mayConsumeItem(store, user, p, sp.quantity)} yield SelectedProductFeedback(sp, f)
+    val selectedProductFeedback = for {
+      sp <- selectedProds
+      p <- Product.getItemByLcboKey(sp.id.LcboKeyID)
+      feedback = mayConsumeItem(store, user, p, sp.quantity)
+    } yield SelectedProductFeedback(sp, feedback)
 
-    val goodAndBackFeedback = feedback.groupBy(_.feedback.success)
+    val goodAndBackFeedback = selectedProductFeedback.groupBy(_.feedback.success)
     // splits into errors (false success) and normal confirmations (true success)
     // as a map keyed by Booleans possibly of size 0, 1 (not 2)
 
@@ -58,7 +60,7 @@ trait Consume extends UtilCommands {
     // open the Option for false lookup in map, which gives us list of erroneous feedback, then pump the message into S.error
 
     val goodFeedback = goodAndBackFeedback.getOrElse(true, Nil) // select those for which we have success and positive message
-    (goodFeedback, feedback) match {
+    (goodFeedback, selectedProductFeedback) match {
       case (Nil, fs) if fs.isEmpty =>
         S.error("None of the selected products exist in database, wait a minute or two")
         // that means web server should warm up quite a few at first. Not better than Twitter Fail Whale...
