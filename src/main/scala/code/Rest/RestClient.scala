@@ -14,7 +14,6 @@ object RestClient {
     * @param uri A uri with full path and protocol but without query parameters, such as "http://foo.com/bar
     * @param timeouts to control socket time out or connection time out.
     * @param params a sequence of value pairs that will become ?param1=val1&param2=val2...&paramn=valn"
-    * @throws HTTPException
     * @return a pair of JSON String obtained from REST site and the uri we just built or a HTTPException on failure
     */
   def get(uri: String, timeouts: HttpTimeouts, params: (String, Any)*): Either[Throwable, (String, String)] = {
@@ -30,6 +29,5 @@ object RestClient {
           Left(new HTTPException(Some("Unexpected response "), response))
         }
     }
-
   }
 }
