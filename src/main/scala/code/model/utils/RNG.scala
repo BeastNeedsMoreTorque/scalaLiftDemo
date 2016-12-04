@@ -48,8 +48,7 @@ object RNG {
 
   def nonNegativeInt: Rand[Int] = State(rng => {
     val (r, i) = rng.nextInt
-    val ii = if (i >= 0) i else -1 * (i + 1)
-    (r, ii)
+    (r, if (i >= 0) i else -1 * (i + 1))
   })
 
   def map[A, B](s: Rand[A])(f: A => B): Rand[B] =
@@ -113,11 +112,11 @@ object RNG {
       }
     }
     State(rng => {
-       if (s.length < k) { // allow client not to check for k being too large
-          val (newRng, permutedIndices ) = shuffle(s.indices).run(rng).value
-          (newRng, permutedIndices.map(s(_)))
-        }
-        else  if (k <= 0) {
+      if (s.length < k) { // allow client not to check for k being too large
+        val (newRng, permutedIndices ) = shuffle(s.indices).run(rng).value
+        (newRng, permutedIndices.map(s(_)))
+      }
+      else if (k <= 0) {
         (rng, IndexedSeq())
       }  // allow client to specify k <= 0
       else {
