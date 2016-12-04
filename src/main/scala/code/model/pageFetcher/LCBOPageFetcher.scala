@@ -1,12 +1,11 @@
 package code.model.pageFetcher
 
-import code.Rest.RestClient
+import code.Rest.{HttpTimeouts, RestClient}
 import net.liftweb.json.{JNothing, JValue, parseOpt}
 import net.liftweb.common.Loggable
 import net.liftweb.util.Props
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
-import cats.implicits._
 
 trait LCBOPageFetcher extends Loggable {
   import LCBOPageFetcher._
@@ -14,7 +13,7 @@ trait LCBOPageFetcher extends Loggable {
   type GotEnough_? = (Int) => Boolean
   type ValidateItems[T] = Either[Throwable, IndexedSeq[T]]
   val neverEnough: GotEnough_? = { x => false }
-
+  val httpTimeOuts = HttpTimeouts(Props.getInt("http.ClientReadTimeOut", 0), Props.getInt("http.ClientConnTimeOut", 0))
   /**
     * LCBO client JSON query handler. Exists to present a cleaner interface than the tail recursive method
     *
@@ -28,7 +27,7 @@ trait LCBOPageFetcher extends Loggable {
   def collectItemsAsWebClient[T](path: String,
                                  xt: JSitemsExtractor[T],
                                  params: Seq[(String, Any)] = Seq())
-                                (implicit enough: GotEnough_? = neverEnough): ValidateItems[T] = Either.catchNonFatal {
+                                (implicit enough: GotEnough_? = neverEnough): ValidateItems[T] = {
     implicit val formats = net.liftweb.json.DefaultFormats
 
     val uriRoot: String = s"http://$LcboDomain/$path"
@@ -37,18 +36,21 @@ trait LCBOPageFetcher extends Loggable {
     // It has no side effect for sure, other than helpful log.
     // @throws HTTPException
     @tailrec // in general it's good to make recursion tailrec to avoid stack overflow.
-    def go(accumItems: IndexedSeq[T], currPage: Int): IndexedSeq[T] = {
+    def go(accumItems: IndexedSeq[T], currPage: Int): ValidateItems[T] =
       // get as many as possible on a page because we could have few matches.
-      val (msg, uri) = RestClient.get(uriRoot, params ++ Seq(("page", currPage)): _*)
-      val jsonRoot = parseOpt(msg).fold[JValue](JNothing)(identity)
-      // fyi: throws plenty of various exceptions.
-      val revisedItems = accumItems ++ xt(jsonRoot \ "result") // Uses XPath-like querying to extract data from parsed object jsObj.
-      if (isFinalPage(jsonRoot, currPage) || enough(revisedItems.size)) {
-        logger.info(uri) // log only last one to be less verbose
-        revisedItems
+      RestClient.get(uriRoot, httpTimeOuts, params ++ Seq(("page", currPage)): _*) match {
+        case Left(t) => Left(t)
+        case Right((msg, uri)) =>
+          val jsonRoot = parseOpt(msg).fold[JValue](JNothing)(identity)
+          // fyi: throws plenty of various exceptions.
+          val revisedItems = accumItems ++ xt(jsonRoot \ "result")
+          if (isFinalPage(jsonRoot, currPage) || enough(revisedItems.size)) {
+            logger.info(uri) // log only last one to be less verbose (technically the String for the logger, could be pushed out perhaps in a Log Monad)
+            Right(revisedItems)
+          }
+          else go(revisedItems, currPage + 1)
       }
-      else go(revisedItems, currPage + 1)
-    }
+
     go( IndexedSeq(), 1) // tail recursion with classic accumulator as first parameter
   }
 
