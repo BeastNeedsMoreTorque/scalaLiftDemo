@@ -48,8 +48,7 @@ trait Consume extends UtilCommands {
     val selectedProductFeedback = for {
       sp <- selectedProds
       p <- Product.getItemByLcboKey(sp.id.LcboKeyID)
-      feedback = mayConsumeItem(store, user, p, sp.quantity)
-    } yield SelectedProductFeedback(sp, feedback)
+    } yield SelectedProductFeedback(sp, mayConsumeItem(store, user, p, sp.quantity))
 
     val goodAndBackFeedback = selectedProductFeedback.groupBy(_.feedback.success)
     // splits into errors (false success) and normal confirmations (true success)
