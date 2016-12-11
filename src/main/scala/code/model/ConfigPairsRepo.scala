@@ -51,9 +51,8 @@ object ConfigPairsRepo {
       // contains optionally children having JValue, which are really JField(name:String, value:JValue that is effectively String)
       parseOpt(values).
          fold(Seq.empty[(String, String)]) {
-           _.children.collect { case JField(name, JString(value)) => (name, value) }
-       // fold(Seq.empty[(String, String)]) { x: JValue =>
-        //  x.children.collect { case JObject(List(JField(name, JString(value)))) => (name, value) }
+            _.children.collect { case JField(name, JString(value)) => (name, value) }
+            // _.children.collect { case JObject(List(JField(name, JString(value)))) => (name, value) }
         }
     }
   }
