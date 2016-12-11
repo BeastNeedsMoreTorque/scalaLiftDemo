@@ -7,6 +7,7 @@ import code.model.utils.RetainSingles._
 import code.model.utils.ShowKey
 import code.model.GlobalLCBO_IDs._
 import net.liftweb.json.JsonAST.{JField, JInt}
+import net.liftweb.json.JObject
 import net.liftweb.record.field.{OptionalStringField, StringField}
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
@@ -23,7 +24,7 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] wi
   // Always call update before insert just to be consistent and safe. Enforce it.
   protected final def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T])
                                      (implicit ev: ShowKey[T]): Unit = inTransaction {
-    update(updateItems) // in a Kafka world, this should be an insert with a new version (log append idea)
+    update(updateItems) //
     insert(insertItems)
   }
 
@@ -103,6 +104,7 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] wi
   val extract: JSitemsExtractor[T] = json => {
     val idFix = json transform {
       case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
+      // case JObject(List(JField("id", JInt(n)))) => JObject(List(JField("lcbo_id", JInt(n)))) // see above paragraph text for justification.
     }
     val nodes = idFix.children
     nodes.foldLeft(ArrayBuffer.empty[T]) {

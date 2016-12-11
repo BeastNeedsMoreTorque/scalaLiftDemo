@@ -1,6 +1,7 @@
 package code.model
 
-import net.liftweb.json.{JField,JString,parseOpt}
+import net.liftweb.json.JsonAST.JValue
+import net.liftweb.json.{JString, JField, JObject, parseOpt}
 import net.liftweb.util.Props
 import scala.collection.Seq
 
@@ -49,8 +50,10 @@ object ConfigPairsRepo {
       val values = Props.get(masterKey, emptyString) // assumed to be of form {"key1":"value1",... "keyn":"valuen"}, which is JSON
       // contains optionally children having JValue, which are really JField(name:String, value:JValue that is effectively String)
       parseOpt(values).
-        fold(Seq.empty[(String, String)]) {
-          _.children.collect { case JField(name, JString(value)) => (name, value) }
+         fold(Seq.empty[(String, String)]) {
+           _.children.collect { case JField(name, JString(value)) => (name, value) }
+       // fold(Seq.empty[(String, String)]) { x: JValue =>
+        //  x.children.collect { case JObject(List(JField(name, JString(value)))) => (name, value) }
         }
     }
   }

@@ -5,7 +5,7 @@ import code.snippet.SessionCache._
 import net.liftweb.common._
 import net.liftweb.http.SHtml._
 import net.liftweb.http.js.JsCmds._
-import net.liftweb.http.js.JE
+import net.liftweb.http.js.{JE, JsCmd}
 import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
 import scala.xml.NodeSeq
@@ -42,9 +42,18 @@ import scala.xml.NodeSeq
   * Created by philippederome on 15-10-26.
   */
 class ProductInteraction extends Cancel with Consume with Advise with Loggable {
-  val hideProdDisplayJS =  JsHideId("prodDisplay")
-  val showConfirmationJS =  JsShowId("confirmationDiv")
-  val hideConfirmationJS =  JsHideId("confirmationDiv")
+  /**
+    * JS instruction to hide the product display
+    */
+  val hideProdDisplayJS: JsCmd =  JsHideId("prodDisplay")
+  /**
+    * JS instruction to show the confirmation div element
+    */
+  val showConfirmationJS: JsCmd =  JsShowId("confirmationDiv")
+  /**
+    * JS instruction to hide the confirmation div element
+    */
+  val hideConfirmationJS: JsCmd =  JsHideId("confirmationDiv")
 
   /**
     * A transformation on NodeSeq called by Lift, with NodeSeq representing a sequence of XML nodes (well formed HTML).
