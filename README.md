@@ -59,8 +59,9 @@ browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - Skinny for WEBAPI client
 
-- Lift framework: 2.6.2 but taken care by SBT
-Squeryl, a Scala ORM ((taken care by SBT)
+- Lift framework: 3.0
+
+- Squeryl, a Scala ORM ((taken care by SBT)
 skinny for httpclient (taken care by SBT)
 scalatest for unit testing
 
