@@ -1,7 +1,6 @@
 package code.model
 
-import net.liftweb.json.JsonAST.JValue
-import net.liftweb.json.{JString, JField, JObject, parseOpt}
+import net.liftweb.json._
 import net.liftweb.util.Props
 import scala.collection.Seq
 
@@ -42,18 +41,20 @@ object ConfigPairsRepo {
   class PropsSeqReader extends ConfigPairsRepo {
     implicit val formats = net.liftweb.json.DefaultFormats
     val emptyString: String = ""
+    val emptyPairs = Seq.empty[(String, String)]
     /**
       * @param masterKey a key to some configuration holding a map of values
       * @return a map of strings to strings bound to the masterKey
       */
     override def getSeq(masterKey: String): Seq[(String, String)] = {
-      val values = Props.get(masterKey, emptyString) // assumed to be of form {"key1":"value1",... "keyn":"valuen"}, which is JSON
+      val json = parseOpt(Props.get(masterKey, emptyString)) // assumed to be of form {"key1":"value1",... "keyn":"valuen"}, which is JSON
       // contains optionally children having JValue, which are really JField(name:String, value:JValue that is effectively String)
-      parseOpt(values).
-         fold(Seq.empty[(String, String)]) {
-            _.children.map { case JField(name, JString(value)) => (name, value) }
-            // _.children.collect { case JObject(List(JField(name, JString(value)))) => (name, value) }
-        }
+      // should now be an Option on JObject(List(JFields))
+      json.map {
+        case (JObject(xs)) => xs
+        case _ => Seq.empty[JField]
+      }.map(_.map { case(JField(k, JString(v))) => (k, v) } )
+       .map(identity).getOrElse(emptyPairs)
     }
   }
 }
