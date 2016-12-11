@@ -42,7 +42,7 @@ libraryDependencies ++= {
 }
 
 libraryDependencies ++= {
-  val liftVersion = "2.6.2" // "3.0"
+  val liftVersion = "3.0"
   Seq(
     "org.scala-lang"    % "scala-compiler"      % scalaVersion.value,
     "org.scala-lang"    % "scala-reflect"       % scalaVersion.value,
@@ -50,8 +50,7 @@ libraryDependencies ++= {
     "net.liftweb"     %% "lift-webkit" % liftVersion % "compile" withSources(),
     "net.liftweb"     %% "lift-mapper" % liftVersion % "compile->default" withSources(),
     "net.liftweb"     %% "lift-squeryl-record" % liftVersion % "compile->default" withSources(), // Record interface to RDBMS,
-    "net.liftmodules" %% "lift-jquery-module_2.6" % "2.9" withSources(),
- //   "net.liftmodules"   %% "lift-jquery-module_3.0" % "2.9" withSources(),
+    "net.liftmodules"   %% "lift-jquery-module_3.0" % "2.9" withSources(),
     "postgresql"        % "postgresql"          % "9.1-901.jdbc4",
     "org.scalactic" %% "scalactic" % "3.0.1",
     "org.scalatest" %% "scalatest" % "3.0.1" % "test",
