@@ -6,7 +6,7 @@ import code.model.pageFetcher.LCBOPageFetcher
 import code.model.utils.RetainSingles._
 import code.model.utils.ShowKey
 import code.model.GlobalLCBO_IDs._
-import net.liftweb.json.JsonAST.{JField, JInt}
+import net.liftweb.json.JsonAST.{JField, JValue, JInt}
 import net.liftweb.json.JObject
 import net.liftweb.record.field.{OptionalStringField, StringField}
 import net.liftweb.squerylrecord.KeyedRecord
@@ -102,13 +102,13 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] wi
    * id as a def (a true read-only item). And this id thingie is required for the whole MainSchema to work with the ORM relationships in memory.
    */
   val extract: JSitemsExtractor[T] = json => {
-    val idFix = json transform {
+    val idFix = json.transform {
       case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
       // case JObject(List(JField("id", JInt(n)))) => JObject(List(JField("lcbo_id", JInt(n)))) // see above paragraph text for justification.
     }
     val nodes = idFix.children
     nodes.foldLeft(ArrayBuffer.empty[T]) {
-      (recsBuffer, node) =>
+      (recsBuffer: ArrayBuffer[T], node: JValue) =>
         meta.fromJValue(node).foreach(record => recsBuffer += record)
         // a lcbo_id can be set here, but not an id (it's kind of "reserved" word by Squeryl while this call is Lift Record).
         recsBuffer
