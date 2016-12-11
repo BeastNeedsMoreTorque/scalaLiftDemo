@@ -6,55 +6,26 @@ import scala.collection.Seq
 
 /**
   * Created by philippederome on 2016-04-08.
-  * Interface to get a sequence of key values that are related by a masterKey.
+  * A module offering several possible different implementations of ConfigPairsRepo
   */
-trait ConfigPairsRepo {
+object ConfigPairsRepo {
+  implicit val formats = net.liftweb.json.DefaultFormats
+  val emptyString: String = ""
+  val emptyPairs = Seq.empty[(String, String)]
   /**
     * represents a map of String to Map(key:String, value:String) that is configurable at run time.
     * @param masterKey a key to some configuration holding a map of values
     * @return a map of strings to strings bound to the masterKey
     */
-  def getSeq(masterKey: String): Seq[(String, String)]
-}
-
-/**
-  * Created by philippederome on 2016-04-08.
-  * A module offering several possible different implementations of ConfigPairsRepo
-  */
-object ConfigPairsRepo {
-  // provide as many implementations of ConfigPairsRepo as required.
-
-  /**
-    * a particular ConfigPairsRepo implementation based on Props
-    * @return a PropsSeqReader object
-    */
-  implicit def configPairsRepoPropsImpl: ConfigPairsRepo = new PropsSeqReader
-
-  /**
-    * client may not care about which one, and since we have not coded a different one, say a database one, just use the same.
-    */
-  implicit val defaultInstance = new PropsSeqReader
-
-  /**
-    * Props based class that uses JSON parsing from a props config to implement ConfigPairsRepo getSeq
-    */
-  class PropsSeqReader extends ConfigPairsRepo {
-    implicit val formats = net.liftweb.json.DefaultFormats
-    val emptyString: String = ""
-    val emptyPairs = Seq.empty[(String, String)]
-    /**
-      * @param masterKey a key to some configuration holding a map of values
-      * @return a map of strings to strings bound to the masterKey
-      */
-    override def getSeq(masterKey: String): Seq[(String, String)] = {
-      val json = parseOpt(Props.get(masterKey, emptyString)) // assumed to be of form {"key1":"value1",... "keyn":"valuen"}, which is JSON
-      // contains optionally children having JValue, which are really JField(name:String, value:JValue that is effectively String)
-      // should now be an Option on JObject(List(JFields))
-      json.map {
-        case (JObject(xs)) => xs
-        case _ => Seq.empty[JField]
-      }.map(_.map { case(JField(k, JString(v))) => (k, v) } )
-       .map(identity).getOrElse(emptyPairs)
-    }
+  def getSeq(masterKey: String): Seq[(String, String)] = {
+    val json = parseOpt(Props.get(masterKey, emptyString)) // assumed to be of form {"key1":"value1",... "keyn":"valuen"}, which is JSON
+    // contains optionally children having JValue, which are really JField(name:String, value:JValue that is effectively String)
+    // should now be an Option on JObject(List(JFields))
+    json.map {
+      case (JObject(xs)) => xs
+      case _ => Seq.empty[JField]
+    }.map(_.map { case(JField(k, JString(v))) => (k, v) } )
+      .map(identity).getOrElse(emptyPairs)
   }
+
 }

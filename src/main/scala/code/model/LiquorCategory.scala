@@ -5,15 +5,14 @@ import net.liftweb.util.Props
   * Created by philippederome on 15-10-26.
   * Provides sequence of product categories to display to client, which is configurable via config,
   * additionally, provides a mapping of queryable pattern-categories to those used as primary categories in LCBO catalog
-  * @param config provides configuration object that gives us the sequence of product categories
   */
-case class LiquorCategory(config: ConfigPairsRepo) {
+class LiquorCategory {
   /**
     * @return a map of product categories to an image file that can be rendered, a web resource
     */
   val toImg = getMap("product.CategoriesImageMap")
   // give wine and beer at a minimum, provides iterable sequence of categories users can select from.
-  val categoriesSeq = Props.get("product.Categories", "wine:beer").split(":").toSeq
+  val categories = Props.get("product.Categories", "wine:beer").split(":")
 
   /**
     * @param category a category of products at LCBO such as wine or beer
@@ -26,5 +25,5 @@ case class LiquorCategory(config: ConfigPairsRepo) {
       fold(category)(identity)
 
   private def getMap(k: String) =
-    config.getSeq(k).toMap
+    ConfigPairsRepo.getSeq(k).toMap
 }

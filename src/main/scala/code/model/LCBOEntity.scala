@@ -116,11 +116,10 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] wi
   /**
     * represents a map of String to Map(key:String, value:String) that is configurable at run time.
     * @param masterKey a key to some configuration holding a map of values
-    * @param c a service object that can obtain this sequence for us
     * @return a map of strings to strings bound to the provided masterKey
     */
-  def getSeq(masterKey: String)(c: ConfigPairsRepo): Seq[(String, String)] =
-    c.getSeq(masterKey)
+  def getSeq(masterKey: String): Seq[(String, String)] =
+    ConfigPairsRepo.getSeq(masterKey)
 
   /**
     * type parameter I is extended by T, so that get can return an interface rather than a concrete class

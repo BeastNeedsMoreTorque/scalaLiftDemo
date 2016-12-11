@@ -22,7 +22,7 @@ trait ProductAdvisorComponent {
     * An interface to provide advice (recommendation) and consumption for LCBO products modelled by a simple methods.
     */
   trait ProductAdvisor extends EventTypes {
-    val liquorCategoryMapper = LiquorCategory(ConfigPairsRepo.configPairsRepoPropsImpl)
+    val liquorCategoryMapper = new LiquorCategory
     val maxSampleSize = Props.getInt("advisor.maxSampleSize", 0)
     def toPrimaryCategory(category: String): String =
       liquorCategoryMapper.toPrimaryCategory(category)

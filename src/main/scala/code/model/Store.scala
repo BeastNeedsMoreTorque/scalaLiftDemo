@@ -176,7 +176,7 @@ object Store extends Store with MetaRecord[Store] {
 
   override val cache: concurrent.Map[P_KEY, Store] = TrieMap() // primary cache
   val lcboKeyToPKMap: concurrent.Map[LCBO_KEY, P_KEY] = TrieMap() // secondary dependent cache, a.k.a. index
-  val queryFilterArgs = getSeq("store.query.Filter")(ConfigPairsRepo.defaultInstance) :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
+  val queryFilterArgs = ConfigPairsRepo.getSeq("store.query.Filter") :+ "per_page" -> Props.getInt("store.lcboMaxPerPage", 0)
   private val storeProductsLoaded: concurrent.Map[Long, Unit] = TrieMap()
 
   def findAll: Iterable[Store] = cache.values

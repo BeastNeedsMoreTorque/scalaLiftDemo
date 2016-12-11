@@ -5,7 +5,6 @@ import code.model.GlobalLCBO_IDs._
 import net.liftweb.json._
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field.{BooleanField, IntField, LongField}
-import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 import org.squeryl.Table
 import org.squeryl.annotations._
@@ -131,9 +130,8 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   override val cache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB!
   val lcboKeyToPKMap: concurrent.Map[LCBO_KEY, P_KEY] = TrieMap()
   val MaxPerPage = Props.getInt("product.lcboMaxPerPage", 0)
-  val queryByCategoryArgs = getSeq("product.query.ByCategoryArgs")(ConfigPairsRepo.defaultInstance)
-  // seems difficult to apply D.I. here, so access global object.
-  val queryFilterArgs = getSeq("product.query.Filter")(ConfigPairsRepo.defaultInstance)
+  val queryByCategoryArgs = ConfigPairsRepo.getSeq("product.query.ByCategoryArgs")
+  val queryFilterArgs = ConfigPairsRepo.getSeq("product.query.Filter")
   protected val sizeFulfilled: Int => GotEnough_? =
     requiredSize => (totalSize: Int) => requiredSize <= totalSize
 
