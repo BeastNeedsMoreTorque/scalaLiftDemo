@@ -1,11 +1,11 @@
 package code.model
 
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.{IndexedSeq, Iterable, Seq}
+import scala.collection.{Seq, IndexedSeq, Iterable}
 import code.model.pageFetcher.LCBOPageFetcher
 import code.model.utils.RetainSingles._
 import code.model.utils.ShowKey
 import code.model.GlobalLCBO_IDs._
+import net.liftweb.common.Full
 import net.liftweb.json.JsonAST._
 import net.liftweb.record.field.{OptionalStringField, StringField}
 import net.liftweb.squerylrecord.KeyedRecord
@@ -23,7 +23,7 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] wi
   // Always call update before insert just to be consistent and safe. Enforce it.
   protected final def updateAndInsert(updateItems: Iterable[T], insertItems: IndexedSeq[T])
                                      (implicit ev: ShowKey[T]): Unit = inTransaction {
-    update(updateItems) //
+    update(updateItems)
     insert(insertItems)
   }
 
@@ -104,13 +104,8 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] wi
     val idFix = json.transformField {
       case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
     }
-    val nodes = idFix.children
-    nodes.foldLeft(ArrayBuffer.empty[T]) {
-      (recsBuffer: ArrayBuffer[T], node: JValue) =>
-        meta.fromJValue(node).foreach(record => recsBuffer += record)
-        // a lcbo_id can be set here, but not an id (it's kind of "reserved" word by Squeryl while this call is Lift Record).
-        recsBuffer
-    }.toIndexedSeq
+    idFix.children.collect { case(n: JValue) => meta.fromJValue(n) }
+      .collect { case(Full(x)) => x }.toIndexedSeq
   }
 
   /**
