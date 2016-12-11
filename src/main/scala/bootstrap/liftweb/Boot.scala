@@ -26,6 +26,8 @@ import net.liftweb.squerylrecord.RecordTypeMode._
   * @see https://wiki.eclipse.org/Jetty/Howto/Configure_JNDI_Datasource, which has details for PostgreSQL
   */
 class Boot {
+  // scalastyle:off method.length
+
   def boot: Unit = {
     //    DefaultConnectionIdentifier.jndiName = "jdbc/liftinaction"  // can tie to servlet container configuration and thus handle different environments.
     // For example, see https://wiki.eclipse.org/Jetty/Howto/Configure_JNDI_Datasource. That is not our deployment strategy here, we use props files instead
@@ -95,6 +97,27 @@ class Boot {
     // What is the function to test if a user is logged in?
     LiftRules.loggedInTest = Full(() => User.loggedIn_?)
 
+    LiftRules.contentSecurityPolicyViolationReport = { violation => Empty } // big cheat
+    // @see https://groups.google.com/forum/#!topic/liftweb/S4La8Ut5R90
+    // should address real issues with something along those lines
+    /* LiftRules.securityRules = () => {
+      SecurityRules(content = Some(ContentSecurityPolicy(
+        styleSources = List(
+          ContentSourceRestriction.All
+        ),
+        defaultSources = List(
+          ContentSourceRestriction.All
+        ),
+
+        fontSources = List(
+          ContentSourceRestriction.All
+        ),
+        scriptSources = List(
+          ContentSourceRestriction.All
+        )
+      )))
+    } */
+
     // Use HTML5 for rendering
     LiftRules.htmlProperties.default.set((r: Req) =>
       new Html5Properties(r.userAgent))
@@ -120,4 +143,6 @@ class Boot {
     Product.load()
     Store.load()
   }
+  // scalastyle:on method.length
+
 }
