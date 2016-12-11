@@ -32,12 +32,20 @@ compileScalastyle := org.scalastyle.sbt.ScalastylePlugin.scalastyle.in(Compile).
 
 (compile in Compile) <<= (compile in Compile) dependsOn compileScalastyle
 
+val circeVersion = "0.6.1"
+
+val liftVersion = "2.6.2"
+
+libraryDependencies ++= Seq(
+  "io.circe" %% "circe-core",
+  "io.circe" %% "circe-generic",
+  "io.circe" %% "circe-parser"
+).map(_ % circeVersion)
+
 libraryDependencies ++= {
-  val liftVersion = "2.6.2"
-  val scalaCompiler = "2.11.8"
   Seq(
-    "org.scala-lang"    % "scala-compiler"      % scalaCompiler,
-    "org.scala-lang"    % "scala-reflect"       % scalaCompiler,
+    "org.scala-lang"    % "scala-compiler"      % scalaVersion.value,
+    "org.scala-lang"    % "scala-reflect"       % scalaVersion.value,
     "org.typelevel" %% "cats" % "0.8.1",
     "net.liftweb"     %% "lift-webkit" % liftVersion % "compile" withSources(),
     "net.liftweb"     %% "lift-mapper" % liftVersion % "compile->default" withSources(),
@@ -45,13 +53,14 @@ libraryDependencies ++= {
     "net.liftweb"     %% "lift-squeryl-record" % liftVersion % "compile->default" withSources(), // Record interface to RDBMS,
     "net.liftmodules" %% "lift-jquery-module_2.6" % "2.8" withSources(),
     "postgresql"        % "postgresql"          % "9.1-901.jdbc4",
-    "org.scalactic" %% "scalactic" % "3.0.1",
-    "org.scalatest" %% "scalatest" % "3.0.1" % "test",
+    "org.scalactic" % "scalactic_2.11" % "3.0.1",
+    "org.scalatest" % "scalatest_2.11" % "3.0.1" % "test",
     "org.skinny-framework" %% "skinny-http-client" % "2.2.0",
-    "org.eclipse.jetty" %  "jetty-webapp" % "9.1.0.v20131115"   % "container,test",  // Needed to run RunWebApp.scala in IDEA
-    "org.eclipse.jetty" %  "jetty-plus"   % "9.1.0.v20131115"  % "container,test", // For Jetty Config
+    "org.eclipse.jetty" % "jetty-webapp"        % "8.1.17.v20150415"  % "container,test",
+    "org.eclipse.jetty" % "jetty-plus"          % "8.1.17.v20150415"  % "container,test", // For Jetty Config
+    "org.eclipse.jetty.orbit" % "javax.servlet" % "3.0.0.v201112011016" % "container,test" artifacts Artifact("javax.servlet", "jar", "jar"),
     "org.specs2"        %% "specs2"             % "2.3.12"           % Test,
-    "ch.qos.logback"    % "logback-classic"     % "1.0.13"
+    "ch.qos.logback"    % "logback-classic"     % "1.1.3"
   )
 }
 
