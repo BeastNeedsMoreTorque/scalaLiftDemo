@@ -6,7 +6,6 @@ import net.liftweb.common._
 import net.liftweb.http.SHtml._
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.js.{JE, JsCmd}
-import net.liftweb.json.JsonAST._
 import net.liftweb.util.Helpers._
 import scala.xml.NodeSeq
 
@@ -74,7 +73,7 @@ class ProductInteraction extends Cancel with Consume with Advise with Loggable {
     // call to activateBt after button activation simply highlights that button was pressed, so we do it on each onclick action below.
     "@consume [onclick]" #>
       jsonCall( JE.Call("prodSelection.currentProds"),
-                      { j: JValue => consume(j) & activateBt("consume")}) &
+                      ( j => consume(j) & activateBt("consume"))) &
       // fetch in JSON with JS Call the lcbo product IDs and then deal with them
     "@cancel [onclick]" #>
       ajaxInvoke({() => cancel & activateBt("cancel")}) &
@@ -83,7 +82,7 @@ class ProductInteraction extends Cancel with Consume with Advise with Loggable {
       // always before recommend so it takes effect so that we know how many products to recommend.
     "@advise [onclick]" #>
       jsonCall( JE.Call("storeFinder.getTheSelectedStore"),
-        { j: JValue => advise(j) & activateBt("advise")})
+        ( j => advise(j) & activateBt("advise")))
   }
 
   /**

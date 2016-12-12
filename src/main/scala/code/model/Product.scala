@@ -2,7 +2,6 @@ package code.model
 
 import java.text.NumberFormat
 import code.model.GlobalLCBO_IDs._
-import net.liftweb.json._
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field.{BooleanField, IntField, LongField}
 import net.liftweb.util.Props
@@ -12,7 +11,6 @@ import scala.collection.concurrent.TrieMap
 import scala.collection.{Seq, _}
 import scala.language.implicitConversions
 import cats.implicits._
-import scala.xml.Node
 
 trait ProductSizeConstants {
   def nameSize: Int = Props.getInt("product.size.NAME", 0)
@@ -138,10 +136,6 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   def getProduct(id: P_KEY): Option[Product] = cache.get(id)
 
   override def table: Table[Product] = MainSchema.products
-
-  /* Convert a store to XML @see progscala2 chapter on implicits or Scala in Depth implicit view */
-  implicit def toXml(p: Product): Node =
-    <product>{Xml.toXml(p.asJValue)}</product>
 
   /*
   * Queries LCBO matching category

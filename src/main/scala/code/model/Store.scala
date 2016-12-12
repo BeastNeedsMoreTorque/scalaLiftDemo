@@ -4,7 +4,6 @@ import cats.implicits._
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
 import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher, SlowAdvisorComponentImpl}
 import code.model.utils.RetainSingles.asMap
-import net.liftweb.json._
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field._
 import net.liftweb.squerylrecord.RecordTypeMode._
@@ -14,7 +13,6 @@ import org.squeryl.annotations._
 import scala.collection._
 import scala.collection.concurrent.TrieMap
 import scala.language.implicitConversions
-import scala.xml.Node
 import code.model.GlobalLCBO_IDs._
 import code.model.utils.RNG
 import scala.util.Random
@@ -185,10 +183,6 @@ object Store extends Store with MetaRecord[Store] {
 
   def getStore(pKey: P_KEY): Option[Store] = cache.get(pKey)
   // effectively a thread-safe lock-free set, which helps avoiding making repeated requests for cache warm up for a store.
-
-  /* Convert a store to XML, @see Scala in Depth implicit view */
-  implicit def toXml(s: Store): Node =
-    <store>{Xml.toXml(s.asJValue)}</store>
 
   /**
     * synchronous because once the webapp accepts requests, this load must have completed so that the store collection is not empty.
