@@ -17,15 +17,14 @@ radio.unselectClass=thinBorder
 
 # implied with LCBO tests (40 throws and then it can wipe out cache!)
 product.lcboMaxPerPage=100
-product.query.ByCategoryArgs={"where_not":"is_discontinued,is_dead", "order":"inventory_count.desc"}
+product.query.ByCategoryArgs={"list":[{"k":"where_not","v":"is_discontinued,is_dead"}, {"k":"order","v":"inventory_count.desc"}]}
 # application product designer believes all items of relevance are not discontinued nor dead, so developer allows him to assign this view at run-time to the concept of "all items".
 # In general our policy or interpretation of how we should use the WEB API should be run-time attributes and not hard coded
 # (open question as to end-user having such choice, convention over configuration I often hear them say?).
-product.query.Filter={"where_not":"is_discontinued,is_dead"}
+product.query.Filter={"list":[{"k":"where_not","v":""is_discontinued,is_dead""}]}
 
-product.CategoriesMap={"wine":"Wine","spirits":"Spirits","beer":"Beer","ciders":"Ciders","coolers":"Ready-to-Drink/Coolers","non-Alc":"Accessories and Non-Alcohol Items"}
-product.CategoriesImageMap={"wine":"/images/wineGlassPour.jpg","spirits":"/images/brandy.jpg","beer":"/images/beerGlass.jpg","ciders":"/images/ciderGlass.jpg","coolers":"/images/coolerGlass.jpg","non-Alc":"/images/giftBox.jpg"}
-product.interactionsImageMap={"recommend":"/images/recommend.jpg","cancel":"/images/cancel.jpg"}
+product.CategoriesMap={"list":[{"k":"wine","v":"Wine"},{"k":"spirits","v":"Spirits"},{"k":"beer","v":"Beer"},{"k":"ciders","v":"Ciders"},{"k":"coolers","v":"Ready-to-Drink/Coolers"},{"k":"non-Alc","v":"Accessories andNon-Alcohol Items"}]}
+product.CategoriesImageMap={"list":[{"k":"wine","v":"/images/wineGlassPour.jpg"},{"k":"spirits","v":"/images/brandy.jpg"},{"k":"beer","v":"/images/beerGlass.jpg"},{"k":"ciders","v":"/images/ciderGlass.jpg"},{"k":"coolers","v":"/images/coolerGlass.jpg"},{"k":"non-Alc","v":"/images/giftBox.jpg"}]}
 
 #No order on a map, so we impose an order on the keys
 product.Categories=wine:spirits:beer:ciders:coolers:non-Alc
@@ -47,7 +46,7 @@ product.size.SERVING_SUGGESTION=300
 # implied with LCBO tests as max we can query on a page
 store.lcboMaxPerPage=100
 # careful observer will notice it's not same value as for product.
-store.query.Filter={"where_not":"is_dead"}
+store.query.Filter={"list":[{"k":"where_not","v":"is_dead"}]}
 
 # false means we're in charge and will get repeatable predictable samples good for unit testing or proving we can work in "pure functional" way.
 # true means we're getting unpredictable selections, it's more entertaining but not as testable.

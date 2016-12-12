@@ -10,20 +10,20 @@ class LiquorCategory {
   /**
     * @return a map of product categories to an image file that can be rendered, a web resource
     */
-  val toImg = getMap("product.CategoriesImageMap")
+  val toImg = ConfigPairsRepo.getSeq("product.CategoriesImageMap").toMap
+
   // give wine and beer at a minimum, provides iterable sequence of categories users can select from.
   val categories = Props.get("product.Categories", "wine:beer").split(":")
 
+  val categoriesMap = ConfigPairsRepo.getSeq("product.CategoriesMap").toMap
   /**
     * @param category a category of products at LCBO such as wine or beer
     * @return a different wording of that category that LCBO uses to specify a primary category
     * for instance LCBO will associate category of "coolers" to the longer primary category name of "Ready-to-Drink/Coolers"
     */
   def toPrimaryCategory(category: String): String =
-    getMap("product.CategoriesMap").
+    categoriesMap.
       get(category).
       fold(category)(identity)
 
-  private def getMap(k: String) =
-    ConfigPairsRepo.getSeq(k).toMap
 }

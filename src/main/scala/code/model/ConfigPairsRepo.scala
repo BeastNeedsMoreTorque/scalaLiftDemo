@@ -1,15 +1,17 @@
 package code.model
 
-import net.liftweb.json._
 import net.liftweb.util.Props
-import scala.collection.Seq
+import io.circe.parser.{parse, _}
+import io.circe._
+import io.circe.generic.auto._
+import cats.syntax.either._
 
 /**
   * Created by philippederome on 2016-04-08.
   * A module offering several possible different implementations of ConfigPairsRepo
   */
 object ConfigPairsRepo {
-  implicit val formats = net.liftweb.json.DefaultFormats
+  case class KV(k: String, v: String) // to assist JSON parsing
   val emptyString: String = ""
   val emptyPairs = Seq.empty[(String, String)]
   /**
@@ -18,14 +20,11 @@ object ConfigPairsRepo {
     * @return a map of strings to strings bound to the masterKey
     */
   def getSeq(masterKey: String): Seq[(String, String)] = {
-    val json = parseOpt(Props.get(masterKey, emptyString)) // assumed to be of form {"key1":"value1",... "keyn":"valuen"}, which is JSON
-    // contains optionally children having JValue, which are really JField(name:String, value:JValue that is effectively String)
-    // should now be an Option on JObject(List(JFields))
-    json.map {
-      case (JObject(xs)) => xs
-      case _ => Seq.empty[JField]
-    }.map(_.map { case(JField(k, JString(v))) => (k, v) } )
-      .map(identity).getOrElse(emptyPairs)
+    // call to Props.get assumed to yield {"key1":"value1",... "keyn":"valuen"}, which is JSON
+    val doc = parse(Props.get(masterKey, emptyString)).getOrElse(Json.Null)
+    (doc.hcursor.downField("list").as[Seq[KV]] match {
+      case Left(_) => Nil
+      case Right(xs) => xs
+    }).map{ case KV(k,v) => (k,v) }
   }
-
 }
