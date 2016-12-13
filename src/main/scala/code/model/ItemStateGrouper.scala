@@ -14,7 +14,7 @@ case class UpdateAndInserts[T](updates: IndexedSeq[T], inserts: IndexedSeq[T])
 /**
   * Single method trait that classifies items as Clean, Dirty, or New according to a comparison made with get.
   */
-trait ItemStateGrouper {
+object ItemStateGrouper {
 
   /**
     * state of an associated Entity (Record here) as whether it requires change to database and cache

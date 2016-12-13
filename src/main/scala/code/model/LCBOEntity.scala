@@ -14,7 +14,7 @@ import net.liftweb.util.Props
   * @see F-bounded polymorphism
   */
 trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor
-  with CreatedUpdated[T] with ItemStateGrouper {
+  with CreatedUpdated[T] {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.
@@ -106,11 +106,9 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] wi
     * and then make sure first DB is brought up to date with that info and synchronously the cache memory as well.
     */
   final def synchDirtyAndNewItems[I >: T](items: IndexedSeq[T], get: I => Option[I])(implicit ev: ShowKey[T]): IndexedSeq[T] = {
-    val dirtyAndNewItems = itemsByState[I, T](items, get)
+    val dirtyAndNewItems = ItemStateGrouper.itemsByState[I, T](items, get)
     updateAndInsert(dirtyAndNewItems.updates, dirtyAndNewItems.inserts) // updates DB AND cache.
     items
   }
-
   private def emptyString = ""
-
 }

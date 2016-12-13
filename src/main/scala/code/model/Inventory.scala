@@ -54,7 +54,7 @@ case class Inventory private(val storeid: Long,
 
 case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: Iterable[Inventory])
 
-object Inventory extends ItemStateGrouper {
+object Inventory {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
   def apply(storeid: Long, productid: Long, inv: InventoryAsLCBOJson): Inventory = {
     val obj = new Inventory(storeid, productid)
@@ -76,7 +76,7 @@ object Inventory extends ItemStateGrouper {
     } yield dirtyInv
 
     for {items <- collectItemsAsWebClient(webApiRoute, extractInventory, params :+ "per_page" -> MaxPerPage)
-      updatesAndInserts <- Right(itemsByState[Inventory, Inventory](items, get))
+      updatesAndInserts <- Right(ItemStateGrouper.itemsByState[Inventory, Inventory](items, get))
       updatedInventories <- Right(getUpdatedInvs(retainSingles(updatesAndInserts.updates)))
       newInventories <- Right(retainSingles(updatesAndInserts.inserts))
       inventories <- Right(UpdatedAndNewInventories(updatedInventories, newInventories))
