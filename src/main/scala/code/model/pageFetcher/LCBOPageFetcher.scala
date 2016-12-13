@@ -72,8 +72,8 @@ object LCBOPageFetcher extends Loggable {
     isFinalPage || totalPages < pageNo + 1
   }
 
-  val extractInventory: JSitemsExtractor[Inventory] = { jVal =>
-    for {p <- jVal.children.toIndexedSeq
+  val extractInventory: JSitemsExtractor[Inventory] = { json =>
+    for {p <- json.children.toIndexedSeq
          inv <- p.extractOpt[InventoryAsLCBOJson]
          storeid <- Store.lcboKeyToPKMap.get(inv.store_id.LcboKeyID)
          productid <- Product.lcboKeyToPKMap.get(inv.product_id.LcboKeyID)
@@ -87,7 +87,7 @@ object LCBOPageFetcher extends Loggable {
     * that have a functional read-only interface while accepting to do sets on the columns and that clashes with underlying Squeryl ORM library that has defined
     * id as a def (a true read-only item). And this id thingie is required for the whole MainSchema to work with the ORM relationships in memory.
     */
-  def extractStore: JSitemsExtractor[Store] = json => {
+  val extractStore: JSitemsExtractor[Store] = json => {
     val idFix = json.transformField {
       case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
     }
