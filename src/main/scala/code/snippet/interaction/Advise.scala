@@ -17,11 +17,6 @@ import code.model.GlobalLCBO_IDs.TaggedLong
   */
 trait Advise extends UtilCommands {
   /**
-    * to make JSON parsing work
-    */
-  implicit val formatsAdvise = net.liftweb.json.DefaultFormats
-
-  /**
     * A call to browser (invoking Javascript) when we are done to ask it to deal with incomplete inventories and get them himself
     * if we cannot send them all in a timely fashion
     */
@@ -44,6 +39,10 @@ trait Advise extends UtilCommands {
     */
   def advise(jsStore: JValue): JsCmd =
     User.currentUser.dmap { S.error("advise", "advise feature unavailable, Login first!"); Noop } { user =>
+      /**
+        * to make JSON parsing work
+        */
+      implicit val formatsAdvise = net.liftweb.json.DefaultFormats
       val cmd =
         for {storeId <- jsStore.extractOpt[Long]
              s <- Store.getStore(storeId.PKeyID)  // no result here or earlier on will lead to error below as cmd will be None

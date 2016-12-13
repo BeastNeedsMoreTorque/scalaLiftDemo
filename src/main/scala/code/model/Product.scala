@@ -125,6 +125,7 @@ class Product private() extends LCBOEntity[Product] with IProduct with ProductSi
   *
   */
 object Product extends Product with MetaRecord[Product] with ProductRunner  {
+  import code.model.pageFetcher.LCBOPageFetcher.GotEnough_?
   // thread-safe lock free objects
   override val cache: concurrent.Map[P_KEY, Product] = TrieMap() // only update once confirmed in DB!
   val lcboKeyToPKMap: concurrent.Map[LCBO_KEY, P_KEY] = TrieMap()

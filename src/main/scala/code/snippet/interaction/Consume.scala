@@ -18,9 +18,10 @@ case class SelectedProduct(id: Long, quantity: Long, cost: Double, missedQty: Lo
 
 trait Consume extends UtilCommands {
   val formatter = NumberFormat.getCurrencyInstance()
-  implicit val formats = net.liftweb.json.DefaultFormats
 
   def consume(selection: JValue): JsCmd = {
+    implicit val formats = net.liftweb.json.DefaultFormats
+
     val data = selection.extractOpt[String].fold[JValue](JNothing)(parse) // {"store":storeId, "items" : <list>}
     val store = for {
       id <- (data \ "store").extractOpt[Long]
