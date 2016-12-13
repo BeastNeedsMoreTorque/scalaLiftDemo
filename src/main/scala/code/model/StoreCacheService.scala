@@ -18,7 +18,7 @@ import scala.util.{Failure, Success}
   * Provides a cache service for the Store class. Keeps track of products by themselves or by cateory,
   * and inventory (count) in a store. It uses TrieMap to do so.
   */
-trait StoreCacheService extends ORMExecutor with Loggable {
+trait StoreCacheService extends Loggable {
   /**
     * StringFormatter formats an input String within a larger fixed message whose format expects a single String input.
     */
@@ -117,8 +117,8 @@ trait StoreCacheService extends ORMExecutor with Loggable {
         inTransaction {
           // bulk update the ones needing an update and then bulk insert the ones
           // MainSchema actions of update and insert provide an update to database combined to ORM caching, transparent to us
-          (execute[Inventory, Iterable](MainSchema.inventories.update, inventories.updatedInvs)
-            |+| execute[Inventory, Iterable](MainSchema.inventories.insert, inventories.newInvs)).
+          (ORMExecutor.execute[Inventory, Iterable](MainSchema.inventories.update, inventories.updatedInvs)
+            |+| ORMExecutor.execute[Inventory, Iterable](MainSchema.inventories.insert, inventories.newInvs)).
             fold({err: String => throw new Throwable(err)}, (Unit) => ())
         }
       )

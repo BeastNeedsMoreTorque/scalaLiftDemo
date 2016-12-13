@@ -13,8 +13,7 @@ import net.liftweb.util.Props
   * Created by philippederome on 2016-04-10. Highest level trait to share between Product and Store that have much logic in common.
   * @see F-bounded polymorphism
   */
-trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] with ORMExecutor
-  with CreatedUpdated[T] {
+trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] with CreatedUpdated[T] {
   self: T =>
 
   // Always call update before insert just to be consistent and safe. Enforce it.
@@ -65,7 +64,7 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] wi
     lazy val context = (err: String) =>
       s"Problem with batchTransactor, exception error $err"
 
-    execute(ORMTransactor, items).
+    ORMExecutor.execute(ORMTransactor, items).
       fold(err => logger.error(context(err)), (Unit) => feedCache(items))
   }
   /**

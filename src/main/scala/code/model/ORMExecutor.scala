@@ -6,7 +6,7 @@ import language.higherKinds
   * Created by philippederome on 2016-04-03.
   * Offers mechanism to report errors as SQLException with some detail
   */
-trait ORMExecutor {
+object ORMExecutor {
   /**
     * executes what is assumed to be a database operation using f for a collection of items fa
     * formatting error message in special way for details if it is a SQLException
