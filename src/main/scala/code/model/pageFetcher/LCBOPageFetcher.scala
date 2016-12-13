@@ -11,8 +11,16 @@ import net.liftweb.util.Props
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
 
-trait LCBOPageFetcher {
-  import LCBOPageFetcher._
+object LCBOPageFetcher extends Loggable {
+  type ValidateItems[T] = Either[Throwable, IndexedSeq[T]]
+  type JSitemsExtractor[T] = JValue => IndexedSeq[T]
+  type GotEnough_? = (Int) => Boolean
+
+  val LcboDomain: String = Props.get("lcboDomain", "")  // set it!
+  val httpTimeOuts = HttpTimeouts(Props.getInt("http.ClientReadTimeOut", 0), Props.getInt("http.ClientConnTimeOut", 0))
+
+  implicit val formats = net.liftweb.json.DefaultFormats
+
   /**
     * LCBO client JSON query handler. Exists to present a cleaner interface than the tail recursive method
     *
@@ -28,17 +36,6 @@ trait LCBOPageFetcher {
                                  params: Seq[(String, Any)] = Seq())
                                 (implicit enough: GotEnough_? = { x => false }): ValidateItems[T] =
     go( IndexedSeq(), 1, xt, params, enough, s"http://$LcboDomain/$path")
-}
-
-object LCBOPageFetcher extends Loggable {
-  type ValidateItems[T] = Either[Throwable, IndexedSeq[T]]
-  type JSitemsExtractor[T] = JValue => IndexedSeq[T]
-  type GotEnough_? = (Int) => Boolean
-
-  val LcboDomain: String = Props.get("lcboDomain", "")  // set it!
-  val httpTimeOuts = HttpTimeouts(Props.getInt("http.ClientReadTimeOut", 0), Props.getInt("http.ClientConnTimeOut", 0))
-
-  implicit val formats = net.liftweb.json.DefaultFormats
 
   // "go" is an idiom to use tailrec in Functional Programming in Scala as a helper function (and likewise using "closure" as is often found in JS).
   // Function would be pure if we'd bother to pass explicitly as params urlRoot, webApiRoute, xt, params, and enough, but conceptually it's the same.

@@ -2,7 +2,7 @@ package code.model
 
 import java.text.NumberFormat
 import code.model.GlobalLCBO_IDs._
-import code.model.pageFetcher.LCBOPageFetcher.extractProduct
+import code.model.pageFetcher.LCBOPageFetcher.{collectItemsAsWebClient,extractProduct}
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field.{BooleanField, IntField, LongField}
 import net.liftweb.util.Props
