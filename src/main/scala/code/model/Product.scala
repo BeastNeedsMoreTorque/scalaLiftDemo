@@ -2,6 +2,7 @@ package code.model
 
 import java.text.NumberFormat
 import code.model.GlobalLCBO_IDs._
+import code.model.pageFetcher.LCBOPageFetcher.extractProduct
 import net.liftweb.record.MetaRecord
 import net.liftweb.record.field.{BooleanField, IntField, LongField}
 import net.liftweb.util.Props
@@ -169,5 +170,5 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
   // a cross cutting concern or a strategy.
   protected def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = neverEnough ) =
-    collectItemsAsWebClient("/products", extract, Seq("per_page" -> MaxPerPage, "store_id" -> lcboStoreId) ++ seq)
+    collectItemsAsWebClient("/products", extractProduct, Seq("per_page" -> MaxPerPage, "store_id" -> lcboStoreId) ++ seq)
 }

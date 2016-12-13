@@ -1,14 +1,16 @@
 package code.model
 
 import code.model.GlobalLCBO_IDs._
+import code.model.pageFetcher.LCBOPageFetcher.extractInventory
 import code.model.pageFetcher.LCBOPageFetcher
 import net.liftweb.squerylrecord.RecordTypeMode._
 import net.liftweb.util.Helpers._
 import net.liftweb.util.Props
 import org.squeryl.KeyedEntity
 import org.squeryl.dsl.CompositeKey2
-import scala.collection.Iterable
 import code.model.utils.RetainSingles._
+
+import scala.collection.Iterable
 import cats.implicits._
 
 object DefaultDateAsNow {
@@ -55,16 +57,6 @@ case class UpdatedAndNewInventories(updatedInvs: Iterable[Inventory], newInvs: I
 
 object Inventory extends LCBOPageFetcher with ItemStateGrouper {
   val MaxPerPage = Props.getInt("inventory.lcboMaxPerPage", 0)
-  implicit val formats = net.liftweb.json.DefaultFormats
-  val extract: JSitemsExtractor[Inventory] =  { jVal =>
-    for {p <- jVal.children.toIndexedSeq
-         inv <- p.extractOpt[InventoryAsLCBOJson]
-         storeid <- Store.lcboKeyToPKMap.get(inv.store_id.LcboKeyID)
-         productid <- Product.lcboKeyToPKMap.get(inv.product_id.LcboKeyID)
-         newInv = Inventory(storeid, productid, inv)
-    } yield newInv
-  }
-
   def apply(storeid: Long, productid: Long, inv: InventoryAsLCBOJson): Inventory = {
     val obj = new Inventory(storeid, productid)
     obj.copy(inv)
@@ -84,7 +76,7 @@ object Inventory extends LCBOPageFetcher with ItemStateGrouper {
       dirtyInv = cachedInv.copyDiffs(freshInv)
     } yield dirtyInv
 
-    for {items <- collectItemsAsWebClient(webApiRoute, extract, params :+ "per_page" -> MaxPerPage)
+    for {items <- collectItemsAsWebClient(webApiRoute, extractInventory, params :+ "per_page" -> MaxPerPage)
       updatesAndInserts <- Right(itemsByState[Inventory, Inventory](items, get))
       updatedInventories <- Right(getUpdatedInvs(retainSingles(updatesAndInserts.updates)))
       newInventories <- Right(retainSingles(updatesAndInserts.inserts))

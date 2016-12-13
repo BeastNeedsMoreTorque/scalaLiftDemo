@@ -5,8 +5,6 @@ import code.model.pageFetcher.LCBOPageFetcher
 import code.model.utils.RetainSingles._
 import code.model.utils.ShowKey
 import code.model.GlobalLCBO_IDs._
-import net.liftweb.common.Full
-import net.liftweb.json.JsonAST._
 import net.liftweb.record.field.{OptionalStringField, StringField}
 import net.liftweb.squerylrecord.KeyedRecord
 import net.liftweb.squerylrecord.RecordTypeMode._
@@ -92,20 +90,6 @@ trait LCBOEntity[T <: LCBOEntity[T]] extends Loader[T] with KeyedRecord[Long] wi
     type filterMethodsList = List[(FilteredMandatoryStringField.this.ValueType) => FilteredMandatoryStringField.this.ValueType]
     override def defaultValue: String = emptyString
     override def setFilter: filterMethodsList = notNull _ :: crop _ :: super.setFilter
-  }
-
-  /**
-   * Some LCBO entities require to back patch JSon read in "id" as a separate column in Record (lcbo_id). They do so with the logic below (idFix = transform).
-   * In other words, JSON comes in as id=123 and we need to store that to table.column[lcbo_id]. The crux of problem is Lift Record wanting to use Fields
-   * that have a functional read-only interface while accepting to do sets on the columns and that clashes with underlying Squeryl ORM library that has defined
-   * id as a def (a true read-only item). And this id thingie is required for the whole MainSchema to work with the ORM relationships in memory.
-   */
-  val extract: JSitemsExtractor[T] = json => {
-    val idFix = json.transformField {
-      case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
-    }
-    idFix.children.collect { case(n: JValue) => meta.fromJValue(n) }
-      .collect { case(Full(x)) => x }.toIndexedSeq
   }
 
   /**

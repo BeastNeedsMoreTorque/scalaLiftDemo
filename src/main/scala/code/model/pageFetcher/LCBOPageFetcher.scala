@@ -1,15 +1,18 @@
 package code.model.pageFetcher
 
 import code.Rest.{HttpTimeouts, RestClient}
+import code.model.{Store, Product, Inventory, InventoryAsLCBOJson}
 import net.liftweb.json.{JNothing, JValue, parseOpt}
-import net.liftweb.common.Loggable
+import net.liftweb.common.{Full, Loggable}
+import net.liftweb.json.JsonAST.{JField, JInt}
+import code.model.GlobalLCBO_IDs._
 import net.liftweb.util.Props
+
 import scala.annotation.tailrec
 import scala.collection.IndexedSeq
 
 trait LCBOPageFetcher extends Loggable {
   import LCBOPageFetcher._
-  type JSitemsExtractor[T] = JValue => IndexedSeq[T]
   type GotEnough_? = (Int) => Boolean
   type ValidateItems[T] = Either[Throwable, IndexedSeq[T]]
   val neverEnough: GotEnough_? = { x => false }
@@ -65,4 +68,37 @@ trait LCBOPageFetcher extends Loggable {
 
 object LCBOPageFetcher {
   val LcboDomain: String = Props.get("lcboDomain", "")  // set it!
+  type JSitemsExtractor[T] = JValue => IndexedSeq[T]
+
+  implicit val formats = net.liftweb.json.DefaultFormats
+  val extractInventory: JSitemsExtractor[Inventory] = { jVal =>
+    for {p <- jVal.children.toIndexedSeq
+         inv <- p.extractOpt[InventoryAsLCBOJson]
+         storeid <- Store.lcboKeyToPKMap.get(inv.store_id.LcboKeyID)
+         productid <- Product.lcboKeyToPKMap.get(inv.product_id.LcboKeyID)
+         newInv = Inventory(storeid, productid, inv)
+    } yield newInv
+  }
+
+  /**
+    * Some LCBO entities require to back patch JSon read in "id" as a separate column in Record (lcbo_id). They do so with the logic below (idFix = transform).
+    * In other words, JSON comes in as id=123 and we need to store that to table.column[lcbo_id]. The crux of problem is Lift Record wanting to use Fields
+    * that have a functional read-only interface while accepting to do sets on the columns and that clashes with underlying Squeryl ORM library that has defined
+    * id as a def (a true read-only item). And this id thingie is required for the whole MainSchema to work with the ORM relationships in memory.
+    */
+  def extractStore: JSitemsExtractor[Store] = json => {
+    val idFix = json.transformField {
+      case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
+    }
+    idFix.children.collect { case(n: JValue) => Store.meta.fromJValue(n) }
+      .collect { case(Full(x)) => x }.toIndexedSeq
+  }
+
+  val extractProduct: JSitemsExtractor[Product] = json => {
+    val idFix = json.transformField {
+      case JField("id", JInt(n)) => JField("lcbo_id", JInt(n)) // see above paragraph text for justification.
+    }
+    idFix.children.collect { case(n: JValue) => Product.meta.fromJValue(n) }
+      .collect { case(Full(x)) => x }.toIndexedSeq
+  }
 }

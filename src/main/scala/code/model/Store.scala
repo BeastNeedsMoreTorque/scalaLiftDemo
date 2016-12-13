@@ -2,6 +2,7 @@ package code.model
 
 import cats.implicits._
 import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
+import code.model.pageFetcher.LCBOPageFetcher.extractStore
 import code.model.prodAdvisor.{MonteCarloProductAdvisorComponentImpl, ProductAdvisorDispatcher, SlowAdvisorComponentImpl}
 import code.model.utils.RetainSingles.asMap
 import net.liftweb.record.MetaRecord
@@ -220,6 +221,6 @@ object Store extends Store with MetaRecord[Store] {
     for {pKey <- lcboKeyToPKMap.get(s.lcboKey)
          is <- getStore(pKey)} yield is
 
-  private def getStores = collectItemsAsWebClient("/stores", extract, queryFilterArgs)
+  private def getStores = collectItemsAsWebClient("/stores", extractStore, queryFilterArgs)
     // nice to know if it's empty, so we can log an error in that case.
 }
