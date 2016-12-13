@@ -13,7 +13,6 @@ import scala.collection.IndexedSeq
 
 trait LCBOPageFetcher {
   import LCBOPageFetcher._
-  val neverEnough: GotEnough_? = { x => false }
   /**
     * LCBO client JSON query handler. Exists to present a cleaner interface than the tail recursive method
     *
@@ -27,7 +26,7 @@ trait LCBOPageFetcher {
   def collectItemsAsWebClient[T](path: String,
                                  xt: JSitemsExtractor[T],
                                  params: Seq[(String, Any)] = Seq())
-                                (implicit enough: GotEnough_? = neverEnough): ValidateItems[T] =
+                                (implicit enough: GotEnough_? = { x => false }): ValidateItems[T] =
     go( IndexedSeq(), 1, xt, params, enough, s"http://$LcboDomain/$path")
 }
 

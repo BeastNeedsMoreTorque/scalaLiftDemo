@@ -161,15 +161,13 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
     } yield cs
   }
 
-  def getItemByLcboKey(id: LCBO_KEY): Option[Product] =
-    for {pKey <- lcboKeyToPKMap.get(id)
-         ip <- cache.get(pKey)} yield ip
+  def getItemByLcboKey(id: LCBO_KEY): Option[Product] = for {
+    pKey <- lcboKeyToPKMap.get(id)
+    ip <- cache.get(pKey)
+  } yield ip
 
   def getCachedItem: Product => Option[Product] = p => getItemByLcboKey(p.lcboKey)
 
-  // the implicit isEnough parameter is strictly to play around with the concept as in this case, implicit is not particularly compelling.
-  // See the calls to productWebQuery and collectItemsAsWebClient. Though, one might argue choosing single pages,n pages, or all pages could represent
-  // a cross cutting concern or a strategy.
-  protected def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)])( implicit isEnough: GotEnough_? = neverEnough ) =
+  protected def productWebQuery(lcboStoreId: Long, seq: Seq[(String, Any)]) =
     collectItemsAsWebClient("/products", extractProduct, Seq("per_page" -> MaxPerPage, "store_id" -> lcboStoreId) ++ seq)
 }
