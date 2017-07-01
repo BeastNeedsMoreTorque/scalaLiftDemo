@@ -133,22 +133,6 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 
   case class CategoryShowKeyPairVals(category: String, keys: ShowKeyPairVals)
 
-  /**
-    * contains configuration values as to whether we want to use a random see and if instead we use a fixed one its value
-    * the FixedRNGSeed is to enable unit testing.
-    */
-  object Shuffler {
-    /**
-      * When true we use standard (non functional have side effect) random number generation, but when false we use value of FixedRNGSeed.
-      * When false, FixedRNGSeed's value is ignored.
-      */
-    val UseRandomSeed = Props.getBool("productInteraction.useRandomSeed", true)
-    /**
-      * the seed to use when we want to bypass standard rand and control the random number generation
-      */
-    val FixedRNGSeed = Props.getInt("productInteraction.fixedRNGSeed", 0)
-  }
-
 }
 
 object Store extends Store with MetaRecord[Store] {
@@ -159,11 +143,26 @@ object Store extends Store with MetaRecord[Store] {
     case _ => new ProductAdvisorDispatcher with SlowAdvisorComponentImpl
   }
 
+  trait SeedStrategy
+  case object RandomSeed extends SeedStrategy
+  case class RNGSeed(value: Int) extends SeedStrategy
+  lazy val seedStrategy: SeedStrategy = {
+    Props.getBool("productInteraction.useRandomSeed", true) match {
+      case true => RandomSeed
+      case false => RNGSeed(Props.getInt("productInteraction.fixedRNGSeed", 0))
+    }
+  }
+
   def advise(invService: Store,
              category: String,
              requestSize: Int,
              runner: ProductRunner): ValidateSelection = {
-    val rng = RNG.Simple(if (Shuffler.UseRandomSeed) Random.nextInt() else Shuffler.FixedRNGSeed)
+    val rng = RNG.Simple(
+      seedStrategy match {
+        case RandomSeed => Random.nextInt()
+        case RNGSeed(value) => value
+      }
+    )
     advisor.advise(invService, category, requestSize, runner)(rng)
   }
 
