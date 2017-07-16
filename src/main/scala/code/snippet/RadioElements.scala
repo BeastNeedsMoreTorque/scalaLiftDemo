@@ -18,13 +18,16 @@ object RadioElements {
   def selectOption(s: String, img: String): RadioElements =
     RadioElements(s, <img name={s} title={s} class={thickBorder} src={img}/>)  // maybe adding button could work?
 
-  def radioOptions(ss: Seq[String],
+  def radioOptions(names: Seq[String],
                    defaultName: String,
-                   toImg: String => String): Seq[RadioElements] =
-  ss.map {
-    case `defaultName` => (defaultName, thickBorder)
-    case (s) => (s, thinBorder)
-  }.map { case (s, border) =>
-    RadioElements(s, <img name={s} title={s} src={toImg(s)} class={border}/>)
-  } // selected with style that frames it
+                   toImg: String => String): Seq[RadioElements] = {
+    val getBorderByName: String => (String, String) = name =>
+      (name, if (name == `defaultName`) thickBorder else thinBorder)
+
+    val getRadioElements: ((String, String)) => RadioElements = nameAndBorder => {
+      val (s, border) = nameAndBorder
+      RadioElements(s, <img name={s} title={s} src={toImg(s)} class={border}/>) // selected with style that frames it
+    }
+    names.map { getBorderByName andThen getRadioElements }
+  }
 }

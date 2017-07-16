@@ -91,6 +91,6 @@ class ProductInteraction extends Cancel with Consume with Advise with Loggable {
   object AdviseCount {
     val values = List("1","5","10","20","50")
     val default = Full(values.head)
-    val options = values.map(k => (k,k))
+    val options = values zip values
   }
 }

@@ -157,7 +157,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
     for {
       as <- productWebQuery(lcboStoreId, queryFilterArgs) // take them all from Stream
       bs <- Right(synchDirtyAndNewItems(as, getCachedItem))
-      cs = bs.map{_.lcboKey}.flatMap{ getItemByLcboKey } // usable for client to cache, now that we refreshed them all
+      cs = bs.flatMap { p: Product => ({p: Product => p.lcboKey} andThen getItemByLcboKey)(p) } // usable for client to cache, now that we refreshed them all
     } yield cs
   }
 
