@@ -37,7 +37,7 @@ total bill.
 - Run modes: dev and test (`src/main/resources/props:` `default.props` and `test.default.props` whose names are chosen as per Lift framework).
 Test mode is used when executing a sample of Scalatest unit test cases.
 
-- Starting app: in project folder, launch sbt, and then `jetty:start`.
+- Starting app: launch Postgres, then, in project folder, launch sbt, and then `jetty:start`.
 May also start from Intellij IDEA Community Edition 2016.*. Patience is required when Intellij IDEA CE decides to index your project.
 Runs on localhost:8090 except if launched from IDEA in which case it is localhost:8080 (or the port you specify in run configuration in the IDE).
 If running from sbt, the port number is controlled in build.sbt by containerPort,which is tied to plugin xsbt-web-plugin (project/plugins.sbt)
