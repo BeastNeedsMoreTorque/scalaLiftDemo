@@ -15,6 +15,7 @@ unmanagedResourceDirectories in Test <+= baseDirectory { _ / "src/main/webapp" }
 
 scalacOptions ++= Seq(
   "-deprecation",
+  "-Xexperimental",
   "-encoding", "UTF-8",
   "-feature",
   "-language:_"

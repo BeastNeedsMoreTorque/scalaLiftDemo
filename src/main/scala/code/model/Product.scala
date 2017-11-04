@@ -9,7 +9,7 @@ import net.liftweb.util.Props
 import org.squeryl.Table
 import org.squeryl.annotations._
 import scala.collection.concurrent.TrieMap
-import scala.collection.{Seq, _}
+import scala.collection._
 import scala.language.implicitConversions
 import cats.implicits._
 
@@ -151,7 +151,7 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
   }
 
   // side effect to store updates of the products
-  def fetchByStore(lcboStoreId: Long): ValidatedProducts = {
+  def fetchByStore(lcboStoreId: Long): ValidatedProducts =
     // by design we don't track of products by store, so this effectively forces us to fetch them from trusted source, LCBO
     // and gives us opportunity to bring our cache up to date about firm wide products.
     for {
@@ -159,7 +159,6 @@ object Product extends Product with MetaRecord[Product] with ProductRunner  {
       bs <- Right(synchDirtyAndNewItems(as, getCachedItem))
       cs = bs.flatMap { p: Product => ({p: Product => p.lcboKey} andThen getItemByLcboKey)(p) } // usable for client to cache, now that we refreshed them all
     } yield cs
-  }
 
   def getItemByLcboKey(id: LCBO_KEY): Option[Product] = for {
     pKey <- lcboKeyToPKMap.get(id)

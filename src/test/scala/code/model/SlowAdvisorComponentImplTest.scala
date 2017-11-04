@@ -15,22 +15,22 @@ class SlowAdvisorComponentImplTest extends UnitTest {
   implicit val rn = ProductAdvisorDispatcher.defaultRNG
   behavior of "No product available empty list"
   it should s"advise an empty list of products when using dummy InventoryService and ProductRunner when no products of category can be found" in {
-    Turtle.advise(NullInventoryService, "wine", 5, outOfStockRunner).map {
-      x => x.toList shouldBe empty
+    Turtle.advise(NullInventoryService, "wine", 5, outOfStockRunner).foreach {
+      _ shouldBe empty
     }
   }
   it should s"advise an empty list of products when no products of category can be found" in {
     val categories = Seq("wine", "spirits", "beer", "ciders", "coolers", "non-Alc")
     val FlagShip = Store
     FlagShip.lcbo_id.set(1) // to make web query good
-    categories.foreach(cat => Turtle.advise(FlagShip, cat, 5, outOfStockRunner).map {
-      x => x.toList shouldBe empty
+    categories.foreach(cat => Turtle.advise(FlagShip, cat, 5, outOfStockRunner).foreach {
+      _ shouldBe empty
     })
   }
 
   behavior of "Single product match by category once list of 1 and once empty list"
   it should s"get a Heineken name in first selection for beer when it is the only product" in {
-    Turtle.advise(NullInventoryService, "beer", 1, singleBeerRunner).map {
+    Turtle.advise(NullInventoryService, "beer", 1, singleBeerRunner).foreach {
       _.headOption.foreach(_._1.Name should equal("Heineken"))
     }
   }
@@ -44,7 +44,7 @@ class SlowAdvisorComponentImplTest extends UnitTest {
   // following tests depend on normal Scala collection take as selection strategy.
   behavior of "Selection of single item among 101 beers: 1 Mill Street among 100 Heinekens"
   def validateSelectedName(runner: ProductRunner, index: Int, name: String): Unit = {
-    val beers = Turtle.advise(NullInventoryService, "beer", 101, runner).map {
+    val beers = Turtle.advise(NullInventoryService, "beer", 101, runner).foreach {
       x: SlowAdvisorComponentImplTest.this.Turtle.Selection =>
       val y = x.toVector
       if (y.size > index) y(index)._1.Name should equal(name)

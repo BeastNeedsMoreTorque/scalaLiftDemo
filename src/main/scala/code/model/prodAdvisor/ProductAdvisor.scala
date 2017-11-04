@@ -184,12 +184,12 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
                                     category: String,
                                     lcboProdCategory: String,
                                     requestSize: Int): ValidateSelection = {
-      val inStockItems = {
+      val inStockItems =
         for {p <- initialProductKeys
              inv <- invService.inventoryByProductIdMap(p.iKey)
              q = inv.quantity if q > 0
              prod <- invService.getProduct(p.eKey)} yield (prod, q)
-      }
+
       // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
 
       invService.asyncLoadCache() // if we never loaded the cache, do it. Note: useful even if we have product of matching inventory

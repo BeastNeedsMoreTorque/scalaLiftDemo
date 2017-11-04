@@ -7,16 +7,27 @@ import code.model.ShowKeyPair.ShowKeyPairVals
 trait ShowKeyPair[External, Internal, A] {
   def showE(a: A): External
   def showI(a: A): Internal
-  def showKeyPairVals(a: A) = ShowKeyPairVals(showE(a), showI(a))
+  def showKeyPairVals(a: A): ShowKeyPairVals[External, Internal] = ShowKeyPairVals(showE(a), showI(a))
 }
 
 object ShowKeyPair {
+
   case class ShowKeyPairVals[E, I](eKey: E, iKey: I)
-  implicit def productKeyPairKeeper: ShowKeyPair[LCBO_KEY, P_KEY, IProduct] = new ShowKeyPair[LCBO_KEY, P_KEY, IProduct] {
-    def showE(prod: IProduct) = prod.lcboKey
-    def showI(prod: IProduct) = prod.pKey
+
+  // remember those are defaulted provided implementations for IProduct and IStore, the caller can choose
+  // any other implementation by selecting the proper evidence object implicitly in scope (in Haskell, there can only be one).
+  implicit val productShowKeyPair = new ShowKeyPair[LCBO_KEY, P_KEY, IProduct] {
+    def showE(prod: IProduct): LCBO_KEY = prod.lcboKey
+    def showI(prod: IProduct): P_KEY = prod.pKey
   }
-  implicit class ShowKeyPairOps[E,I,A](a: A)(implicit ev: ShowKeyPair[E, I, A]) {
+
+  implicit val storeShowKeyPair = new ShowKeyPair[LCBO_KEY, P_KEY, IStore] {
+    def showE(store: IStore): LCBO_KEY = store.lcboKey
+    def showI(store: IStore): P_KEY = store.pKey
+  }
+
+  // extension method style (object.showKeyPairVals)
+  implicit final class ShowKeyPairOps[E,I,A](a: A)(implicit ev: ShowKeyPair[E, I, A]) {
     def showKeyPairVals: ShowKeyPairVals[E, I] = ev.showKeyPairVals(a)
   }
 }

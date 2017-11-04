@@ -3,9 +3,9 @@ package code.Rest
 import skinny.http.{HTTP, HTTPException, Request}
 import cats.implicits._
 
-case class HttpTimeouts(sockTimeOut: Int, connTimeOut: Int)
-
 object RestClient {
+  case class HttpTimeouts(sockTimeOut: Int, connTimeOut: Int)
+
   val HTTP_PROTOCOL_GOOD_STAT_LOW = 200
   val HTTP_PROTOCOL_GOOD_STAT_HI = 300
   /**

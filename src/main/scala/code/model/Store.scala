@@ -32,12 +32,12 @@ trait EventTypes {
   type Selection = Iterable[(IProduct, Long)]
 
   /**
-    * captures exceptions as errors in Xor if any, otherwise a selection
+    * captures exceptions as errors in Either if any, otherwise a selection
     */
   type ValidateSelection = Either[Throwable, Selection]
 
   /**
-    * captures exceptions as errors in Xor if any, otherwise the quantity that got purchased
+    * captures exceptions as errors in Either if any, otherwise the quantity that got purchased
     */
   type ValidatePurchase = Either[Throwable, Long]
 }
@@ -120,17 +120,15 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 
   override def inventories: Iterable[Inventory] = storeProducts.associations
 
-  def advise(category: String, requestSize: Int, runner: ProductRunner): ValidateSelection = {
+  def advise(category: String, requestSize: Int, runner: ProductRunner): ValidateSelection =
     Store.advise(this, category, requestSize, runner)
-  }
 
   def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
     Store.consume(this, user, p, quantity)
 
-  def asyncLoadCache(): Unit = {
+  def asyncLoadCache(): Unit =
     // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()(Store.ec)
-  }
 
   case class CategoryShowKeyPairVals(category: String, keys: ShowKeyPairVals[LCBO_KEY, P_KEY])
 
