@@ -37,7 +37,7 @@ total bill.
 - Run modes: dev and test (`src/main/resources/props:` `default.props` and `test.default.props` whose names are chosen as per Lift framework).
 Test mode is used when executing a sample of Scalatest unit test cases.
 
-- Starting app: launch Postgres, then, in project folder, launch sbt, and then `jetty:start`.
+- Starting app: launch Postgres, then, in project folder, issue `jetty:start` within SBT Shell.
 May also start from Intellij IDEA Community Edition 2016.*. Patience is required when Intellij IDEA CE decides to index your project.
 Runs on localhost:8090 except if launched from IDEA in which case it is localhost:8080 (or the port you specify in run configuration in the IDE).
 If running from sbt, the port number is controlled in build.sbt by containerPort,which is tied to plugin xsbt-web-plugin (project/plugins.sbt)
@@ -49,7 +49,7 @@ browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - SBT: 0.13.13
 
-- Scala: 2.11.8
+- Scala: 2.12.3
 
 - JVM SDK: 1.8
 
@@ -59,7 +59,7 @@ browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - Skinny for WEBAPI client
 
-- Lift framework: 3.0
+- Lift framework: 3.0.1
 
 - Squeryl, a Scala ORM ((taken care by SBT)
 skinny for httpclient (taken care by SBT)
