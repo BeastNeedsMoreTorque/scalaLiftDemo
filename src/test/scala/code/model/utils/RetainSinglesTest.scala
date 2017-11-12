@@ -11,7 +11,7 @@ class RetainSinglesTest extends FlatSpec with Matchers {
 
   case class Model(k: Long, first: String, last : String, salary: Double)
   implicit val modelShowKey = new ShowKey[Model] {
-    def show(f: Model) = f.k.toString
+    def show(f: Model) = 0.toLong
   }
   behavior of "empty"
   it should s"return empty sequence on empty input" in {

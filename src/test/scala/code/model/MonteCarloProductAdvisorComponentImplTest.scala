@@ -43,9 +43,9 @@ class MonteCarloProductAdvisorComponentImplTest extends UnitTest {
   }
   // following is more to validate previous test. This is not particularly interesting.
   it should s"NOT get a Heineken name in first selection for wine when Heineken is the only (beer) product" in {
-    TupsyTurvy.advise(NullInventoryService, "wine", 1, singleBeerRunner).map {
+    TupsyTurvy.advise(NullInventoryService, "wine", 1, singleBeerRunner).toOption.collect {
       case Nil => ; // success: wine != beer, no match.
-    }
+    } should not be empty
   }
 
   // following tests depend on a shuffle of collection indices (post category filter) and normal Scala collection take as selection strategy.

@@ -10,7 +10,8 @@ import net.liftweb.record.Record
   */
 
 trait Created[T <: Created[T]] extends Record[T] {
-  self: T =>
+  self: T => // see https://tpolecat.github.io/2015/04/29/f-bounds.html, forces the subtype of Created (concrete type) to be a T
+  // as opposed to an arbitrary case class (F-bounded polymorphism)
   val created: DateTimeField[T] = new DateTimeField(this) {
     override def defaultValue = Calendar.getInstance
   }

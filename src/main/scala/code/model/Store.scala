@@ -46,7 +46,7 @@ trait InventoryService {
   def lcboKey: LCBO_KEY
   val inventoryByProductIdMap: P_KEY => Option[Inventory]
   def getProduct(x: LCBO_KEY): Option[IProduct]
-  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals[LCBO_KEY, P_KEY]]
+  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals[P_KEY]]
   def asyncLoadCache(): Unit
 }
 
@@ -73,7 +73,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   val address_line_1 = new FilteredMandatoryStringField(addressSize)
   val city = new FilteredMandatoryStringField(cityNameSize)
   override val productsCache = TrieMap[LCBO_KEY, IProduct]()
-  override val categoryIndex = TrieMap[String, IndexedSeq[ShowKeyPairVals[LCBO_KEY, P_KEY]]]()
+  override val categoryIndex = TrieMap[String, IndexedSeq[ShowKeyPairVals[P_KEY]]]()
   // don't put whole IProduct in here, just useful keys.
   override val inventoryByProductId = TrieMap[P_KEY, Inventory]()
 
@@ -101,9 +101,9 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   // They're recomputed when needed by the three helper functions that follow.
   def getProduct(x: LCBO_KEY): Option[IProduct] = productsCache.get(x)
 
-  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals[LCBO_KEY, P_KEY]] =
+  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals[P_KEY]] =
     categoryIndex.get(lcboCategory).
-      fold(IndexedSeq[ShowKeyPairVals[LCBO_KEY, P_KEY]]()){ identity }
+      fold(IndexedSeq[ShowKeyPairVals[P_KEY]]()){ identity }
 
   def refreshProducts(): Unit =  {
     refreshInventories()
@@ -130,7 +130,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
     // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()(Store.ec)
 
-  case class CategoryShowKeyPairVals(category: String, keys: ShowKeyPairVals[LCBO_KEY, P_KEY])
+  case class CategoryShowKeyPairVals(category: String, keys: ShowKeyPairVals[P_KEY])
 
 }
 
@@ -142,7 +142,7 @@ object Store extends Store with MetaRecord[Store] {
     case _ => new ProductAdvisorDispatcher with SlowAdvisorComponentImpl
   }
 
-  trait SeedStrategy
+  sealed trait SeedStrategy
   case object RandomSeed extends SeedStrategy
   case class RNGSeed(value: Int) extends SeedStrategy
   lazy val seedStrategy: SeedStrategy = {

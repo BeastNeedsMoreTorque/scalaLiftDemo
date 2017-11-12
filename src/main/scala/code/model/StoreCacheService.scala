@@ -38,7 +38,7 @@ trait StoreCacheService extends Loggable {
   /**
     * cache of product ids by category, a category index
     */
-  val categoryIndex: TrieMap[String, IndexedSeq[ShowKeyPairVals[LCBO_KEY, P_KEY]]]
+  val categoryIndex: TrieMap[String, IndexedSeq[ShowKeyPairVals[P_KEY]]]
 
   private val getCachedInventoryItem: Inventory => Option[Inventory] =
     inv => inventoryByProductId.get(inv.productid.PKeyID)

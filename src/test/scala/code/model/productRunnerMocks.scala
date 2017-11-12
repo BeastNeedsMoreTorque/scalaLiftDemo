@@ -15,7 +15,7 @@ package object productRunnerMocks {
     override def lcboKey: LCBO_KEY = 1.LcboKeyID
     override val inventoryByProductIdMap: P_KEY => Option[Inventory] = key => None
     override def getProduct(x: LCBO_KEY): Option[Product] = None
-    override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals[LCBO_KEY, P_KEY]] = IndexedSeq.empty
+    override def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals[P_KEY]] = IndexedSeq.empty
     override def asyncLoadCache(): Unit = () // intentional Noop/Unit here.
   }
   trait MockProductRunner extends ProductRunner {

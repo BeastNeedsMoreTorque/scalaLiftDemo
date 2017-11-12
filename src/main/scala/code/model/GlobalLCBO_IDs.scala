@@ -17,7 +17,7 @@ object GlobalLCBO_IDs {
   type @@[T, Tag] = Tagged[T, Tag]
 
   trait LcboKeyTag
-  type LCBO_KEY = Long @@ LcboKeyTag
+  type LCBO_KEY = Tagged[Long, LcboKeyTag]
 
   trait PKEYTag
   type P_KEY = Long @@ PKEYTag
