@@ -17,7 +17,7 @@ create table "store" (
 "address_line_1" varchar(200) not null,
 "created" timestamp not null
 );
-create sequence "s_store_pkid";
+-- create sequence "s_store_pkid";
 alter table store alter column pkid set default nextval('s_store_pkid');
 -- indexes on store
 create unique index "store_lcbo_id_idx" on "store" ("lcbo_id");
@@ -49,7 +49,7 @@ alter table product alter column image_thumb_url drop not null;
 alter table product alter column serving_suggestion drop not null;
 alter table product alter column secondary_category drop not null;
 
-create sequence "s_product_pkid";
+-- create sequence "s_product_pkid";
 alter table product alter column pkid set default nextval('s_product_pkid');
 -- indexes on product
 create unique index "lcbo_id_idx" on "product" ("lcbo_id");

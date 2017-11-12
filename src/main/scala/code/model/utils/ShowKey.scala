@@ -14,6 +14,6 @@ object ShowKey {
   // SAM (Single Access Method, experimental in 2.11)
   def pure[A](f: A => Long): ShowKey[A] = { a => f(a) } // from Daniel Westheide talk on type classes
 
-  implicit def showLoader[T <: Loader[T]]: ShowKey[T] = pure( _.lcboKey ) // meets our needs for Store and Product
-  implicit val invShowKey: ShowKey[Inventory] = pure(_.hashCode) // here, the key is all the data of the case class
+  implicit def showLoader[T <: Loader[T]]: ShowKey[T] = pure(_.lcboKey) // meets our needs for Store and Product
+  implicit val invShowKey: ShowKey[Inventory] = pure(x => (32768 * x.store_id) + x.product_id) // here, the key is external key from LCBO
 }
