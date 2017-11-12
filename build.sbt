@@ -1,7 +1,7 @@
 lazy val commonSettings = Seq(
   organization := "deromefintech.com",
   version := "1.0",
-  scalaVersion := "2.12.3"
+  scalaVersion := "2.11.8"
 )
 
 val scalaOptions = Seq(
@@ -14,7 +14,7 @@ lazy val root = (project in file("."))
     name := "lcboViewer",
     scalacOptions ++= scalaOptions,
     libraryDependencies ++= {
-      val liftVersion = "3.0.1"
+      val liftVersion = "3.0"
       Seq(
         "io.circe" %% "circe-core",
         "io.circe" %% "circe-generic",
@@ -26,15 +26,15 @@ lazy val root = (project in file("."))
         "net.liftweb"     %% "lift-webkit" % liftVersion % "compile" withSources(),
         "net.liftweb"     %% "lift-mapper" % liftVersion % "compile->default" withSources(),
         "net.liftweb"     %% "lift-squeryl-record" % liftVersion % "compile->default" withSources(), // Record interface to RDBMS,
-        "net.liftmodules" % "lift-jquery-module_3.0_2.11" % "2.10" withSources(),
+        "net.liftmodules"   %% "lift-jquery-module_3.0" % "2.9" withSources(),
         "postgresql"        % "postgresql"          % "9.1-901.jdbc4",
         "org.scalactic" %% "scalactic" % "3.0.1",
         "org.scalatest" %% "scalatest" % "3.0.1" % "test",
-        "org.skinny-framework" %% "skinny-http-client" % "2.5.1",
+        "org.skinny-framework" %% "skinny-http-client" % "2.2.0",
         "org.eclipse.jetty" % "jetty-webapp"        % "8.1.17.v20150415"  % "container,test",
         "org.eclipse.jetty" % "jetty-plus"          % "8.1.17.v20150415"  % "container,test", // For Jetty Config
         "org.eclipse.jetty.orbit" % "javax.servlet" % "3.0.0.v201112011016" % "container,test" artifacts Artifact("javax.servlet", "jar", "jar"),
-        "org.specs2"        %% "specs2-core"             % "4.0.1"           % Test,
+        "org.specs2"        %% "specs2-core"             % "3.6.4"           % Test,
         "ch.qos.logback"    % "logback-classic"     % "1.1.3"
       )
     },

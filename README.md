@@ -49,7 +49,7 @@ browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - SBT: 0.13.13
 
-- Scala: 2.12.3
+- Scala: 2.11.8
 
 - JVM SDK: 1.8
 
@@ -59,7 +59,7 @@ browser: runs fine on Google Chrome 50.0. Should run fine on Safari and Firefox.
 
 - Skinny for WEBAPI client
 
-- Lift framework: 3.0.1
+- Lift framework: 3.0
 
 - Squeryl, a Scala ORM ((taken care by SBT)
 skinny for httpclient (taken care by SBT)
