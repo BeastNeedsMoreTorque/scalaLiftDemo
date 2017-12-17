@@ -1,7 +1,8 @@
 package code.model.pageFetcher
 
-import code.Rest.{HttpTimeouts, RestClient}
-import code.model.{Store, Product, Inventory, InventoryAsLCBOJson}
+import code.Rest.RestClient
+import code.Rest.RestClient.HttpTimeouts
+import code.model.{Inventory, InventoryAsLCBOJson, Product, Store}
 import net.liftweb.common.{Full, Loggable}
 import net.liftweb.json.{JNothing, JValue, parseOpt}
 import net.liftweb.json.JsonAST.{JField, JInt}

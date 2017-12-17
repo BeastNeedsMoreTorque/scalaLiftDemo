@@ -11,7 +11,8 @@ class RetainSinglesTest extends FlatSpec with Matchers {
 
   case class Model(k: Long, first: String, last : String, salary: Double)
   implicit val modelShowKey = new ShowKey[Model] {
-    def show(f: Model) = f.k.toString
+    def show(f: Model) = f.k
+
   }
   behavior of "empty"
   it should s"return empty sequence on empty input" in {
@@ -25,10 +26,10 @@ class RetainSinglesTest extends FlatSpec with Matchers {
   val oddPair = Seq(Philanthropist, Scrooge)
   val many: Seq[Model] = Seq.fill(100)(oddPair).flatten
   it should s"return 2 on normal pair" in {
-    retainSingles(oddPair).toStream should have size 2
+    retainSingles(oddPair).toList should have size 2
   }
   it should s"return size 2 on duped pair" in {
-    retainSingles(many).toStream should have size 2
+    retainSingles(many).toList should have size 2
   }
 
 }
