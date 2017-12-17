@@ -4,8 +4,6 @@ import code.model.utils.RNG
 import code.model._
 import net.liftweb.util.Props
 import cats.implicits._
-import code.model.GlobalLCBO_IDs.{LCBO_KEY, P_KEY}
-import code.model.ShowKeyPair.ShowKeyPairVals
 
 import scala.collection.IndexedSeq
 
@@ -180,16 +178,16 @@ trait MonteCarloProductAdvisorComponentImpl extends ProductAdvisorComponent {
     private def getShuffledProducts(invService: InventoryService,
                                     runner: ProductRunner,
                                     rng: RNG,
-                                    initialProductKeys: IndexedSeq[ShowKeyPairVals[P_KEY]],
+                                    initialProductKeys: IndexedSeq[ShowKeyPairVals],
                                     category: String,
                                     lcboProdCategory: String,
                                     requestSize: Int): ValidateSelection = {
-      val inStockItems =
+      val inStockItems = {
         for {p <- initialProductKeys
-             inv <- invService.inventoryByProductIdMap(p.iKey)
+             inv <- invService.inventoryByProductIdMap(p.pKey)
              q = inv.quantity if q > 0
-             prod <- invService.getProduct(p.eKey)} yield (prod, q)
-
+             prod <- invService.getProduct(p.lcboKey)} yield (prod, q)
+      }
       // products are loaded before inventories (when loaded asynchronously) and we might have no inventory, hence we test for positive quantity.
 
       invService.asyncLoadCache() // if we never loaded the cache, do it. Note: useful even if we have product of matching inventory

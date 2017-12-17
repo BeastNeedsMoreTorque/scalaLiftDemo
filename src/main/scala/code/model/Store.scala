@@ -15,7 +15,6 @@ import scala.collection._
 import scala.collection.concurrent.TrieMap
 import scala.language.implicitConversions
 import code.model.GlobalLCBO_IDs._
-import code.model.ShowKeyPair.ShowKeyPairVals
 import code.model.utils.RNG
 import scala.util.Random
 
@@ -32,12 +31,12 @@ trait EventTypes {
   type Selection = Iterable[(IProduct, Long)]
 
   /**
-    * captures exceptions as errors in Either if any, otherwise a selection
+    * captures exceptions as errors in Xor if any, otherwise a selection
     */
   type ValidateSelection = Either[Throwable, Selection]
 
   /**
-    * captures exceptions as errors in Either if any, otherwise the quantity that got purchased
+    * captures exceptions as errors in Xor if any, otherwise the quantity that got purchased
     */
   type ValidatePurchase = Either[Throwable, Long]
 }
@@ -46,7 +45,7 @@ trait InventoryService {
   def lcboKey: LCBO_KEY
   val inventoryByProductIdMap: P_KEY => Option[Inventory]
   def getProduct(x: LCBO_KEY): Option[IProduct]
-  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals[P_KEY]]
+  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals]
   def asyncLoadCache(): Unit
 }
 
@@ -73,7 +72,7 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   val address_line_1 = new FilteredMandatoryStringField(addressSize)
   val city = new FilteredMandatoryStringField(cityNameSize)
   override val productsCache = TrieMap[LCBO_KEY, IProduct]()
-  override val categoryIndex = TrieMap[String, IndexedSeq[ShowKeyPairVals[P_KEY]]]()
+  override val categoryIndex = TrieMap[String, IndexedSeq[ShowKeyPairVals]]()
   // don't put whole IProduct in here, just useful keys.
   override val inventoryByProductId = TrieMap[P_KEY, Inventory]()
 
@@ -101,9 +100,9 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
   // They're recomputed when needed by the three helper functions that follow.
   def getProduct(x: LCBO_KEY): Option[IProduct] = productsCache.get(x)
 
-  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals[P_KEY]] =
+  def getProductKeysByCategory(lcboCategory: String): IndexedSeq[ShowKeyPairVals] =
     categoryIndex.get(lcboCategory).
-      fold(IndexedSeq[ShowKeyPairVals[P_KEY]]()){ identity }
+      fold(IndexedSeq[ShowKeyPairVals]()){ identity }
 
   def refreshProducts(): Unit =  {
     refreshInventories()
@@ -120,17 +119,19 @@ case class Store private() extends LCBOEntity[Store] with IStore with StoreSizeC
 
   override def inventories: Iterable[Inventory] = storeProducts.associations
 
-  def advise(category: String, requestSize: Int, runner: ProductRunner): ValidateSelection =
+  def advise(category: String, requestSize: Int, runner: ProductRunner): ValidateSelection = {
     Store.advise(this, category, requestSize, runner)
+  }
 
   def consume(user: User, p: IProduct, quantity: Long): ValidatePurchase =
     Store.consume(this, user, p, quantity)
 
-  def asyncLoadCache(): Unit =
+  def asyncLoadCache(): Unit = {
     // A kind of guard: Two piggy-backed requests to loadCache for same store will thus ignore second one.
     if (Store.storeProductsLoaded.putIfAbsent(idField.get, Unit).isEmpty) loadCache()(Store.ec)
+  }
 
-  case class CategoryShowKeyPairVals(category: String, keys: ShowKeyPairVals[P_KEY])
+  case class CategoryShowKeyPairVals(category: String, keys: ShowKeyPairVals)
 
 }
 
@@ -142,7 +143,7 @@ object Store extends Store with MetaRecord[Store] {
     case _ => new ProductAdvisorDispatcher with SlowAdvisorComponentImpl
   }
 
-  sealed trait SeedStrategy
+  trait SeedStrategy
   case object RandomSeed extends SeedStrategy
   case class RNGSeed(value: Int) extends SeedStrategy
   lazy val seedStrategy: SeedStrategy = {

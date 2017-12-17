@@ -12,7 +12,6 @@ import scala.collection.{IndexedSeq, Iterable}
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.{ExecutionContext, Future, blocking}
 import scala.util.{Failure, Success}
-import ShowKeyPair._
 
 /**
   * Created by philippederome on 2016-07-31.
@@ -38,7 +37,7 @@ trait StoreCacheService extends Loggable {
   /**
     * cache of product ids by category, a category index
     */
-  val categoryIndex: TrieMap[String, IndexedSeq[ShowKeyPairVals[P_KEY]]]
+  val categoryIndex: TrieMap[String, IndexedSeq[ShowKeyPairVals]]
 
   private val getCachedInventoryItem: Inventory => Option[Inventory] =
     inv => inventoryByProductId.get(inv.productid.PKeyID)
@@ -95,7 +94,7 @@ trait StoreCacheService extends Loggable {
     // project the products to category+key pairs, group by category yielding sequences of category, keys and retain only the key pairs in those sequences.
     // The map construction above technically filters outs from items if there are duplicate keys, so reuse same collection below (productsCache.values)
     categoryIndex ++= productsCache.values.
-      map(prod => CategoryShowKeyPairVals(prod.primaryCategory, prod.showKeyPairVals)).toIndexedSeq.
+      map(prod => CategoryShowKeyPairVals(prod.primaryCategory, prod: ShowKeyPairVals)).toIndexedSeq.
       groupBy(_.category).
       mapValues(_.map(_.keys))
   }

@@ -25,6 +25,6 @@ object ConfigPairsRepo {
     (doc.hcursor.downField("list").as[Seq[KV]] match {
       case Left(_) => Nil
       case Right(xs) => xs
-    }).map{ kv => (kv.k, kv.v) }
+    }).map{ case KV(k,v) => (k,v) }
   }
 }

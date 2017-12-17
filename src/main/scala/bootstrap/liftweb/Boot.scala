@@ -2,11 +2,9 @@ package bootstrap.liftweb
 
 import code.Rest.AppRest
 import code.model._
-import net.liftmodules.JQueryModule
 import net.liftweb._
 import net.liftweb.common._
 import net.liftweb.db.StandardDBVendor
-import net.liftweb.http.js.jquery.JQueryArtifacts
 import net.liftweb.http.{LiftRules, _}
 import net.liftweb.sitemap.Loc._
 import net.liftweb.sitemap._
@@ -73,11 +71,6 @@ class Boot {
     // set the sitemap.  Note if you don't want access control for
     // each page, just comment this line out.
     LiftRules.setSiteMapFunc(() => sitemapMutators(sitemap))
-
-    // Init the jQuery module, see http://liftweb.net/jquery for more information.
-    LiftRules.jsArtifacts = JQueryArtifacts
-    JQueryModule.InitParam.JQuery = JQueryModule.JQuery191
-    JQueryModule.init()
 
     val spinnyImmageName= "ajax-loader"
     // Show the spinny image when an Ajax call starts
