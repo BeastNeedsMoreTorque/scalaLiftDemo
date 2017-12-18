@@ -40,7 +40,7 @@ class Boot {
         Props.get("db.user"),
         Props.get("db.password"))
 
-      LiftRules.unloadHooks.append(vendor.closeAllConnections_!)
+      LiftRules.unloadHooks.append(vendor.closeAllConnections_! _)
       DB.defineConnectionManager(util.DefaultConnectionIdentifier, vendor)
     }
 
